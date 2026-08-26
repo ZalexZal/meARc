@@ -32,11 +32,11 @@ public class RemoteMarkerSource : MonoBehaviour
              "inside the client - it identifies the project and nothing more. Row Level " +
              "Security is what protects the data. Never put the service_role key here.")]
     [TextArea(2, 4)]
-    public string anonKey = "";
+    public string anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhamJlYnlobXZwcHFsc3d5amlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NDg0OTQsImV4cCI6MjEwMzMyNDQ5NH0.e2-l3SbkBIRBCEOfbNrvQC0i2M_FbQxZ5Lwyg3zOHLo";
 
     [Tooltip("Which world to load. Phase 0 only - Phase 3 replaces this with the join " +
              "code entry screen.")]
-    public string worldId = "";
+    public string worldId = "c1bd0005-be21-409f-9e28-40faf3abb661";
 
     [Header("Query")]
     [Tooltip("How far around the phone to ask for. MarkerSpawner still decides what to " +
