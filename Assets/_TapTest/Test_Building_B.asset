@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1a3aad368a6a404a9b4c2a37c821c40, type: 3}
+  m_Name: Test_Building_B
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingData
+  buildingName: Test Building B
+  description: PLACEHOLDER TEXT. Tapping the middle cube should replace the panel
+    contents with this paragraph.
+  yearBuilt: 1968
+  architect: 
+  buildingType: Residential
+  latitude: 0
+  longitude: 0
+  externalLinkURL: example.com

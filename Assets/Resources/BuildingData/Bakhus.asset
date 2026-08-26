@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1a3aad368a6a404a9b4c2a37c821c40, type: 3}
+  m_Name: Bakhus
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingData
+  buildingId: test_home
+  buildingName: Bakhus
+  description: This is a test
+  yearBuilt: 2003
+  yearBuiltNumeric: 2003
+  architect: Baba ti
+  buildingType: Hotel/Guest House
+  category: {fileID: 0}
+  latitude: 42.880631220115305
+  longitude: 24.58769116288218
+  externalLinkURL: https://kibela.one
