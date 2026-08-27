@@ -2,6 +2,11 @@ using System.Collections.Generic;
 using Google.XR.ARCoreExtensions;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
+// TrackableId lives in this namespace. Line 92 refers to the namespace fully
+// qualified while line 55 uses TrackableId bare, so the file has been
+// uncompilable since it was last edited - the original project simply never
+// recompiled after that edit and kept running a stale assembly.
+using UnityEngine.XR.ARSubsystems;
 
 /// <summary>
 /// Stops markers showing through solid things.
