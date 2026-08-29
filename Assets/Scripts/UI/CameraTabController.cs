@@ -4,23 +4,23 @@ using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
 
 /// <summary>
-/// Owns the Camera tab: the Ready/Live state machine, the overlays on the feed, and
-/// keeping the two bottom sheets from ever being open at once.
+/// Owns the Camera tab: what sits over the live feed, and which marker the chrome
+/// is currently talking about.
+///
+/// There is no gate in front of the feed any more. The app opens on the map, so
+/// the camera is somewhere the reader chose to go, and asking them to press Start
+/// once they are already here is a door in the middle of a room. Calibration is
+/// still told truthfully - by the dot, and by the banner when accuracy is poor -
+/// but it decides what the reader will see, never whether they may look.
 ///
 /// On the AR session: it is deliberately never disabled. Turning the session off
-/// would stop Geospatial localization, which is the exact thing the Ready State
-/// exists to wait for - the reader would sit in front of a status card that never
-/// improves. Instead the session runs from launch, so ARCore requests location
-/// permission and starts localizing immediately, and the Ready State hides the feed
-/// simply by being an opaque panel on top of it. Tap input is gated on the live view
-/// being active, so nothing behind the panel is reachable.
+/// would stop Geospatial localization, and localization is what the reader is
+/// waiting for.
 /// </summary>
 public class CameraTabController : MonoBehaviour
 {
     [Header("Views")]
-    public GameObject readyStateView;
     public GameObject liveARView;
-    public ReadyStateView readyState;
 
     [Header("References")]
     public UserLocationService locationService;
@@ -32,51 +32,57 @@ public class CameraTabController : MonoBehaviour
              "disabled - see the note on this class.")]
     public ARSession arSession;
 
-    [Tooltip("Hidden while the Ready State is showing. That screen is full-bleed " +
-             "and its buttons sit where the nav bar would be, so the two cannot " +
-             "share the bottom of the screen.")]
-    public GameObject bottomNav;
-
-    [Header("Live overlays")]
+    [Header("Overlays")]
     public Button nearbyButton;
     public TextMeshProUGUI nearbyCountText;
-    public Button pauseButton;
     public GameObject warningBanner;
     public TextMeshProUGUI warningLabel;
     public Button warningDismissButton;
 
-    [Header("Behaviour")]
-    [Tooltip("Backgrounded for longer than this and the tab returns to the Ready " +
-             "State, because tracking has probably degraded.")]
-    public float backgroundResetSeconds = 120f;
+    [Header("Marker dock")]
+    [Tooltip("The row at the bottom naming the marker the chrome is talking about. " +
+             "Tapping it opens that marker's sheet.")]
+    public GameObject dock;
+    public Button dockButton;
+    public Image dockDot;
+    public Image dockRing;
+    public TextMeshProUGUI dockName;
+    public TextMeshProUGUI dockDistance;
+    public BearingArrow dockArrow;
+    public TextMeshProUGUI dockEmptyLabel;
 
-    bool _hasEnteredLiveThisSession;
+    [Header("Off-screen markers")]
+    public CameraEdgePills edgePills;
 
-    public bool HasEnteredLive { get { return _hasEnteredLiveThisSession; } }
+    [Header("Guidance")]
+    public GuidanceBanner guidance;
+
+    bool _warningDismissed;
+    BuildingData _selected;
+    float _timer;
+
+    /// <summary>The marker the dock and the arrow are pointing at.</summary>
+    public BuildingData Selected { get { return _selected; } }
 
     void Awake()
     {
         if (nearbyButton != null)
             nearbyButton.onClick.AddListener(ToggleNearby);
 
-        if (pauseButton != null)
-            pauseButton.onClick.AddListener(EnterReady);
-
         if (warningDismissButton != null)
-            warningDismissButton.onClick.AddListener(HideWarning);
+            warningDismissButton.onClick.AddListener(DismissWarning);
+
+        if (dockButton != null)
+            dockButton.onClick.AddListener(OpenSelected);
 
         if (nearbyPanel != null)
-            nearbyPanel.onBuildingSelected = ShowBuilding;
+            nearbyPanel.onBuildingSelected = SelectAndShow;
+
+        if (edgePills != null)
+            edgePills.onSelected = Select;
 
         if (infoPanel != null)
             infoPanel.onWillOpen = CloseNearby;
-
-        if (readyState != null)
-        {
-            readyState.onStart = EnterLive;
-            readyState.onStartAnyway = EnterLiveUnverified;
-            readyState.onBuildingSelected = EnterLiveWithBuilding;
-        }
     }
 
     void OnEnable()
@@ -86,65 +92,39 @@ public class CameraTabController : MonoBehaviour
 
         if (locationService != null)
         {
-            locationService.OnPoseUpdated += RefreshNearbyCount;
+            locationService.OnPoseUpdated += Refresh;
             locationService.OnStatusChanged += HandleStatusChanged;
         }
 
-        AppStrings.OnLanguageChanged += RefreshLabels;
-        AppLifecycleWatcher.OnResumed += HandleResumed;
+        AppStrings.OnLanguageChanged += Refresh;
+        BuildingDatabase.OnBuildingsChanged += HandleBuildingsChanged;
+        GuidanceService.OnGuidanceChanged += Refresh;
 
-        ShowAppropriateState();
-        RefreshLabels();
+        if (liveARView != null)
+            liveARView.SetActive(true);
+
+        // Whatever the reader is walking to is what the camera should be talking
+        // about when they raise the phone.
+        if (GuidanceService.IsGuiding)
+            _selected = GuidanceService.Target;
+
+        Refresh();
     }
 
     void OnDisable()
     {
         if (locationService != null)
         {
-            locationService.OnPoseUpdated -= RefreshNearbyCount;
+            locationService.OnPoseUpdated -= Refresh;
             locationService.OnStatusChanged -= HandleStatusChanged;
         }
 
-        AppStrings.OnLanguageChanged -= RefreshLabels;
-        AppLifecycleWatcher.OnResumed -= HandleResumed;
-
-        // Whatever this tab did to the nav bar, the tab being left must not
-        // outlive it - otherwise Search opens with no way back.
-        SetNavVisible(true);
+        AppStrings.OnLanguageChanged -= Refresh;
+        BuildingDatabase.OnBuildingsChanged -= HandleBuildingsChanged;
+        GuidanceService.OnGuidanceChanged -= Refresh;
 
         // Leaving the tab with a sheet open would strand it half-drawn behind
         // whichever tab the reader switched to.
-        CloseNearby();
-
-        if (vpsIndicator != null)
-            vpsIndicator.CloseBubble();
-    }
-
-    // ---------------------------------------------------------- state machine
-
-    /// <summary>
-    /// Decides Ready or Live on entering the tab. Called by
-    /// TabNavigationController rather than blindly activating a fixed panel.
-    /// </summary>
-    public void ShowAppropriateState()
-    {
-        // A long spell in the background is consumed here as well as on the event,
-        // because this component is disabled while the reader is on another tab and
-        // would otherwise never hear about it.
-        if (AppLifecycleWatcher.ConsumeBackgroundDuration() > backgroundResetSeconds)
-        {
-            EnterReady();
-            return;
-        }
-
-        if (_hasEnteredLiveThisSession)
-            EnterLive();
-        else
-            EnterReady();
-    }
-
-    public void EnterReady()
-    {
         CloseNearby();
 
         if (infoPanel != null)
@@ -152,91 +132,93 @@ public class CameraTabController : MonoBehaviour
 
         if (vpsIndicator != null)
             vpsIndicator.CloseBubble();
-
-        HideWarning();
-
-        if (liveARView != null) liveARView.SetActive(false);
-        if (readyStateView != null) readyStateView.SetActive(true);
-
-        // Start and "Start anyway" occupy the bottom of the screen, so the nav bar
-        // stands down until the reader has started. It comes straight back in Live.
-        SetNavVisible(false);
     }
 
-    public void EnterLive()
+    void Update()
     {
-        _hasEnteredLiveThisSession = true;
+        _timer += Time.unscaledDeltaTime;
+        if (_timer < 0.5f)
+            return;
 
-        if (readyStateView != null) readyStateView.SetActive(false);
-        if (liveARView != null) liveARView.SetActive(true);
-
-        SetNavVisible(true);
-        RefreshNearbyCount();
+        _timer = 0f;
+        RefreshDock();
     }
 
-    /// <summary>
-    /// Entering before calibration is trustworthy. Same as EnterLive, plus a
-    /// non-blocking banner so a misplaced marker reads as expected rather than broken.
-    /// </summary>
-    public void EnterLiveUnverified()
+    // ------------------------------------------------------------------ selection
+
+    public void Select(BuildingData building)
     {
-        EnterLive();
-        ShowWarning();
+        _selected = building;
+        RefreshDock();
     }
 
-    /// <summary>
-    /// Goes through the normal ShowPanel path, so the discovery count increments
-    /// exactly as it would from an AR marker or a search result.
-    /// </summary>
-    public void EnterLiveWithBuilding(BuildingData building)
+    /// <summary>Selects and opens the sheet, for a marker chosen from a list.</summary>
+    public void SelectAndShow(BuildingData building)
     {
-        EnterLive();
+        Select(building);
         ShowBuilding(building);
     }
 
-    void SetNavVisible(bool visible)
+    void OpenSelected()
     {
-        if (bottomNav != null)
-            bottomNav.SetActive(visible);
+        ShowBuilding(_selected);
     }
 
-    void HandleResumed(float secondsBackgrounded)
+    public void ShowBuilding(BuildingData building)
     {
-        if (secondsBackgrounded <= backgroundResetSeconds)
+        if (building == null)
             return;
 
-        AppLifecycleWatcher.ConsumeBackgroundDuration();
-        EnterReady();
+        CloseNearby();
+
+        if (infoPanel != null)
+            infoPanel.ShowPanel(building);
     }
 
-    // ---------------------------------------------------------------- warning
+    void HandleBuildingsChanged()
+    {
+        // The selected marker may have been hidden or unpublished while the reader
+        // was looking at it.
+        if (_selected != null && HiddenMarkers.IsHidden(_selected))
+            _selected = null;
 
-    void ShowWarning()
+        Refresh();
+    }
+
+    // -------------------------------------------------------------------- warning
+
+    void HandleStatusChanged(VpsStatus status)
+    {
+        // A change in calibration is new information, so an old dismissal should
+        // not silence it - except when it improved, which needs no banner at all.
+        if (status != VpsStatus.Good)
+            _warningDismissed = false;
+
+        Refresh();
+    }
+
+    void DismissWarning()
+    {
+        _warningDismissed = true;
+        RefreshWarning();
+    }
+
+    void RefreshWarning()
     {
         if (warningBanner == null)
             return;
 
-        warningBanner.SetActive(true);
+        bool poor = locationService != null &&
+                    (locationService.Status == VpsStatus.Poor ||
+                     locationService.Status == VpsStatus.Unavailable);
+
+        warningBanner.SetActive(poor && !_warningDismissed);
 
         if (warningLabel != null)
             warningLabel.text = AppStrings.Get("live.warning");
     }
 
-    void HideWarning()
-    {
-        if (warningBanner != null)
-            warningBanner.SetActive(false);
-    }
-
-    void HandleStatusChanged(VpsStatus status)
-    {
-        // Once calibration is genuinely good the warning has nothing left to warn
-        // about, so it retires itself.
-        if (status == VpsStatus.Good)
-            HideWarning();
-    }
-
-    // -------------------------------------------------------------- overlays
+    // ------------------------------------------------------------------- overlays
 
     public void ToggleNearby()
     {
@@ -261,21 +243,14 @@ public class CameraTabController : MonoBehaviour
             nearbyPanel.Close();
     }
 
-    /// <summary>Opens the info sheet for a building chosen from a list.</summary>
-    public void ShowBuilding(BuildingData building)
+    void Refresh()
     {
-        CloseNearby();
-
-        if (infoPanel != null)
-            infoPanel.ShowPanel(building);
-    }
-
-    void RefreshLabels()
-    {
+        RefreshWarning();
         RefreshNearbyCount();
+        RefreshDock();
 
-        if (warningLabel != null)
-            warningLabel.text = AppStrings.Get("live.warning");
+        if (guidance != null)
+            guidance.Refresh();
     }
 
     void RefreshNearbyCount()
@@ -285,5 +260,97 @@ public class CameraTabController : MonoBehaviour
 
         nearbyCountText.text = string.Format(
             AppStrings.Get("camera.nearbyCount"), nearbyPanel.NearbyCount);
+    }
+
+    /// <summary>
+    /// Falls back to the nearest marker when nothing has been chosen, so the dock
+    /// is a useful row on arrival rather than an empty one waiting to be filled.
+    /// </summary>
+    void RefreshDock()
+    {
+        if (dock == null)
+            return;
+
+        if (_selected == null || HiddenMarkers.IsHidden(_selected))
+            _selected = Nearest();
+
+        bool has = _selected != null;
+
+        if (dockEmptyLabel != null)
+        {
+            dockEmptyLabel.gameObject.SetActive(!has);
+            dockEmptyLabel.text = AppStrings.Get("camera.noMarkers");
+        }
+
+        if (dockName != null)
+            dockName.gameObject.SetActive(has);
+
+        if (dockDistance != null)
+            dockDistance.gameObject.SetActive(has);
+
+        if (dockButton != null)
+            dockButton.interactable = has;
+
+        if (!has)
+        {
+            if (dockDot != null)
+                dockDot.gameObject.SetActive(false);
+
+            if (dockArrow != null)
+                dockArrow.SetTarget(null);
+
+            return;
+        }
+
+        Color colour = MarkerPalette.Resolve(_selected);
+
+        if (dockDot != null)
+        {
+            dockDot.gameObject.SetActive(true);
+            dockDot.color = colour;
+        }
+
+        if (dockRing != null)
+            dockRing.color = MarkerPalette.RingFor(colour);
+
+        if (dockName != null)
+            dockName.text = _selected.DisplayName;
+
+        if (dockArrow != null)
+            dockArrow.SetTarget(_selected);
+
+        if (dockDistance == null)
+            return;
+
+        double metres = locationService != null
+            ? locationService.DistanceMetresTo(_selected)
+            : -1d;
+
+        dockDistance.text = metres < 0d
+            ? AppStrings.Get("map.noLocation")
+            : AppStrings.FormatDistance(metres,
+                locationService != null && locationService.IsApproximate);
+    }
+
+    BuildingData Nearest()
+    {
+        if (locationService == null || !locationService.HasValidPose)
+            return null;
+
+        BuildingData best = null;
+        double bestDistance = double.MaxValue;
+
+        var all = BuildingDatabase.AllBuildings;
+        for (int i = 0; i < all.Count; i++)
+        {
+            double distance = locationService.DistanceMetresTo(all[i]);
+            if (distance >= 0d && distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = all[i];
+            }
+        }
+
+        return best;
     }
 }

@@ -38,6 +38,15 @@ public class SettingsTabController : MonoBehaviour
     public TextMeshProUGUI nearbyRowLabel;
     public Toggle nearbyToggle;
 
+    [Header("Privacy")]
+    [Tooltip("Anyone can put a marker on a public street, so the reader needs a way " +
+             "to take one off their own map. This is where they get it back.")]
+    public TextMeshProUGUI privacyLabel;
+    public TextMeshProUGUI hiddenRowLabel;
+    public TextMeshProUGUI hiddenCountLabel;
+    public Button unhideAllButton;
+    public TextMeshProUGUI unhideAllLabel;
+
     [Header("Help")]
     public TextMeshProUGUI tutorialRowLabel;
     public TextMeshProUGUI sourcesRowLabel;
@@ -90,6 +99,9 @@ public class SettingsTabController : MonoBehaviour
         if (versionButton != null)
             versionButton.onClick.AddListener(HandleVersionTap);
 
+        if (unhideAllButton != null)
+            unhideAllButton.onClick.AddListener(UnhideAll);
+
         WireHelpRow(tutorialButton, tutorialPage);
         WireHelpRow(sourcesButton, sourcesPage);
         WireHelpRow(aboutButton, aboutPage);
@@ -110,6 +122,7 @@ public class SettingsTabController : MonoBehaviour
     {
         AppStrings.OnLanguageChanged += ApplyLabels;
         ThemeManager.OnThemeChanged += ApplyLanguageSegment;
+        HiddenMarkers.OnChanged += ApplyLabels;
 
         ApplyLabels();
 
@@ -121,6 +134,12 @@ public class SettingsTabController : MonoBehaviour
     {
         AppStrings.OnLanguageChanged -= ApplyLabels;
         ThemeManager.OnThemeChanged -= ApplyLanguageSegment;
+        HiddenMarkers.OnChanged -= ApplyLabels;
+    }
+
+    void UnhideAll()
+    {
+        HiddenMarkers.UnhideAll();
     }
 
     void WireHelpRow(Button button, GameObject page)
@@ -168,7 +187,24 @@ public class SettingsTabController : MonoBehaviour
         Set(languageRowLabel, "settings.appLanguage");
         Set(notificationsLabel, "settings.notifications");
         Set(nearbyRowLabel, "settings.nearbyBuildings");
+        Set(privacyLabel, "settings.privacy");
+        Set(hiddenRowLabel, "settings.hidden");
+        Set(unhideAllLabel, "settings.unhideAll");
         Set(helpLabel, "settings.help");
+
+        int hidden = HiddenMarkers.Count;
+
+        if (hiddenCountLabel != null)
+        {
+            hiddenCountLabel.text = hidden == 0
+                ? AppStrings.Get("settings.hiddenNone")
+                : string.Format(AppStrings.Get("settings.hiddenCount"), hidden);
+        }
+
+        // Nothing to show again, so the control is not offered rather than offered
+        // and dead.
+        if (unhideAllButton != null)
+            unhideAllButton.gameObject.SetActive(hidden > 0);
         Set(tutorialRowLabel, "settings.replayTutorial");
         Set(sourcesRowLabel, "settings.dataSources");
         Set(aboutRowLabel, "settings.about");

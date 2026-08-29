@@ -91,7 +91,11 @@ public static class AppTheme
             line = Hex("#343B47"),
             textPrimary = Hex("#F3F5F7"),
             textSecondary = Hex("#A7ADB5"),
-            textMuted = Hex("#727982"),
+            // Measured, not eyeballed: #727982 came to 3.77:1 on Surface,
+            // under the 4.5:1 small-text floor. This clears it on all three
+            // dark surfaces - 6.4:1 on Background, 5.5:1 on Surface, 4.6:1
+            // on SurfaceAlt.
+            textMuted = Hex("#8E959F"),
             accent = Hex("#45C4B0"),
             onAccent = Hex("#04201C"),
             scrim = new Color(0f, 0f, 0f, 0.55f),
@@ -112,7 +116,10 @@ public static class AppTheme
             line = Hex("#D3D5D1"),
             textPrimary = Hex("#16181B"),
             textSecondary = Hex("#464B52"),
-            textMuted = Hex("#7A8088"),
+            // Same measurement in reverse: #7A8088 was 3.98:1 on white.
+            // This is 5.9:1 on Surface, 5.2:1 on Background, 4.8:1 on
+            // SurfaceAlt.
+            textMuted = Hex("#5F656D"),
             accent = Hex("#0F7A6B"),
             onAccent = Hex("#FFFFFF"),
             scrim = new Color(0f, 0f, 0f, 0.35f),

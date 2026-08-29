@@ -1,0 +1,167 @@
+using System;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+/// <summary>
+/// The card shown when there is nothing to show: still locating, still loading,
+/// nothing nearby, the fetch failed, or no connection at all.
+///
+/// One component with five configurations rather than five screens, because the
+/// shape of the answer is always the same - what happened, what it means, and the
+/// one thing worth trying. The action button is never decorative: it is hidden
+/// outright when there is nothing useful to press, which is the difference between
+/// an empty state and a dead end.
+/// </summary>
+public class StateCardView : MonoBehaviour
+{
+    public enum Kind
+    {
+        Hidden,
+
+        /// <summary>Position and markers are both fine; nothing is near.</summary>
+        Empty,
+
+        /// <summary>Still waiting for a first fix.</summary>
+        Locating,
+
+        /// <summary>Position is known; the marker list is on its way.</summary>
+        Loading,
+
+        /// <summary>The list could not be loaded and there is no cache to fall back on.</summary>
+        Failed,
+
+        /// <summary>No connection at all.</summary>
+        Offline
+    }
+
+    [Header("Parts")]
+    public GameObject root;
+    public Image icon;
+    public TextMeshProUGUI titleText;
+    public TextMeshProUGUI bodyText;
+    public Button actionButton;
+    public TextMeshProUGUI actionLabel;
+
+    [Header("Behaviour")]
+    [Tooltip("Radius named in the empty state's wording, so it matches what was searched.")]
+    public double radiusMetres = 500d;
+
+    /// <summary>What the action button does. Set by whoever owns this card.</summary>
+    public Action onAction;
+
+    Kind _kind = Kind.Hidden;
+
+    public Kind Current { get { return _kind; } }
+
+    void Awake()
+    {
+        if (actionButton != null)
+            actionButton.onClick.AddListener(RaiseAction);
+    }
+
+    void OnEnable()
+    {
+        AppStrings.OnLanguageChanged += Render;
+        Render();
+    }
+
+    void OnDisable()
+    {
+        AppStrings.OnLanguageChanged -= Render;
+    }
+
+    public void Show(Kind kind)
+    {
+        _kind = kind;
+        Render();
+    }
+
+    public void Hide()
+    {
+        Show(Kind.Hidden);
+    }
+
+    void Render()
+    {
+        if (root != null)
+            root.SetActive(_kind != Kind.Hidden);
+
+        if (_kind == Kind.Hidden)
+            return;
+
+        string title;
+        string body;
+        string action;
+        ThemeRole tint;
+
+        switch (_kind)
+        {
+            case Kind.Locating:
+                title = "state.locating.title";
+                body = "state.locating.body";
+                action = null;
+                tint = ThemeRole.StatusNone;
+                break;
+
+            case Kind.Loading:
+                title = "state.loading.title";
+                body = "state.loading.body";
+                action = null;
+                tint = ThemeRole.StatusNone;
+                break;
+
+            case Kind.Failed:
+                title = "state.failed.title";
+                body = "state.failed.body";
+                action = "state.retry";
+                tint = ThemeRole.StatusPoor;
+                break;
+
+            case Kind.Offline:
+                title = "state.offline.title";
+                body = "state.offline.body";
+                action = "state.retry";
+                tint = ThemeRole.StatusFair;
+                break;
+
+            default:
+                title = "state.empty.title";
+                body = "state.empty.body";
+                action = "state.widen";
+                tint = ThemeRole.TextMuted;
+                break;
+        }
+
+        if (titleText != null)
+            titleText.text = AppStrings.Get(title);
+
+        if (bodyText != null)
+        {
+            string text = AppStrings.Get(body);
+
+            // The empty state names the radius it actually searched, so "nothing
+            // here" is a fact the reader can check rather than a shrug.
+            bodyText.text = _kind == Kind.Empty
+                ? string.Format(text, AppStrings.FormatDistance(radiusMetres))
+                : text;
+        }
+
+        if (icon != null)
+            icon.color = ThemeManager.Get(tint);
+
+        bool hasAction = action != null;
+
+        if (actionButton != null)
+            actionButton.gameObject.SetActive(hasAction);
+
+        if (hasAction && actionLabel != null)
+            actionLabel.text = AppStrings.Get(action);
+    }
+
+    void RaiseAction()
+    {
+        if (onAction != null)
+            onAction();
+    }
+}

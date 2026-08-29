@@ -94,6 +94,18 @@ public class UserLocationService : MonoBehaviour
     public VpsStatus Status { get; private set; } = VpsStatus.Unavailable;
 
     /// <summary>
+    /// Which way the phone is pointing, in degrees clockwise from true north, or
+    /// 0 when the device has no usable compass.
+    ///
+    /// Read from the magnetometer rather than from the AR session: the arrows that
+    /// use it have to keep pointing while the reader is looking at the map with the
+    /// phone flat, which is exactly when the camera has nothing to localize against.
+    /// </summary>
+    public float DeviceHeading { get; private set; }
+
+    public bool HasHeading { get; private set; }
+
+    /// <summary>
     /// Whether Google has VPS coverage where the reader is standing. Checked as soon
     /// as any position is known - including a GPS one - so the Ready State can say
     /// "there is no visual positioning here" instead of coaching someone forever to
@@ -119,6 +131,10 @@ public class UserLocationService : MonoBehaviour
     {
         if (useGpsFallback)
             StartCoroutine(StartGps());
+
+        // Harmless when there is no magnetometer - trueHeading simply stays at 0
+        // and HasHeading never turns on, which the arrows check before drawing.
+        Input.compass.enabled = true;
     }
 
     void OnDisable()
@@ -129,12 +145,38 @@ public class UserLocationService : MonoBehaviour
 
     void Update()
     {
+        ReadHeading();
+
         _timer += Time.unscaledDeltaTime;
         if (_timer < pollInterval)
             return;
 
         _timer = 0f;
         Poll();
+    }
+
+    /// <summary>
+    /// Smoothed, because a raw magnetometer reading jitters by several degrees a
+    /// frame and an arrow that shivers reads as broken rather than as precise.
+    /// </summary>
+    void ReadHeading()
+    {
+        if (!Input.compass.enabled || Input.compass.timestamp <= 0d)
+            return;
+
+        float heading = Input.compass.trueHeading;
+
+        if (!HasHeading)
+        {
+            DeviceHeading = heading;
+            HasHeading = true;
+            return;
+        }
+
+        // Interpolated the short way round, so 359 to 1 degrees does not spin the
+        // arrow the whole way back.
+        float delta = Mathf.DeltaAngle(DeviceHeading, heading);
+        DeviceHeading = Mathf.Repeat(DeviceHeading + delta * Mathf.Clamp01(Time.deltaTime * 8f), 360f);
     }
 
     // ------------------------------------------------------------------ polling

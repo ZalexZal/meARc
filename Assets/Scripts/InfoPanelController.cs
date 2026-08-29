@@ -24,18 +24,50 @@ public class InfoPanelController : MonoBehaviour
     public SheetAnimator sheet;
 
     public TextMeshProUGUI learnMoreLabel;
-    public TextMeshProUGUI closeLabel;
+
+    [Header("Marker identity")]
+    [Tooltip("The marker's own colour, so the sheet and the thing on the map or in " +
+             "the street are recognisably the same object.")]
+    public Image colourDot;
+
+    [Tooltip("Ring behind the dot. Carries the separation when a marker's colour " +
+             "happens to be the app's own accent.")]
+    public Image colourRing;
+
+    [Header("Distance")]
+    public UserLocationService locationService;
+    public TextMeshProUGUI distanceText;
+    public BearingArrow bearingArrow;
+
+    [Header("Actions")]
+    public Button guideButton;
+    public TextMeshProUGUI guideLabel;
+
+    [Tooltip("Takes this marker off the map for this reader. Local and immediate - " +
+             "it does not wait for anyone to agree.")]
+    public Button hideButton;
+    public TextMeshProUGUI hideLabel;
 
     /// <summary>Raised before the sheet opens, so the Camera tab can close Nearby.</summary>
     public Action onWillOpen;
 
     private string currentLink;
     private BuildingData currentBuilding;
+    private float _distanceTimer;
+
+    /// <summary>The marker this sheet is showing, or null when it is closed.</summary>
+    public BuildingData Current { get { return currentBuilding; } }
 
     void Awake()
     {
         if (scrimButton != null)
             scrimButton.onClick.AddListener(ClosePanel);
+
+        if (guideButton != null)
+            guideButton.onClick.AddListener(ToggleGuidance);
+
+        if (hideButton != null)
+            hideButton.onClick.AddListener(HideThisMarker);
 
         if (scrim != null)
             scrim.SetActive(false);
@@ -50,13 +82,60 @@ public class InfoPanelController : MonoBehaviour
 
     void OnEnable()
     {
+        if (locationService == null)
+            locationService = UserLocationService.Instance;
+
         AppStrings.OnLanguageChanged += RefreshLabels;
+        GuidanceService.OnGuidanceChanged += RefreshLabels;
+
         RefreshLabels();
     }
 
     void OnDisable()
     {
         AppStrings.OnLanguageChanged -= RefreshLabels;
+        GuidanceService.OnGuidanceChanged -= RefreshLabels;
+    }
+
+    void Update()
+    {
+        if (currentBuilding == null || distanceText == null)
+            return;
+
+        _distanceTimer += Time.unscaledDeltaTime;
+        if (_distanceTimer < 0.5f)
+            return;
+
+        _distanceTimer = 0f;
+        RefreshDistance();
+    }
+
+    // -------------------------------------------------------------- actions
+
+    /// <summary>
+    /// Starts or stops walking to this marker. The sheet closes either way, because
+    /// the answer to "guide me there" is the map, not more of this sheet.
+    /// </summary>
+    public void ToggleGuidance()
+    {
+        if (currentBuilding == null)
+            return;
+
+        if (GuidanceService.Target == currentBuilding)
+            GuidanceService.Stop();
+        else
+            GuidanceService.Guide(currentBuilding);
+
+        ClosePanel();
+    }
+
+    public void HideThisMarker()
+    {
+        if (currentBuilding == null)
+            return;
+
+        HiddenMarkers.Hide(currentBuilding);
+        ClosePanel();
     }
 
     public void ShowPanel(BuildingData data)
@@ -100,6 +179,41 @@ public class InfoPanelController : MonoBehaviour
         currentLink = data.ExternalLink;
 
         learnMoreButton.SetActive(!string.IsNullOrWhiteSpace(currentLink));
+
+        Color colour = MarkerPalette.Resolve(data);
+
+        if (colourDot != null)
+            colourDot.color = colour;
+
+        if (colourRing != null)
+            colourRing.color = MarkerPalette.RingFor(colour);
+
+        if (bearingArrow != null)
+            bearingArrow.SetTarget(data);
+
+        RefreshDistance();
+    }
+
+    void RefreshDistance()
+    {
+        if (distanceText == null)
+            return;
+
+        if (locationService == null)
+            locationService = UserLocationService.Instance;
+
+        double metres = locationService != null && currentBuilding != null
+            ? locationService.DistanceMetresTo(currentBuilding)
+            : -1d;
+
+        if (metres < 0d)
+        {
+            distanceText.text = AppStrings.Get("map.noLocation");
+            return;
+        }
+
+        distanceText.text = AppStrings.FormatDistance(
+            metres, locationService != null && locationService.IsApproximate);
     }
 
     // Joins only the fields that are actually filled in, so a building missing an
@@ -122,8 +236,18 @@ public class InfoPanelController : MonoBehaviour
         if (learnMoreLabel != null)
             learnMoreLabel.text = AppStrings.Get("info.learnMore");
 
-        if (closeLabel != null)
-            closeLabel.text = AppStrings.Get("info.close");
+        // The one button changes what it says rather than sitting beside a second
+        // button that is wrong half the time.
+        if (guideLabel != null)
+        {
+            bool guidingHere = currentBuilding != null &&
+                               GuidanceService.Target == currentBuilding;
+
+            guideLabel.text = AppStrings.Get(guidingHere ? "guide.stop" : "guide.start");
+        }
+
+        if (hideLabel != null)
+            hideLabel.text = AppStrings.Get("marker.hide");
 
         // Re-render the open sheet in the new language rather than leaving stale
         // text until the reader closes and reopens it.
@@ -153,6 +277,8 @@ public class InfoPanelController : MonoBehaviour
 
     public void ClosePanel()
     {
+        currentBuilding = null;
+
         if (scrim != null)
             scrim.SetActive(false);
 

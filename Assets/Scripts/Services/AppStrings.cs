@@ -81,6 +81,40 @@ public static class AppStrings
 
     static readonly Dictionary<string, string> En = new Dictionary<string, string>
     {
+        { "tab.map", "Map" },
+
+        { "map.nearest", "Nearest to you" },
+        { "map.browse", "Browse all" },
+        { "map.backToMap", "Back to map" },
+        { "map.noLocation", "Location unknown" },
+        { "map.recentre", "Recentre" },
+
+        { "guide.start", "Guide me there" },
+        { "guide.stop", "Stop" },
+        { "guide.arrived", "You have arrived" },
+
+        { "marker.hide", "Hide this marker" },
+        { "camera.noMarkers", "No markers nearby" },
+
+        { "state.loading.title", "Loading markers" },
+        { "state.loading.body", "Fetching what is around you." },
+        { "state.locating.title", "Finding your position" },
+        { "state.locating.body", "Step into the open and this will be quicker." },
+        { "state.empty.title", "Nothing here yet" },
+        { "state.empty.body", "No markers within {0}. Browse everything, or zoom out." },
+        { "state.failed.title", "Couldn't load the markers" },
+        { "state.failed.body", "The server didn't answer. Anything downloaded earlier is still here." },
+        { "state.offline.title", "No connection" },
+        { "state.offline.body", "Check your connection. Markers downloaded earlier still work." },
+        { "state.retry", "Try again" },
+        { "state.widen", "Browse all" },
+
+        { "settings.privacy", "Privacy" },
+        { "settings.hidden", "Hidden markers" },
+        { "settings.hiddenNone", "None hidden" },
+        { "settings.hiddenCount", "{0} hidden" },
+        { "settings.unhideAll", "Show all again" },
+
         { "tab.camera", "Camera" },
         { "tab.search", "Search" },
         { "tab.settings", "Settings" },
@@ -102,7 +136,6 @@ public static class AppStrings
         { "vps.unavailable", "Unavailable" },
 
         { "info.learnMore", "Learn more" },
-        { "info.close", "Close" },
 
         { "search.placeholder", "Search buildings" },
         { "search.closest", "Closest to you" },
@@ -131,27 +164,6 @@ public static class AppStrings
         { "sub.tutorial.body", "The first-run walkthrough will live here." },
         { "sub.sources.body", "Building information is researched and written by hand, one entry at a time. Where a fact comes from a published source it is credited here." },
         { "sub.about.body", "An augmented reality guide to the architecture around you." },
-
-        { "ready.morning", "Good morning" },
-        { "ready.afternoon", "Good afternoon" },
-        { "ready.evening", "Good evening" },
-        { "ready.countHeadline", "{0} buildings around you" },
-        { "ready.finding", "Finding buildings nearby…" },
-        { "ready.closest", "Closest" },
-        { "ready.status.none.title", "Finding your position…" },
-        { "ready.status.none.body", "Hold your phone up and look around" },
-        { "ready.status.novps.title", "No visual positioning here" },
-        { "ready.status.novps.body", "Your position comes from GPS, so distances are approximate and markers can't be placed. Everything else works." },
-        { "ready.status.poor.title", "Still calibrating" },
-        { "ready.status.poor.body", "Point at nearby building facades to improve accuracy" },
-        { "ready.status.fair.title", "Almost ready" },
-        { "ready.status.fair.body", "Accuracy is improving — a few more seconds" },
-        { "ready.status.good.title", "Ready to explore" },
-        { "ready.status.good.body", "Position accurate to about {0}" },
-        { "ready.start", "Start exploring" },
-        { "ready.preparing", "Preparing…" },
-        { "ready.startAnyway", "Start anyway" },
-        { "ready.cameraOff", "Camera stays off until you start" },
         { "live.warning", "Marker positions may be inaccurate" },
 
         { "unit.metres", "{0} m" },
@@ -163,6 +175,40 @@ public static class AppStrings
 
     static readonly Dictionary<string, string> Bg = new Dictionary<string, string>
     {
+        { "tab.map", "Карта" },
+
+        { "map.nearest", "Най-близо до вас" },
+        { "map.browse", "Всички маркери" },
+        { "map.backToMap", "Към картата" },
+        { "map.noLocation", "Неизвестно местоположение" },
+        { "map.recentre", "Центрирай" },
+
+        { "guide.start", "Заведи ме там" },
+        { "guide.stop", "Спри" },
+        { "guide.arrived", "Пристигнахте" },
+
+        { "marker.hide", "Скрий този маркер" },
+        { "camera.noMarkers", "Няма маркери наблизо" },
+
+        { "state.loading.title", "Зареждане на маркери" },
+        { "state.loading.body", "Изтегляне на това, което е около вас." },
+        { "state.locating.title", "Определяне на позицията" },
+        { "state.locating.body", "Излезте на открито и това ще стане по-бързо." },
+        { "state.empty.title", "Тук няма маркери" },
+        { "state.empty.body", "Няма маркери в радиус от {0}. Разгледайте всички или отдалечете картата." },
+        { "state.failed.title", "Маркерите не се заредиха" },
+        { "state.failed.body", "Сървърът не отговори. Вече изтегленото остава достъпно." },
+        { "state.offline.title", "Няма връзка" },
+        { "state.offline.body", "Проверете връзката си. Изтеглените маркери продължават да работят." },
+        { "state.retry", "Опитай отново" },
+        { "state.widen", "Всички маркери" },
+
+        { "settings.privacy", "Поверителност" },
+        { "settings.hidden", "Скрити маркери" },
+        { "settings.hiddenNone", "Няма скрити" },
+        { "settings.hiddenCount", "{0} скрити" },
+        { "settings.unhideAll", "Покажи всички отново" },
+
         { "tab.camera", "Камера" },
         { "tab.search", "Търсене" },
         { "tab.settings", "Настройки" },
@@ -184,7 +230,6 @@ public static class AppStrings
         { "vps.unavailable", "Недостъпно" },
 
         { "info.learnMore", "Научи повече" },
-        { "info.close", "Затвори" },
 
         { "search.placeholder", "Търсене на сгради" },
         { "search.closest", "Най-близо до вас" },
@@ -213,27 +258,6 @@ public static class AppStrings
         { "sub.tutorial.body", "Тук ще бъде въведението при първо стартиране." },
         { "sub.sources.body", "Информацията за сградите е проучена и написана ръчно, запис по запис. Когато даден факт идва от публикуван източник, той е посочен тук." },
         { "sub.about.body", "Приложение с добавена реалност за архитектурата около вас." },
-
-        { "ready.morning", "Добро утро" },
-        { "ready.afternoon", "Добър ден" },
-        { "ready.evening", "Добър вечер" },
-        { "ready.countHeadline", "{0} сгради около вас" },
-        { "ready.finding", "Търсене на сгради наблизо…" },
-        { "ready.closest", "Най-близо" },
-        { "ready.status.none.title", "Определяне на позицията…" },
-        { "ready.status.none.body", "Вдигнете телефона и се огледайте" },
-        { "ready.status.novps.title", "Няма визуално позициониране тук" },
-        { "ready.status.novps.body", "Позицията идва от GPS, затова разстоянията са приблизителни и маркери не могат да се поставят. Всичко останало работи." },
-        { "ready.status.poor.title", "Все още се калибрира" },
-        { "ready.status.poor.body", "Насочете към фасади наблизо за по-добра точност" },
-        { "ready.status.fair.title", "Почти готово" },
-        { "ready.status.fair.body", "Точността се подобрява — още няколко секунди" },
-        { "ready.status.good.title", "Готово за разглеждане" },
-        { "ready.status.good.body", "Точност на позицията около {0}" },
-        { "ready.start", "Започни" },
-        { "ready.preparing", "Подготовка…" },
-        { "ready.startAnyway", "Започни въпреки това" },
-        { "ready.cameraOff", "Камерата остава изключена, докато не започнете" },
         { "live.warning", "Позициите на маркерите може да са неточни" },
 
         { "unit.metres", "{0} м" },

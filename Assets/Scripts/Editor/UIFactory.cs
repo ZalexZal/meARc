@@ -7,7 +7,13 @@ public enum UIShape
     Rect,
     Rounded,
     Pill,
-    Circle
+    Circle,
+
+    /// <summary>A circle with a hole, for the ring that separates a marker dot.</summary>
+    Ring,
+
+    /// <summary>Points up at zero rotation. Every direction arrow in the app.</summary>
+    Triangle
 }
 
 /// <summary>
@@ -81,6 +87,16 @@ public static class UIFactory
 
             case UIShape.Circle:
                 image.sprite = UISprites.Circle;
+                image.type = Image.Type.Simple;
+                break;
+
+            case UIShape.Ring:
+                image.sprite = UISprites.Ring;
+                image.type = Image.Type.Simple;
+                break;
+
+            case UIShape.Triangle:
+                image.sprite = UISprites.Triangle;
                 image.type = Image.Type.Simple;
                 break;
         }

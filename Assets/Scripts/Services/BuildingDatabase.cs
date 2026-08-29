@@ -81,15 +81,21 @@ public static class BuildingDatabase
         LoadState = State.Ready;
 
         RebuildVisible();
-        Raise();
     }
 
-    /// <summary>Re-applies draft filtering, e.g. after developer mode is toggled.</summary>
+    /// <summary>
+    /// Re-applies the filters and tells everything listening. Called after the list
+    /// is replaced, after developer mode is toggled, and after the reader hides or
+    /// unhides a marker.
+    /// </summary>
     public static void RebuildVisible()
     {
         bool showDrafts = DeveloperMode.ShowDrafts;
 
-        _visible = _all.Where(b => b != null && (b.isPublished || showDrafts)).ToList();
+        _visible = _all
+            .Where(b => b != null && (b.isPublished || showDrafts))
+            .Where(b => !HiddenMarkers.IsHidden(b))
+            .ToList();
 
         _byId = new Dictionary<string, BuildingData>();
         foreach (BuildingData building in _visible)
@@ -110,6 +116,8 @@ public static class BuildingDatabase
 
             _byId.Add(building.buildingId, building);
         }
+
+        Raise();
     }
 
     static void Raise()

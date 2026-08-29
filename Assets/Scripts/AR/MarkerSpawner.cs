@@ -267,20 +267,13 @@ public class MarkerSpawner : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// Delegated so the cube in the world, the pin on the map and the dot on the
+    /// sheet can never disagree about a marker's colour.
+    /// </summary>
     static Color ChooseColour(BuildingData building)
     {
-        // The sheet wins, so one building can be made to stand out without changing
-        // what its whole category looks like.
-        if (!string.IsNullOrWhiteSpace(building.markerColourHex) &&
-            ColorUtility.TryParseHtmlString(building.markerColourHex.Trim(), out Color parsed))
-        {
-            return parsed;
-        }
-
-        if (building.category != null)
-            return building.category.markerColour;
-
-        return Color.white;
+        return MarkerPalette.Resolve(building);
     }
 
     void Log(string message)

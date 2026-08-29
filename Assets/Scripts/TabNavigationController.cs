@@ -1,40 +1,63 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
+/// <summary>
+/// Which screen is on.
+///
+/// Three tabs, in the order the walk happens: Map, Camera, Settings. The app opens
+/// on Map, never on Camera - a camera that opens itself is pointed at whatever the
+/// phone happened to be over, and it asks for the one permission the reader has no
+/// reason to grant yet.
+///
+/// Browse is a fourth panel with no tab of its own. It belongs to Map - the map
+/// answers "what is around me", browse answers "what exists" - and giving it a tab
+/// would put a fourth thing in a bar whose job is to be readable at a glance while
+/// walking.
+/// </summary>
 public class TabNavigationController : MonoBehaviour
 {
     [Header("Panels")]
+    public GameObject mapPanel;
     public GameObject cameraPanel;
-    public GameObject searchPanel;
     public GameObject settingsPanel;
 
+    [Tooltip("The searchable list. Reached from the Map tab, not from the nav bar.")]
+    public GameObject browsePanel;
+
     [Header("Chrome")]
-    [Tooltip("Restored on every tab switch, in case the Camera tab hid it for its " +
-             "Ready State.")]
     public GameObject bottomNav;
 
-    [Header("Settings tab")]
-    [Tooltip("Pressing Settings while already inside a sub-page returns to the top " +
-             "level, rather than doing nothing.")]
+    [Header("Tabs")]
     public SettingsTabController settingsTab;
 
-    [Header("Camera tab")]
-    [Tooltip("Decides whether the Camera tab opens in its Ready State or straight " +
-             "into the live view. Without one, the panel is just activated as-is.")]
-    public CameraTabController cameraTab;
-
-    [Header("Tab labels (optional)")]
+    [Header("Tab labels")]
     [Tooltip("Coloured here rather than by a ThemedElement, because the active tab " +
              "and the inactive ones need different roles.")]
+    public TMP_Text mapLabel;
     public TMP_Text cameraLabel;
-    public TMP_Text searchLabel;
     public TMP_Text settingsLabel;
 
-    // All three panels are left enabled in the scene so they can be edited without
-    // toggling them on and off, so the starting tab is decided here instead.
+    [Header("Tab icons")]
+    [Tooltip("Each icon is drawn from two or three primitives rather than one glyph, " +
+             "because the font atlas carries no icons - so the active colour has to " +
+             "be applied to every piece.")]
+    public Graphic[] mapIcon;
+    public Graphic[] cameraIcon;
+    public Graphic[] settingsIcon;
+
+    enum Tab
+    {
+        Map,
+        Camera,
+        Settings
+    }
+
+    Tab _tab = Tab.Map;
+
     void Start()
     {
-        ShowCamera();
+        ShowMap();
     }
 
     void OnEnable()
@@ -48,23 +71,21 @@ public class TabNavigationController : MonoBehaviour
         ThemeManager.OnThemeChanged -= ApplyTabColours;
     }
 
-    public void ShowCamera()
+    public void ShowMap()
     {
-        ShowOnly(cameraPanel);
-
-        // The Camera tab has two states, and which one to show depends on whether
-        // the reader has already started this session - so it decides, not us.
-        if (cameraTab != null)
-            cameraTab.ShowAppropriateState();
+        _tab = Tab.Map;
+        ShowOnly(mapPanel);
     }
 
-    public void ShowSearch()
+    public void ShowCamera()
     {
-        ShowOnly(searchPanel);
+        _tab = Tab.Camera;
+        ShowOnly(cameraPanel);
     }
 
     public void ShowSettings()
     {
+        _tab = Tab.Settings;
         ShowOnly(settingsPanel);
 
         // OnEnable does this on a fresh open, but pressing Settings while already
@@ -73,35 +94,65 @@ public class TabNavigationController : MonoBehaviour
             settingsTab.ResetToRoot();
     }
 
+    /// <summary>
+    /// The list, shown over the Map tab. The Map tab stays lit, because that is
+    /// where Back goes, and a nav bar that lights nothing leaves the reader
+    /// wondering where they are.
+    /// </summary>
+    public void ShowBrowse()
+    {
+        _tab = Tab.Map;
+        ShowOnly(browsePanel);
+    }
+
     void ShowOnly(GameObject panelToShow)
     {
-        // The Camera tab hides this for its Ready State and turns it back on when
-        // entering Live. Every other tab always wants it.
-        if (bottomNav != null && panelToShow != cameraPanel)
+        if (bottomNav != null)
             bottomNav.SetActive(true);
 
-        cameraPanel.SetActive(panelToShow == cameraPanel);
-        searchPanel.SetActive(panelToShow == searchPanel);
-        settingsPanel.SetActive(panelToShow == settingsPanel);
+        SetActive(mapPanel, panelToShow);
+        SetActive(cameraPanel, panelToShow);
+        SetActive(settingsPanel, panelToShow);
+        SetActive(browsePanel, panelToShow);
 
         ApplyTabColours();
     }
 
-    void ApplyTabColours()
+    static void SetActive(GameObject panel, GameObject wanted)
     {
-        Apply(cameraLabel, cameraPanel);
-        Apply(searchLabel, searchPanel);
-        Apply(settingsLabel, settingsPanel);
+        if (panel != null)
+            panel.SetActive(panel == wanted);
     }
 
-    static void Apply(TMP_Text label, GameObject panel)
+    void ApplyTabColours()
     {
-        if (label == null || panel == null)
+        Apply(mapLabel, mapIcon, _tab == Tab.Map);
+        Apply(cameraLabel, cameraIcon, _tab == Tab.Camera);
+        Apply(settingsLabel, settingsIcon, _tab == Tab.Settings);
+    }
+
+    /// <summary>
+    /// The active tab is shown by colour and by weight, not by colour alone -
+    /// bold is the cue that still works for anyone who cannot tell this teal from
+    /// this grey.
+    /// </summary>
+    static void Apply(TMP_Text label, Graphic[] icon, bool active)
+    {
+        Color colour = ThemeManager.Get(active ? ThemeRole.Accent : ThemeRole.TextMuted);
+
+        if (label != null)
+        {
+            label.color = colour;
+            label.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
+        }
+
+        if (icon == null)
             return;
 
-        bool active = panel.activeSelf;
-
-        label.color = ThemeManager.Get(active ? ThemeRole.TextPrimary : ThemeRole.TextMuted);
-        label.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
+        for (int i = 0; i < icon.Length; i++)
+        {
+            if (icon[i] != null)
+                icon[i].color = colour;
+        }
     }
 }

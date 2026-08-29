@@ -112,6 +112,23 @@ public class RemoteMarkerSource : MonoBehaviour
         StartCoroutine(FetchWhenLocated());
     }
 
+    /// <summary>
+    /// Fetches again now, ignoring the throttle.
+    ///
+    /// The throttle exists to stop the app hammering the server on its own; a
+    /// reader who pressed Retry has asked, and answering "not yet" to a button
+    /// press is how a retry button earns a reputation for doing nothing.
+    /// </summary>
+    public void Refresh()
+    {
+        if (_fetching)
+            return;
+
+        _lastFetchTime = -999f;
+        BuildingDatabase.SetLoading();
+        StartCoroutine(FetchWhenLocated());
+    }
+
     void Update()
     {
         // Walking out of the fetched radius should bring in the next markers without

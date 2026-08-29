@@ -24,6 +24,30 @@ public static class UISprites
     /// <summary>A plain circle, for dots and switch knobs.</summary>
     public static Sprite Circle { get { return GetOrCreate("UICircle", 64, 32, false); } }
 
+    /// <summary>
+    /// A ring. This is what separates a marker from whatever is behind it, so it
+    /// has to be a real hole rather than a circle in the background colour - the
+    /// map, the camera feed and the sheet are three different backgrounds.
+    /// </summary>
+    public static Sprite Ring { get { return GetOrCreateRing("UIRing", 64, 7); } }
+
+    /// <summary>
+    /// A triangle pointing up, for every direction arrow in the app. Drawn rather
+    /// than typed: the font atlas is Latin plus Cyrillic, and an arrow glyph
+    /// renders as an empty box on device.
+    /// </summary>
+    public static Sprite Triangle { get { return GetOrCreateTriangle("UITriangle", 64); } }
+
+    static Sprite GetOrCreateRing(string name, int size, float thickness)
+    {
+        return Save(name, RenderRing(size, thickness), 0);
+    }
+
+    static Sprite GetOrCreateTriangle(string name, int size)
+    {
+        return Save(name, RenderTriangle(size), 0);
+    }
+
     static Sprite GetOrCreate(string name, int size, int radius, bool sliced = true)
     {
         string path = Folder + "/" + name + ".png";
@@ -55,6 +79,104 @@ public static class UISprites
         importer.SaveAndReimport();
 
         return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+    }
+
+    /// <summary>Shared write-and-import step, so every generated sprite lands the same way.</summary>
+    static Sprite Save(string name, Texture2D texture, int border)
+    {
+        string path = Folder + "/" + name + ".png";
+
+        Sprite existing = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        if (existing != null)
+            return existing;
+
+        if (!AssetDatabase.IsValidFolder(Folder))
+            AssetDatabase.CreateFolder("Assets", "UI");
+
+        File.WriteAllBytes(path, texture.EncodeToPNG());
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+
+        TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
+        importer.textureType = TextureImporterType.Sprite;
+        importer.spriteImportMode = SpriteImportMode.Single;
+        importer.alphaIsTransparency = true;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.wrapMode = TextureWrapMode.Clamp;
+
+        if (border > 0)
+            importer.spriteBorder = new Vector4(border, border, border, border);
+
+        importer.SaveAndReimport();
+
+        return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+    }
+
+    static Texture2D RenderRing(int size, float thickness)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        float half = size * 0.5f;
+        float outer = half - 1f;
+        float inner = outer - thickness;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - half;
+                float dy = y + 0.5f - half;
+                float distance = Mathf.Sqrt(dx * dx + dy * dy);
+
+                float alpha = Mathf.Clamp01(outer - distance + 0.5f) *
+                              Mathf.Clamp01(distance - inner + 0.5f);
+
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
+    static Texture2D RenderTriangle(int size)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+
+        // Apex at the top centre, base along the bottom, inset a pixel so the
+        // anti-aliased edge has somewhere to fade into.
+        Vector2 apex = new Vector2(size * 0.5f, size - 1f);
+        Vector2 left = new Vector2(1f, 1f);
+        Vector2 right = new Vector2(size - 1f, 1f);
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Vector2 point = new Vector2(x + 0.5f, y + 0.5f);
+
+                float inside = Mathf.Min(
+                    Mathf.Min(Edge(point, left, right), Edge(point, right, apex)),
+                    Edge(point, apex, left));
+
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(inside + 0.5f)));
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
+    /// <summary>Signed distance from a point to the line through a and b, positive inside.</summary>
+    static float Edge(Vector2 point, Vector2 a, Vector2 b)
+    {
+        Vector2 edge = b - a;
+        float length = edge.magnitude;
+
+        if (length < 0.0001f)
+            return 0f;
+
+        return (edge.x * (point.y - a.y) - edge.y * (point.x - a.x)) / length;
     }
 
     /// <summary>

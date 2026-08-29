@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// The Search tab.
@@ -24,6 +25,16 @@ public class SearchTabController : MonoBehaviour
              "sheet can show, because the sheet lives inside that tab.")]
     public TabNavigationController tabs;
     public CameraTabController cameraTab;
+
+    [Tooltip("Where a result goes. Browse answers what exists; the map is where " +
+             "the reader decides what to do about it.")]
+    public MapTabController mapTab;
+
+    [Header("Chrome")]
+    [Tooltip("Back to the map. Browse has no tab of its own, so without this there " +
+             "is no way out of it but the nav bar.")]
+    public Button backButton;
+    public TextMeshProUGUI backLabel;
 
     [Header("References")]
     public UserLocationService locationService;
@@ -81,20 +92,32 @@ public class SearchTabController : MonoBehaviour
         // discarded when the scene saves.
         if (onBuildingSelected == null)
             onBuildingSelected = OpenBuilding;
+
+        if (backButton != null)
+            backButton.onClick.AddListener(GoBack);
+    }
+
+    void GoBack()
+    {
+        if (tabs != null)
+            tabs.ShowMap();
     }
 
     /// <summary>
-    /// Switches to the Camera tab, enters the live view, and opens the sheet -
-    /// in that order, because the sheet is a child of the live view and cannot
-    /// render while the Camera tab is inactive.
+    /// Returns to the map with this marker selected and its sheet open.
+    ///
+    /// The map, not the camera. A result chosen from a list is usually somewhere
+    /// the reader has not walked to yet, and dropping them into a camera view of a
+    /// street that does not contain it yet is the single most confusing thing this
+    /// app could do. The sheet's own Guide me there is the way onward.
     /// </summary>
     void OpenBuilding(BuildingData building)
     {
         if (tabs != null)
-            tabs.ShowCamera();
+            tabs.ShowMap();
 
-        if (cameraTab != null)
-            cameraTab.EnterLiveWithBuilding(building);
+        if (mapTab != null)
+            mapTab.Focus(building);
     }
 
     void OnEnable()
@@ -130,6 +153,9 @@ public class SearchTabController : MonoBehaviour
     {
         if (searchPlaceholder != null)
             searchPlaceholder.text = AppStrings.Get("search.placeholder");
+
+        if (backLabel != null)
+            backLabel.text = AppStrings.Get("map.backToMap");
 
         if (closestLabel != null)
             closestLabel.text = AppStrings.Get("search.closest");
