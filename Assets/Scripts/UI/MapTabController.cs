@@ -108,6 +108,12 @@ public class MapTabController : MonoBehaviour
         Refresh();
     }
 
+    void LateUpdate()
+    {
+        if (map != null && infoPanel != null)
+            map.interactable = infoPanel.Current == null;
+    }
+
     // ------------------------------------------------------------------ actions
 
     void OpenMarker(BuildingData building)

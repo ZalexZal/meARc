@@ -184,7 +184,31 @@ public static class UIFactory
         Button button = rt.gameObject.AddComponent<Button>();
         button.targetGraphic = image;
 
+        Feedback(button);
         return button;
+    }
+
+    /// <summary>
+    /// Replaces Unity's colour tint with a dim on the whole control.
+    ///
+    /// The tint acts on the target graphic, and most controls here have an
+    /// invisible one so a whole row can be tapped - a nav tab, a list row, a
+    /// settings row. Tinting an alpha-zero rectangle is no feedback at all, which
+    /// left most of the app answering taps with nothing.
+    /// </summary>
+    public static TapFeedback Feedback(Button button)
+    {
+        button.transition = Selectable.Transition.None;
+
+        if (button.GetComponent<CanvasGroup>() == null)
+            button.gameObject.AddComponent<CanvasGroup>();
+
+        TapFeedback feedback = button.GetComponent<TapFeedback>();
+        if (feedback == null)
+            feedback = button.gameObject.AddComponent<TapFeedback>();
+
+        feedback.target = button;
+        return feedback;
     }
 
     /// <summary>

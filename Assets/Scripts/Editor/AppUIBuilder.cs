@@ -1480,7 +1480,7 @@ public static class AppUIBuilder
 
         Button button = rt.gameObject.AddComponent<Button>();
         button.targetGraphic = background;
-        button.transition = Selectable.Transition.None;
+        UIFactory.Feedback(button);
 
         label = UIFactory.Text("Label", rt, Caption, ThemeRole.TextMuted,
                                TextAlignmentOptions.Center);
@@ -1606,6 +1606,7 @@ public static class AppUIBuilder
 
         Button button = rt.gameObject.AddComponent<Button>();
         button.targetGraphic = background;
+        UIFactory.Feedback(button);
 
         RectTransform iconRect = UIFactory.Rect("Icon", rt);
         UIFactory.Corner(iconRect, new Vector2(0.5f, 1f), new Vector2(58f, 58f),
@@ -1718,7 +1719,7 @@ public static class AppUIBuilder
 
         Button button = temp.AddComponent<Button>();
         button.targetGraphic = hit;
-        button.transition = Selectable.Transition.None;
+        UIFactory.Feedback(button);
 
         RectTransform selection = UIFactory.Rect("Selection", rt);
         UIFactory.Corner(selection, new Vector2(0.5f, 0.5f), new Vector2(66f, 66f), Vector2.zero);
@@ -1852,6 +1853,7 @@ public static class AppUIBuilder
 
         Button button = temp.AddComponent<Button>();
         button.targetGraphic = background;
+        UIFactory.Feedback(button);
 
         RectTransform labelRect = UIFactory.Rect("Label", rt);
         TextMeshProUGUI label = labelRect.gameObject.AddComponent<TextMeshProUGUI>();

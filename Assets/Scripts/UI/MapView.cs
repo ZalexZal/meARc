@@ -69,6 +69,13 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     /// <summary>Raised when the reader pans or zooms, so a recentre control can appear.</summary>
     public Action onViewMoved;
 
+    /// <summary>
+    /// Turned off while a sheet is open. Dragging is already blocked by the sheet
+    /// scrim, but pinch reads raw touches and would otherwise zoom the map behind
+    /// whatever the reader is reading.
+    /// </summary>
+    public bool interactable = true;
+
     readonly Dictionary<BuildingData, MapPinView> _pins =
         new Dictionary<BuildingData, MapPinView>();
 
@@ -201,6 +208,12 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
     void HandlePinch()
     {
+        if (!interactable)
+        {
+            _pinchStart = 0f;
+            return;
+        }
+
         if (Input.touchCount != 2)
         {
             _pinchStart = 0f;
