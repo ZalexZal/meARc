@@ -38,6 +38,10 @@ public class SettingsTabController : MonoBehaviour
     public TextMeshProUGUI nearbyRowLabel;
     public Toggle nearbyToggle;
 
+    [Tooltip("Says that this fires while the app is open. Without it the row sits " +
+             "under a heading that promises something it does not do.")]
+    public TextMeshProUGUI nearbyNoteLabel;
+
     [Header("Privacy")]
     [Tooltip("Anyone can put a marker on a public street, so the reader needs a way " +
              "to take one off their own map. This is where they get it back.")]
@@ -55,9 +59,13 @@ public class SettingsTabController : MonoBehaviour
     public Button sourcesButton;
     public Button aboutButton;
 
+    [Header("Help")]
+    [Tooltip("The walkthrough itself. Replay tutorial opens it rather than " +
+             "navigating to a page about it.")]
+    public TutorialFlow tutorial;
+
     [Header("Sub-pages")]
     public SubPanelNavigator navigator;
-    public GameObject tutorialPage;
     public GameObject sourcesPage;
     public GameObject aboutPage;
 
@@ -67,8 +75,6 @@ public class SettingsTabController : MonoBehaviour
     [Tooltip("Seven taps on the version label toggle developer mode, which reveals " +
              "draft buildings. Same gesture Android uses for Developer Options.")]
     public Button versionButton;
-
-    const string NearbyPrefKey = "notify_nearby";
 
     void Awake()
     {
@@ -92,9 +98,12 @@ public class SettingsTabController : MonoBehaviour
 
         if (nearbyToggle != null)
         {
-            nearbyToggle.isOn = PlayerPrefs.GetInt(NearbyPrefKey, 1) == 1;
-            nearbyToggle.onValueChanged.AddListener(SetNearbyNotifications);
+            nearbyToggle.isOn = ProximityAlerts.Enabled;
+            nearbyToggle.onValueChanged.AddListener(SetNearbyAlerts);
         }
+
+        if (tutorialButton != null)
+            tutorialButton.onClick.AddListener(ReplayTutorial);
 
         if (versionButton != null)
             versionButton.onClick.AddListener(HandleVersionTap);
@@ -102,7 +111,6 @@ public class SettingsTabController : MonoBehaviour
         if (unhideAllButton != null)
             unhideAllButton.onClick.AddListener(UnhideAll);
 
-        WireHelpRow(tutorialButton, tutorialPage);
         WireHelpRow(sourcesButton, sourcesPage);
         WireHelpRow(aboutButton, aboutPage);
     }
@@ -171,11 +179,15 @@ public class SettingsTabController : MonoBehaviour
         ApplyLanguageSegment();
     }
 
-    // This only records the preference for now. Scheduling is a later pass.
-    void SetNearbyNotifications(bool enabled)
+    static void SetNearbyAlerts(bool enabled)
     {
-        PlayerPrefs.SetInt(NearbyPrefKey, enabled ? 1 : 0);
-        PlayerPrefs.Save();
+        ProximityAlerts.Enabled = enabled;
+    }
+
+    void ReplayTutorial()
+    {
+        if (tutorial != null)
+            tutorial.Open();
     }
 
     void ApplyLabels()
@@ -187,6 +199,7 @@ public class SettingsTabController : MonoBehaviour
         Set(languageRowLabel, "settings.appLanguage");
         Set(notificationsLabel, "settings.notifications");
         Set(nearbyRowLabel, "settings.nearbyBuildings");
+        Set(nearbyNoteLabel, "settings.nearbyNote");
         Set(privacyLabel, "settings.privacy");
         Set(hiddenRowLabel, "settings.hidden");
         Set(unhideAllLabel, "settings.unhideAll");

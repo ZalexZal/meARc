@@ -54,7 +54,7 @@ public static class AppUIBuilder
     static readonly string[] GeneratedNames =
     {
         "MapPanel", "CameraPanel", "BrowsePanel", "SearchPanel", "SettingsPanel",
-        "InfoPanel", "InfoSheet", "BottomNav",
+        "InfoPanel", "InfoSheet", "BottomNav", "ProximityToast", "Tutorial",
         "NearbyButton", "VpsIndicator", "NearbyPanel", "LiveARView", "ReadyStateView",
         "SearchContent", "SettingsContent"
     };
@@ -145,6 +145,10 @@ public static class AppUIBuilder
 
         // BuildNav returns the padded row the buttons go in. The bar itself is its
         // parent, and that is what the tab controller shows and hides.
+        // Under the marker sheet in draw order, so an alert can never cover
+        // something the reader opened on purpose.
+        BuildProximityToast(root, location, info);
+
         RectTransform navRow = BuildNav(root);
 
         TabNavigationController tabs = WireTabs(
@@ -160,6 +164,11 @@ public static class AppUIBuilder
         EditorUtility.SetDirty(browseTab);
 
         WireTapInput(cameraPanel, info);
+
+        // Last, so the walkthrough covers the nav bar too. A first run with a live
+        // tab bar behind the explanation is a first run people tap straight past.
+        settingsTab.tutorial = BuildTutorial(root);
+        EditorUtility.SetDirty(settingsTab);
 
         AddFade(mapPanel.gameObject);
         AddFade(browsePanel.gameObject);
@@ -239,6 +248,14 @@ public static class AppUIBuilder
         go.AddComponent<RemoteMarkerSource>();
 
         UserLocationService location = go.AddComponent<UserLocationService>();
+
+        // Watches for markers coming into range while the app is open. Lives here
+        // rather than on a panel, so walking past one while reading Settings still
+        // counts.
+        ProximityAlerts alerts = go.AddComponent<ProximityAlerts>();
+        alerts.locationService = location;
+        alerts.alertRadiusMetres = 60d;
+        alerts.rearmRadiusMetres = 110d;
         location.earthManager =
             Object.FindFirstObjectByType<AREarthManager>(FindObjectsInactive.Include);
 
@@ -1174,6 +1191,205 @@ public static class AppUIBuilder
         EditorUtility.SetDirty(tap);
     }
 
+    // --------------------------------------------------------------------- toast
+
+    /// <summary>
+    /// The card that arrives when a marker comes into range. Built at the Canvas
+    /// root so it shows on any tab.
+    /// </summary>
+    static ProximityToast BuildProximityToast(Transform root, UserLocationService location,
+                                              InfoPanelController info)
+    {
+        RectTransform holder = UIFactory.Rect("ProximityToast", root);
+        Undo.RegisterCreatedObjectUndo(holder.gameObject, "Build App UI");
+        UIFactory.Stretch(holder);
+
+        ProximityToast toast = holder.gameObject.AddComponent<ProximityToast>();
+        toast.locationService = location;
+        toast.infoPanel = info;
+        toast.restY = Nav + 40f;
+        toast.slideDistance = 240f;
+
+        RectTransform safe = UIFactory.Rect("Safe", holder);
+        UIFactory.Stretch(safe);
+        SafeAreaPad pad = safe.gameObject.AddComponent<SafeAreaPad>();
+        pad.left = true;
+        pad.right = true;
+
+        // Switched on and off by the toast. The component stays on the holder
+        // above it, which has to keep running to hear the next alert.
+        RectTransform cardHolder = UIFactory.Rect("CardHolder", safe);
+        UIFactory.Stretch(cardHolder);
+        toast.root = cardHolder.gameObject;
+
+        RectTransform card = UIFactory.Rect("Card", cardHolder);
+        card.anchorMin = new Vector2(0f, 0f);
+        card.anchorMax = new Vector2(1f, 0f);
+        card.pivot = new Vector2(0.5f, 0f);
+        card.sizeDelta = new Vector2(-Margin * 2f, 160f);
+        card.anchoredPosition = new Vector2(0f, toast.restY);
+        toast.card = card;
+
+        toast.openButton = UIFactory.Button(card, ThemeRole.Surface, 1f, UIShape.Rounded);
+
+        RectTransform row = UIFactory.Rect("Row", card);
+        UIFactory.Stretch(row);
+        row.offsetMin = new Vector2(28f, 0f);
+        row.offsetMax = new Vector2(-16f, 0f);
+        UIFactory.HorizontalStack(row, 20f);
+
+        toast.colourRing = Disc(row, 52f, ThemeRole.Line, UIShape.Ring,
+                                out RectTransform ringRect);
+        toast.colourDot = Disc(ringRect, 32f, ThemeRole.Accent, UIShape.Circle,
+                               out RectTransform _);
+
+        RectTransform text = UIFactory.Rect("Text", row);
+        UIFactory.Size(text.gameObject, 100f);
+        UIFactory.Flexible(text.gameObject);
+        UIFactory.VerticalStack(text, 2f, false);
+
+        toast.captionText = UIFactory.Text("Caption", text, Caption, ThemeRole.TextMuted,
+                                           TextAlignmentOptions.Left, "alert.caption");
+        UIFactory.Size(toast.captionText.gameObject, 40f);
+
+        toast.nameText = UIFactory.Text("Name", text, Body, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(toast.nameText.gameObject, 56f);
+
+        toast.distanceText = UIFactory.Text("Distance", row, Body, ThemeRole.Accent,
+                                            TextAlignmentOptions.Right, null, FontStyles.Bold);
+        LayoutElement distanceSize = UIFactory.Size(toast.distanceText.gameObject, 60f, 170f);
+        distanceSize.flexibleWidth = 0f;
+
+        RectTransform dismiss = UIFactory.Rect("Dismiss", row);
+        LayoutElement dismissSize = UIFactory.Size(dismiss.gameObject, Tap, Tap);
+        dismissSize.flexibleWidth = 0f;
+        toast.dismissButton = UIFactory.Button(dismiss, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
+        UIFactory.Cross(dismiss, ThemeRole.TextSecondary, 30f, 4f);
+
+        cardHolder.gameObject.SetActive(false);
+        return toast;
+    }
+
+    // ------------------------------------------------------------------ tutorial
+
+    /// <summary>
+    /// The first-run walkthrough. Four cards over an opaque background, because it
+    /// is explaining the screen behind it and a half-visible screen is a
+    /// distraction rather than a demonstration.
+    /// </summary>
+    static TutorialFlow BuildTutorial(Transform root)
+    {
+        RectTransform holder = UIFactory.Rect("Tutorial", root);
+        Undo.RegisterCreatedObjectUndo(holder.gameObject, "Build App UI");
+        UIFactory.Stretch(holder);
+
+        TutorialFlow flow = holder.gameObject.AddComponent<TutorialFlow>();
+
+        // The overlay is what is shown and hidden. The holder above it has to stay
+        // active or the flow never reaches Start, where the first run is decided.
+        RectTransform overlay = UIFactory.Rect("Overlay", holder);
+        UIFactory.Stretch(overlay);
+        UIFactory.Fill(overlay, ThemeRole.Background).raycastTarget = true;
+        flow.root = overlay.gameObject;
+
+        RectTransform safe = SafeContent(overlay, padBottom: true);
+
+        RectTransform inner = UIFactory.Rect("Inner", safe);
+        UIFactory.Stretch(inner);
+        inner.offsetMin = new Vector2(Margin, Margin);
+        inner.offsetMax = new Vector2(-Margin, -Margin);
+
+        RectTransform back = UIFactory.Rect("Back", inner);
+        UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(240f, Tap), Vector2.zero);
+        flow.backButton = UIFactory.Button(back, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+        flow.backLabel = UIFactory.Text("Label", back, Secondary, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Center, "settings.back",
+                                        FontStyles.Bold);
+        UIFactory.Stretch(flow.backLabel.rectTransform);
+        back.gameObject.SetActive(false);
+
+        RectTransform pages = UIFactory.Rect("Pages", inner);
+        UIFactory.Stretch(pages);
+        pages.offsetMin = new Vector2(0f, Tap * 2f + 120f);
+        pages.offsetMax = new Vector2(0f, -(Tap + 40f));
+
+        for (int i = 1; i <= 4; i++)
+            flow.pages.Add(TutorialPage(pages, "tutorial." + i));
+
+        RectTransform dots = UIFactory.Rect("Dots", inner);
+        UIFactory.Corner(dots, new Vector2(0.5f, 0f), new Vector2(300f, 40f),
+                         new Vector2(0f, Tap * 2f + 46f));
+        HorizontalLayoutGroup dotsLayout = UIFactory.HorizontalStack(dots, 12f);
+        dotsLayout.childAlignment = TextAnchor.MiddleCenter;
+
+        for (int i = 0; i < 4; i++)
+        {
+            RectTransform dot = UIFactory.Rect("Dot" + i, dots);
+            LayoutElement dotSize = UIFactory.Size(dot.gameObject, 14f, 14f);
+            dotSize.flexibleWidth = 0f;
+
+            Image image = UIFactory.Plain(dot, ThemeManager.Get(ThemeRole.Line), UIShape.Pill);
+            image.raycastTarget = false;
+            flow.dots.Add(image);
+        }
+
+        RectTransform next = UIFactory.Rect("Next", inner);
+        next.anchorMin = new Vector2(0f, 0f);
+        next.anchorMax = new Vector2(1f, 0f);
+        next.pivot = new Vector2(0.5f, 0f);
+        next.sizeDelta = new Vector2(0f, Tap);
+        next.anchoredPosition = new Vector2(0f, Tap + 16f);
+        flow.nextButton = UIFactory.Button(next, ThemeRole.Accent, 1f, UIShape.Rounded);
+        Unthemed(next.gameObject);
+        flow.nextLabel = UIFactory.Text("Label", next, Body, ThemeRole.OnAccent,
+                                        TextAlignmentOptions.Center, null, FontStyles.Bold);
+        UIFactory.Stretch(flow.nextLabel.rectTransform);
+        Unthemed(flow.nextLabel.gameObject);
+
+        RectTransform skip = UIFactory.Rect("Skip", inner);
+        skip.anchorMin = new Vector2(0f, 0f);
+        skip.anchorMax = new Vector2(1f, 0f);
+        skip.pivot = new Vector2(0.5f, 0f);
+        skip.sizeDelta = new Vector2(0f, Tap);
+        skip.anchoredPosition = Vector2.zero;
+        flow.skipButton = UIFactory.Button(skip, ThemeRole.Background, 0f);
+        flow.skipLabel = UIFactory.Text("Label", skip, Secondary, ThemeRole.TextSecondary,
+                                        TextAlignmentOptions.Center, "tutorial.skip");
+        UIFactory.Stretch(flow.skipLabel.rectTransform);
+
+        overlay.gameObject.SetActive(false);
+        return flow;
+    }
+
+    static TutorialFlow.Page TutorialPage(RectTransform parent, string key)
+    {
+        RectTransform rt = UIFactory.Rect(key, parent);
+        UIFactory.Stretch(rt);
+
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(rt, 24f, false);
+        stack.childAlignment = TextAnchor.LowerLeft;
+
+        TutorialFlow.Page page = new TutorialFlow.Page();
+        page.root = rt.gameObject;
+        page.key = key;
+
+        RectTransform spacer = UIFactory.Rect("Spacer", rt);
+        LayoutElement spacerSize = spacer.gameObject.AddComponent<LayoutElement>();
+        spacerSize.flexibleHeight = 1f;
+
+        page.title = UIFactory.Text("Title", rt, Display, ThemeRole.TextPrimary,
+                                    TextAlignmentOptions.BottomLeft, null, FontStyles.Bold);
+        UIFactory.Size(page.title.gameObject, 190f);
+
+        page.body = UIFactory.Text("Body", rt, Body, ThemeRole.TextSecondary,
+                                   TextAlignmentOptions.TopLeft);
+        UIFactory.Size(page.body.gameObject, 260f);
+
+        rt.gameObject.SetActive(false);
+        return page;
+    }
+
     // ---------------------------------------------------------------- browse tab
 
     static SearchTabController BuildBrowseTab(RectTransform panel, UserLocationService location,
@@ -1391,6 +1607,14 @@ public static class AppUIBuilder
                                              out RectTransform nearbyRow);
         controller.nearbyToggle = UIFactory.Switch("Toggle", nearbyRow);
 
+        // The heading says Notifications, and this fires while the app is open. The
+        // note is what stops that from being a lie.
+        controller.nearbyNoteLabel = UIFactory.Text("Note", notifications, Caption,
+                                                    ThemeRole.TextMuted,
+                                                    TextAlignmentOptions.TopLeft,
+                                                    "settings.nearbyNote");
+        UIFactory.Size(controller.nearbyNoteLabel.gameObject, 76f);
+
         controller.helpLabel = SectionLabel(content, "settings.help");
         RectTransform help = UIFactory.Rect("HelpCard", content);
         UIFactory.Card(help);
@@ -1408,15 +1632,13 @@ public static class AppUIBuilder
                                                  TextAlignmentOptions.Center);
         UIFactory.Stretch(controller.versionLabel.rectTransform);
 
-        controller.tutorialPage = SubPage(rt, "TutorialPage", "settings.replayTutorial",
-                                          "sub.tutorial.body");
         controller.sourcesPage = SubPage(rt, "SourcesPage", "settings.dataSources",
                                          "sub.sources.body");
         controller.aboutPage = SubPage(rt, "AboutPage", "settings.about", "sub.about.body");
 
         navigator.pages = new List<GameObject>
         {
-            controller.tutorialPage, controller.sourcesPage, controller.aboutPage
+            controller.sourcesPage, controller.aboutPage
         };
 
         RectTransform backRect = UIFactory.Rect("BackButton", rt);

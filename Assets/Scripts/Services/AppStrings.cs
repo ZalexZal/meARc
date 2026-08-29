@@ -81,6 +81,20 @@ public static class AppStrings
 
     static readonly Dictionary<string, string> En = new Dictionary<string, string>
     {
+        { "alert.caption", "Nearby" },
+
+        { "tutorial.skip", "Skip" },
+        { "tutorial.next", "Next" },
+        { "tutorial.done", "Start exploring" },
+        { "tutorial.1.title", "Markers stand where they were left" },
+        { "tutorial.1.body", "Every marker is pinned to a real spot on a real street. Walk to it and it will be there, in the colour whoever made the trail chose." },
+        { "tutorial.2.title", "The map first, the camera when you arrive" },
+        { "tutorial.2.body", "The map shows what is around you and how far. Open the camera when you get there, or before, if you just want to look. It is never locked." },
+        { "tutorial.3.title", "Guide me there" },
+        { "tutorial.3.body", "Pick a marker and an arrow follows you, on the map and through the camera, until you arrive or you stop it." },
+        { "tutorial.4.title", "Your map, your rules" },
+        { "tutorial.4.body", "Anyone can leave a marker. Hide this marker takes one off your map straight away, and Settings brings it back." },
+
         { "tab.map", "Map" },
 
         { "map.nearest", "Nearest to you" },
@@ -153,7 +167,8 @@ public static class AppStrings
         { "settings.language", "Language" },
         { "settings.appLanguage", "App language" },
         { "settings.notifications", "Notifications" },
-        { "settings.nearbyBuildings", "Nearby buildings" },
+        { "settings.nearbyBuildings", "Alert me about markers nearby" },
+        { "settings.nearbyNote", "While the app is open. Markers you have already read about are not announced." },
         { "settings.help", "Help" },
         { "settings.replayTutorial", "Replay tutorial" },
         { "settings.dataSources", "Data and sources" },
@@ -161,7 +176,6 @@ public static class AppStrings
         { "settings.version", "Version {0}" },
         { "settings.back", "Back" },
 
-        { "sub.tutorial.body", "The first-run walkthrough will live here." },
         { "sub.sources.body", "Building information is researched and written by hand, one entry at a time. Where a fact comes from a published source it is credited here." },
         { "sub.about.body", "An augmented reality guide to the architecture around you." },
         { "live.warning", "Marker positions may be inaccurate" },
@@ -175,6 +189,20 @@ public static class AppStrings
 
     static readonly Dictionary<string, string> Bg = new Dictionary<string, string>
     {
+        { "alert.caption", "Наблизо" },
+
+        { "tutorial.skip", "Пропусни" },
+        { "tutorial.next", "Напред" },
+        { "tutorial.done", "Започни" },
+        { "tutorial.1.title", "Маркерите стоят там, където са оставени" },
+        { "tutorial.1.body", "Всеки маркер е закачен за истинско място на истинска улица. Отидете до него и ще го намерите там, в цвета, който създателят на маршрута е избрал." },
+        { "tutorial.2.title", "Първо картата, камерата — когато стигнете" },
+        { "tutorial.2.body", "Картата показва какво има около вас и колко е далеч. Отворете камерата, когато пристигнете — или по-рано, ако искате да погледнете. Никога не е заключена." },
+        { "tutorial.3.title", "Заведи ме там" },
+        { "tutorial.3.body", "Изберете маркер и стрелката ви следва — на картата и през камерата — докато не пристигнете или не я спрете." },
+        { "tutorial.4.title", "Вашата карта, вашите правила" },
+        { "tutorial.4.body", "Всеки може да остави маркер. „Скрий този маркер“ го маха от вашата карта веднага, а Настройки го връщат." },
+
         { "tab.map", "Карта" },
 
         { "map.nearest", "Най-близо до вас" },
@@ -247,7 +275,8 @@ public static class AppStrings
         { "settings.language", "Език" },
         { "settings.appLanguage", "Език на приложението" },
         { "settings.notifications", "Известия" },
-        { "settings.nearbyBuildings", "Сгради наблизо" },
+        { "settings.nearbyBuildings", "Известявай ме за маркери наблизо" },
+        { "settings.nearbyNote", "Докато приложението е отворено. Маркери, които вече сте разгледали, не се обявяват." },
         { "settings.help", "Помощ" },
         { "settings.replayTutorial", "Повтори обучението" },
         { "settings.dataSources", "Данни и източници" },
@@ -255,7 +284,6 @@ public static class AppStrings
         { "settings.version", "Версия {0}" },
         { "settings.back", "Назад" },
 
-        { "sub.tutorial.body", "Тук ще бъде въведението при първо стартиране." },
         { "sub.sources.body", "Информацията за сградите е проучена и написана ръчно, запис по запис. Когато даден факт идва от публикуван източник, той е посочен тук." },
         { "sub.about.body", "Приложение с добавена реалност за архитектурата около вас." },
         { "live.warning", "Позициите на маркерите може да са неточни" },
