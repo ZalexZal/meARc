@@ -58,7 +58,18 @@ public static class UIIcons
         File.WriteAllBytes(path, Render(Field(icon)).EncodeToPNG());
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 
-        TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null)
+        {
+            // Batch mode can defer the import; a second pass settles it. Failing
+            // here with a name beats a NullReferenceException three frames later.
+            AssetDatabase.Refresh();
+            importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        }
+
+        if (importer == null)
+            throw new System.Exception("Could not import the generated icon at " + path);
+
         importer.textureType = TextureImporterType.Sprite;
         importer.spriteImportMode = SpriteImportMode.Single;
         importer.alphaIsTransparency = true;

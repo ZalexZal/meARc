@@ -61,19 +61,47 @@ public static class AppUIBuilder
 
     static List<string> _notes;
 
+    /// <summary>
+    /// False when the build is being run from the command line for a preview
+    /// render. Dialogs have nobody to ask in batch mode.
+    /// </summary>
+    static bool _interactive = true;
+
+    /// <summary>
+    /// Builds without prompting, and throws instead of showing a dialog. This is
+    /// what the screenshot harness calls; a build nobody can see the report of
+    /// must fail loudly rather than quietly.
+    /// </summary>
+    public static void BuildForPreview()
+    {
+        _interactive = false;
+
+        try
+        {
+            Build();
+        }
+        finally
+        {
+            _interactive = true;
+        }
+    }
+
     [MenuItem("Tools/UI/Build App UI")]
     public static void Build()
     {
         _notes = new List<string>();
 
-        Canvas canvas = Object.FindFirstObjectByType<Canvas>(FindObjectsInactive.Include);
+        Canvas canvas = FindRootCanvas();
         if (canvas == null)
         {
+            if (!_interactive)
+                throw new System.Exception("No Canvas in the open scene.");
+
             EditorUtility.DisplayDialog("Build App UI", "No Canvas in the open scene.", "OK");
             return;
         }
 
-        if (!EditorUtility.DisplayDialog("Build App UI",
+        if (_interactive && !EditorUtility.DisplayDialog("Build App UI",
                 "This rebuilds every screen under the Canvas from scratch.\n\n" +
                 "Anything the builder made last time is deleted and made again. The " +
                 "AR side of the scene is not touched.\n\n" +
@@ -95,6 +123,9 @@ public static class AppUIBuilder
             // through would otherwise leave the scene stripped.
             Undo.RevertAllDownToGroup(group);
 
+            if (!_interactive)
+                throw;
+
             Debug.LogException(exception);
             EditorUtility.DisplayDialog("Build App UI",
                 "The build failed and the scene was rolled back - nothing was lost.\n\n" +
@@ -112,7 +143,9 @@ public static class AppUIBuilder
             : "Built, with " + _notes.Count + " note(s):\n\n" + string.Join("\n", _notes);
 
         Debug.Log("[App UI] " + report);
-        EditorUtility.DisplayDialog("Build App UI", report, "OK");
+
+        if (_interactive)
+            EditorUtility.DisplayDialog("Build App UI", report, "OK");
     }
 
     static void BuildAll(Canvas canvas)
@@ -183,6 +216,27 @@ public static class AppUIBuilder
     }
 
     // -------------------------------------------------------------------- canvas
+
+    /// <summary>
+    /// The Canvas the screen is built into.
+    ///
+    /// Not FindFirstObjectByType: the map surface carries a nested Canvas of its
+    /// own for batching, and a plain search can return that one. On a rebuild that
+    /// would put the entire app inside the map.
+    /// </summary>
+    public static Canvas FindRootCanvas()
+    {
+        Canvas[] all = Object.FindObjectsByType<Canvas>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i].isRootCanvas)
+                return all[i];
+        }
+
+        return all.Length > 0 ? all[0] : null;
+    }
 
     static void ConfigureCanvas(Canvas canvas)
     {
