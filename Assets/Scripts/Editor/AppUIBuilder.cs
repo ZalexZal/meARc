@@ -303,6 +303,12 @@ public static class AppUIBuilder
 
         UserLocationService location = go.AddComponent<UserLocationService>();
 
+        // Lets the app draw faster than ARCore delivers camera frames, which is
+        // what was capping every animation in the app at thirty.
+        FrameRate frameRate = go.AddComponent<FrameRate>();
+        frameRate.session = Object.FindFirstObjectByType<ARSession>(FindObjectsInactive.Include);
+        frameRate.target = 60;
+
         // Watches for markers coming into range while the app is open. Lives here
         // rather than on a panel, so walking past one while reading Settings still
         // counts.
@@ -633,18 +639,23 @@ public static class AppUIBuilder
         UIFactory.Stretch(content);
         map.contentParent = content;
 
-        // Rings first, so everything else draws over them.
-        map.distanceRings = new[]
-        {
-            RingImage(content, "RingNear"),
-            RingImage(content, "RingFar")
-        };
-
+        // The accuracy circle: a faint fill with a crisp edge drawn as geometry.
+        // The two distance rings that used to sit here are gone - they were drawn
+        // for a map with no streets, and over real tiles they were decoration
+        // covering information.
         RectTransform accuracy = UIFactory.Rect("Accuracy", content);
         UIFactory.Corner(accuracy, new Vector2(0.5f, 0.5f), new Vector2(200f, 200f), Vector2.zero);
         map.accuracyCircle = UIFactory.Plain(accuracy, ThemeManager.Get(ThemeRole.Accent),
                                              UIShape.Circle);
         map.accuracyCircle.raycastTarget = false;
+
+        RectTransform accuracyEdge = UIFactory.Rect("AccuracyEdge", content);
+        UIFactory.Corner(accuracyEdge, new Vector2(0.5f, 0.5f), new Vector2(200f, 200f),
+                         Vector2.zero);
+        map.accuracyRing = accuracyEdge.gameObject.AddComponent<RingGraphic>();
+        map.accuracyRing.thickness = 3f;
+        map.accuracyRing.color = ThemeManager.Get(ThemeRole.Accent);
+        map.accuracyRing.raycastTarget = false;
 
         RectTransform ray = UIFactory.Rect("GuidanceRay", content);
         UIFactory.Corner(ray, new Vector2(0.5f, 0.5f), new Vector2(0f, 8f), Vector2.zero);
@@ -801,16 +812,6 @@ public static class AppUIBuilder
 
         EditorUtility.SetDirty(controller);
         return controller;
-    }
-
-    static Image RingImage(Transform parent, string name)
-    {
-        RectTransform rt = UIFactory.Rect(name, parent);
-        UIFactory.Corner(rt, new Vector2(0.5f, 0.5f), new Vector2(200f, 200f), Vector2.zero);
-
-        Image image = UIFactory.Plain(rt, ThemeManager.Get(ThemeRole.Line), UIShape.Ring);
-        image.raycastTarget = false;
-        return image;
     }
 
     /// <summary>
@@ -1029,7 +1030,7 @@ public static class AppUIBuilder
         // feed is the one background the app does not control, and translucent
         // chrome over it is unreadable roughly half the time.
         RectTransform nearby = UIFactory.Rect("NearbyButton", safe);
-        UIFactory.Corner(nearby, new Vector2(0f, 1f), new Vector2(360f, Tap),
+        UIFactory.Corner(nearby, new Vector2(0f, 1f), new Vector2(330f, 112f),
                          new Vector2(Margin, -Margin));
         controller.nearbyButton = UIFactory.Button(nearby, ThemeRole.Surface, 1f, UIShape.Pill);
 
@@ -1115,21 +1116,20 @@ public static class AppUIBuilder
         banner.anchorMax = new Vector2(1f, 1f);
         banner.pivot = new Vector2(0.5f, 1f);
         banner.sizeDelta = new Vector2(-Margin * 2f, 130f);
-        banner.anchoredPosition = new Vector2(0f, -(Margin + Tap + 20f));
+        banner.anchoredPosition = new Vector2(0f, -(Margin + 112f + 20f));
         UIFactory.Fill(banner, ThemeRole.Surface, 1f, UIShape.Rounded);
-        Outline(banner, ThemeRole.StatusFair);
 
         // A glyph rather than a coloured background: the message has to stay
         // readable, and the state is then carried by shape as well as by hue.
-        Image warning = Icon(banner, AppIcon.Warning, 46f, ThemeRole.StatusFair,
+        Image warning = Icon(banner, AppIcon.Warning, 44f, ThemeRole.StatusFair,
                              out RectTransform warningRect);
-        UIFactory.Corner(warningRect, new Vector2(0f, 0.5f), new Vector2(46f, 46f),
-                         new Vector2(30f, 0f));
+        UIFactory.Corner(warningRect, new Vector2(0f, 0.5f), new Vector2(44f, 44f),
+                         new Vector2(34f, 0f));
 
         controller.warningLabel = UIFactory.Text("Label", banner, Secondary, ThemeRole.TextPrimary,
                                                  TextAlignmentOptions.Left);
         UIFactory.Stretch(controller.warningLabel.rectTransform);
-        controller.warningLabel.rectTransform.offsetMin = new Vector2(70f, 0f);
+        controller.warningLabel.rectTransform.offsetMin = new Vector2(96f, 0f);
         controller.warningLabel.rectTransform.offsetMax = new Vector2(-(Tap + 10f), 0f);
         controller.warningLabel.text = AppStrings.Get("live.warning");
 
@@ -1159,14 +1159,18 @@ public static class AppUIBuilder
     }
 
     /// <summary>
-    /// One side tab, anchored to the middle of its edge where a thumb reaches
-    /// without the hand leaving the phone.
+    /// One side tab: the nearest marker off to that side, and a chevron saying
+    /// which way to turn for it.
+    ///
+    /// Inset from the edge rather than flush against it. Flush meant half of the
+    /// corner radius was off screen, so a rounded card read as a square slab
+    /// wedged into the side of the display - which is what it looked like.
     /// </summary>
     static CameraEdgePills.Pill EdgePill(RectTransform parent, string name, bool onLeft)
     {
         RectTransform rt = UIFactory.Rect(name, parent);
         UIFactory.Corner(rt, new Vector2(onLeft ? 0f : 1f, 0.5f),
-                         new Vector2(380f, Tap), Vector2.zero);
+                         new Vector2(340f, 112f), new Vector2(onLeft ? 24f : -24f, 0f));
 
         CameraEdgePills.Pill pill = new CameraEdgePills.Pill();
         pill.root = rt.gameObject;
@@ -1175,13 +1179,22 @@ public static class AppUIBuilder
 
         RectTransform row = UIFactory.Rect("Row", rt);
         UIFactory.Stretch(row);
-        row.offsetMin = new Vector2(onLeft ? 26f : 18f, 0f);
-        row.offsetMax = new Vector2(onLeft ? -18f : -26f, 0f);
-        HorizontalLayoutGroup layout = UIFactory.HorizontalStack(row, 14f);
+        row.offsetMin = new Vector2(20f, 0f);
+        row.offsetMax = new Vector2(-20f, 0f);
+        HorizontalLayoutGroup layout = UIFactory.HorizontalStack(row, 12f);
         layout.reverseArrangement = !onLeft;
 
-        pill.ring = Disc(row, 42f, ThemeRole.Line, UIShape.Ring, out RectTransform ringRect);
-        pill.dot = Disc(ringRect, 24f, ThemeRole.Accent, UIShape.Circle, out RectTransform _);
+        // First in the row, so the reversal puts it on the outer edge of either
+        // pill. Without it the card says a marker is over there without saying
+        // which way there is.
+        Icon(row, AppIcon.ChevronRight, 34f, ThemeRole.TextMuted,
+             out RectTransform chevron);
+
+        if (onLeft)
+            chevron.localRotation = Quaternion.Euler(0f, 0f, 180f);
+
+        pill.ring = Disc(row, 36f, ThemeRole.Line, UIShape.Ring, out RectTransform ringRect);
+        pill.dot = Disc(ringRect, 22f, ThemeRole.Accent, UIShape.Circle, out RectTransform _);
 
         RectTransform text = UIFactory.Rect("Text", row);
         UIFactory.Size(text.gameObject, 100f);
@@ -1192,10 +1205,11 @@ public static class AppUIBuilder
 
         pill.label = UIFactory.Text("Name", text, Secondary, ThemeRole.TextPrimary, align,
                                     null, FontStyles.Bold);
-        UIFactory.Size(pill.label.gameObject, 50f);
+        UIFactory.Size(pill.label.gameObject, 44f);
+        pill.label.overflowMode = TextOverflowModes.Ellipsis;
 
         pill.distance = UIFactory.Text("Distance", text, Caption, ThemeRole.TextMuted, align);
-        UIFactory.Size(pill.distance.gameObject, 42f);
+        UIFactory.Size(pill.distance.gameObject, 38f);
 
         rt.gameObject.SetActive(false);
         return pill;
@@ -1207,8 +1221,9 @@ public static class AppUIBuilder
         RectTransform rt = UIFactory.Rect("VpsIndicator", parent);
         UIFactory.Stretch(rt);
 
+        // Same height as the nearby pill beside it, and on the same line.
         RectTransform dotButton = UIFactory.Rect("DotButton", rt);
-        UIFactory.Corner(dotButton, new Vector2(1f, 1f), new Vector2(Tap, Tap),
+        UIFactory.Corner(dotButton, new Vector2(1f, 1f), new Vector2(112f, 112f),
                          new Vector2(-Margin, -Margin));
         Button button = UIFactory.Button(dotButton, ThemeRole.Surface, 1f, UIShape.Circle);
 
@@ -1225,7 +1240,7 @@ public static class AppUIBuilder
         bubble.anchorMax = new Vector2(1f, 1f);
         bubble.pivot = new Vector2(0.5f, 1f);
         bubble.sizeDelta = new Vector2(-(200f + Margin), 0f);
-        bubble.anchoredPosition = new Vector2((200f - Margin) * 0.5f, -(Margin + Tap + 16f));
+        bubble.anchoredPosition = new Vector2((200f - Margin) * 0.5f, -(Margin + 112f + 16f));
         UIFactory.Card(bubble, 32f, 12f, true);
 
         RectTransform head = UIFactory.Rect("Head", bubble);
@@ -1947,9 +1962,11 @@ public static class AppUIBuilder
         UIFactory.BottomStretch(nav, Nav);
         UIFactory.Fill(nav, ThemeRole.Surface).raycastTarget = true;
 
+        // Half-strength, and one pixel. A hard rule across the whole width is the
+        // single most Microsoft Paint thing a nav bar can do.
         RectTransform line = UIFactory.Rect("TopLine", nav);
-        UIFactory.TopStretch(line, 2f);
-        UIFactory.Fill(line, ThemeRole.Line).raycastTarget = false;
+        UIFactory.TopStretch(line, 1f);
+        UIFactory.Fill(line, ThemeRole.Line, 0.5f).raycastTarget = false;
 
         // The fill runs to the bottom edge of the glass; only the buttons stop
         // short of the gesture bar. Padding the whole bar would leave a strip of
@@ -1996,12 +2013,19 @@ public static class AppUIBuilder
         tabs.settingsTab = settingsTab;
 
         Button map = NavButton(navRow, "MapTabButton", "tab.map", NavGlyph.Map,
-                               out tabs.mapLabel, out tabs.mapIcon);
+                               out tabs.mapLabel, out tabs.mapIcon,
+                               out Image mapPill);
         Button camera = NavButton(navRow, "CameraTabButton", "tab.camera", NavGlyph.Camera,
-                                  out tabs.cameraLabel, out tabs.cameraIcon);
+                                  out tabs.cameraLabel, out tabs.cameraIcon,
+                                  out Image cameraPill);
         Button settings = NavButton(navRow, "SettingsTabButton", "tab.settings",
                                     NavGlyph.Settings,
-                                    out tabs.settingsLabel, out tabs.settingsIcon);
+                                    out tabs.settingsLabel, out tabs.settingsIcon,
+                                    out Image settingsPill);
+
+        tabs.mapIndicator = mapPill;
+        tabs.cameraIndicator = cameraPill;
+        tabs.settingsIndicator = settingsPill;
 
         // Persistent listeners, not AddListener: a runtime listener added here is
         // thrown away when the scene is saved, and the tab bar would do nothing.
@@ -2020,8 +2044,16 @@ public static class AppUIBuilder
         Settings
     }
 
+    /// <summary>
+    /// One tab: a pill that lights behind the icon, the icon, and the label under
+    /// it, as one group in the middle of the bar.
+    ///
+    /// The first version pinned the icon to the top and the label to the bottom of
+    /// a 190-unit bar, which left a hole between them and made two small marks
+    /// floating in a slab.
+    /// </summary>
     static Button NavButton(RectTransform navRow, string name, string key, NavGlyph glyph,
-                            out TMP_Text label, out Graphic[] icon)
+                            out TMP_Text label, out Graphic[] icon, out Image indicator)
     {
         RectTransform rt = UIFactory.Rect(name, navRow);
 
@@ -2033,16 +2065,22 @@ public static class AppUIBuilder
         button.targetGraphic = background;
         UIFactory.Feedback(button);
 
+        RectTransform pill = UIFactory.Rect("Indicator", rt);
+        UIFactory.Corner(pill, new Vector2(0.5f, 0.5f), new Vector2(136f, 64f),
+                         new Vector2(0f, 22f));
+        indicator = UIFactory.Plain(pill, new Color(1f, 1f, 1f, 0f), UIShape.Pill);
+        indicator.raycastTarget = false;
+
         RectTransform iconRect = UIFactory.Rect("Icon", rt);
-        UIFactory.Corner(iconRect, new Vector2(0.5f, 1f), new Vector2(58f, 58f),
-                         new Vector2(0f, -14f));
+        UIFactory.Corner(iconRect, new Vector2(0.5f, 0.5f), new Vector2(50f, 50f),
+                         new Vector2(0f, 22f));
 
         icon = DrawGlyph(iconRect, glyph);
 
         TextMeshProUGUI text = UIFactory.Text("Label", rt, Caption, ThemeRole.TextMuted,
                                               TextAlignmentOptions.Center, key);
-        UIFactory.Corner(text.rectTransform, new Vector2(0.5f, 0f), new Vector2(240f, 44f),
-                         new Vector2(0f, 20f));
+        UIFactory.Corner(text.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(240f, 36f),
+                         new Vector2(0f, -36f));
 
         // TabNavigationController colours this from which tab is open, so it must
         // not also be themed automatically - the two would overwrite each other.

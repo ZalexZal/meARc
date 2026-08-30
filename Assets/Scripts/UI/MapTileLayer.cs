@@ -73,6 +73,13 @@ public class MapTileLayer : MonoBehaviour
     readonly HashSet<long> _fetching = new HashSet<long>();
     readonly Queue<long> _queued = new Queue<long>();
 
+    // Downloaded but not yet turned into a texture. Decoding a PNG and inverting
+    // sixty-five thousand pixels costs a couple of milliseconds, and four of them
+    // landing in the same frame is a dropped frame - which happens every time the
+    // reader pans, exactly when the map should feel smooth.
+    readonly Queue<long> _toBuild = new Queue<long>();
+    readonly Dictionary<long, byte[]> _raw = new Dictionary<long, byte[]>();
+
     readonly List<long> _wanted = new List<long>();
     readonly List<long> _spent = new List<long>();
 
@@ -125,6 +132,10 @@ public class MapTileLayer : MonoBehaviour
         _live.Clear();
         _lastZoom = -1;
         _lastVersion = -1;
+
+        // Anything waiting was decoded for the old theme.
+        _toBuild.Clear();
+        _raw.Clear();
     }
 
     void LateUpdate()
@@ -319,6 +330,35 @@ public class MapTileLayer : MonoBehaviour
     {
         while (_inFlight < maxConcurrentRequests && _queued.Count > 0)
             StartCoroutine(Load(_queued.Dequeue()));
+
+        BuildOne();
+    }
+
+    /// <summary>One texture per frame, whatever is waiting.</summary>
+    void BuildOne()
+    {
+        if (_toBuild.Count == 0)
+            return;
+
+        long key = _toBuild.Dequeue();
+
+        if (!_raw.TryGetValue(key, out byte[] data))
+            return;
+
+        _raw.Remove(key);
+
+        Texture2D texture = Build(data);
+        if (texture == null)
+            return;
+
+        Remember(key, texture);
+
+        // The tile may have scrolled off while it was in the air.
+        if (_live.TryGetValue(key, out Tile tile) && tile.image != null)
+        {
+            tile.image.texture = texture;
+            tile.image.color = Color.white;
+        }
     }
 
     IEnumerator Load(long key)
@@ -376,18 +416,10 @@ public class MapTileLayer : MonoBehaviour
         if (data == null)
             yield break;
 
-        Texture2D texture = Build(data);
-        if (texture == null)
-            yield break;
-
-        Remember(key, texture);
-
-        // The tile may have scrolled off while it was in the air.
-        if (_live.TryGetValue(key, out Tile tile) && tile.image != null)
-        {
-            tile.image.texture = texture;
-            tile.image.color = Color.white;
-        }
+        // Handed to the queue rather than decoded here, so several arriving at
+        // once are spread over several frames instead of one long one.
+        _raw[key] = data;
+        _toBuild.Enqueue(key);
     }
 
     void Cache(string path, byte[] data)

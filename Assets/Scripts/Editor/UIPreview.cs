@@ -222,22 +222,26 @@ public static class UIPreview
             go.transform.position = new Vector3(0f, 0f, -1000f);
             go.transform.rotation = Quaternion.identity;
 
+            // The target texture goes on first, and that ordering is the whole
+            // trick. A Screen Space - Camera canvas sizes itself from the camera's
+            // pixel rect, and a camera with no target texture reports the screen -
+            // which in batch mode is an invented 640x480. Hooking the canvas up
+            // first meant every screenshot was of a layout for a screen nobody
+            // owns, at the right resolution, looking entirely plausible.
+            rig.texture = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+            rig.texture.antiAliasing = 4;
+            rig.camera.targetTexture = rig.texture;
+
             // Screen Space - Camera, not World Space.
             //
             // World space was the obvious way to point a camera at a canvas, and it
-            // lied: in that mode the map surface's nested canvas drew over all of
-            // its later siblings, so the map came back with no chrome and no nav
-            // bar. On device, in overlay mode, nested canvases keep hierarchy
-            // order - the field test navigated between tabs perfectly well. An
-            // instrument that reports faults the subject does not have is worse
-            // than no instrument, and this one cost most of a session.
+            // lied a different way: only nested canvases drew, so the map came back
+            // with its pins and none of its chrome.
             canvas.renderMode = RenderMode.ScreenSpaceCamera;
             canvas.worldCamera = rig.camera;
             canvas.planeDistance = 100f;
 
-            rig.texture = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
-            rig.texture.antiAliasing = 4;
-            rig.camera.targetTexture = rig.texture;
+            Canvas.ForceUpdateCanvases();
 
             return rig;
         }

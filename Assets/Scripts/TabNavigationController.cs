@@ -39,12 +39,16 @@ public class TabNavigationController : MonoBehaviour
     public TMP_Text settingsLabel;
 
     [Header("Tab icons")]
-    [Tooltip("Each icon is drawn from two or three primitives rather than one glyph, " +
-             "because the font atlas carries no icons - so the active colour has to " +
-             "be applied to every piece.")]
     public Graphic[] mapIcon;
     public Graphic[] cameraIcon;
     public Graphic[] settingsIcon;
+
+    [Header("Active indicator")]
+    [Tooltip("The shape that moves to the open tab. Colour and weight alone left " +
+             "the bar reading as three grey pictures with one of them tinted.")]
+    public Graphic mapIndicator;
+    public Graphic cameraIndicator;
+    public Graphic settingsIndicator;
 
     enum Tab
     {
@@ -126,9 +130,9 @@ public class TabNavigationController : MonoBehaviour
 
     void ApplyTabColours()
     {
-        Apply(mapLabel, mapIcon, _tab == Tab.Map);
-        Apply(cameraLabel, cameraIcon, _tab == Tab.Camera);
-        Apply(settingsLabel, settingsIcon, _tab == Tab.Settings);
+        Apply(mapLabel, mapIcon, mapIndicator, _tab == Tab.Map);
+        Apply(cameraLabel, cameraIcon, cameraIndicator, _tab == Tab.Camera);
+        Apply(settingsLabel, settingsIcon, settingsIndicator, _tab == Tab.Settings);
     }
 
     /// <summary>
@@ -136,7 +140,7 @@ public class TabNavigationController : MonoBehaviour
     /// bold is the cue that still works for anyone who cannot tell this teal from
     /// this grey.
     /// </summary>
-    static void Apply(TMP_Text label, Graphic[] icon, bool active)
+    static void Apply(TMP_Text label, Graphic[] icon, Graphic indicator, bool active)
     {
         Color colour = ThemeManager.Get(active ? ThemeRole.Accent : ThemeRole.TextMuted);
 
@@ -144,6 +148,16 @@ public class TabNavigationController : MonoBehaviour
         {
             label.color = colour;
             label.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
+        }
+
+        if (indicator != null)
+        {
+            // A filled shape behind the icon, not just a tint. It is the cue that
+            // survives being read at arm's length while walking, and the one that
+            // works for anyone who cannot tell this teal from this grey.
+            Color fill = ThemeManager.Get(ThemeRole.Accent);
+            fill.a = active ? 0.16f : 0f;
+            indicator.color = fill;
         }
 
         if (icon == null)

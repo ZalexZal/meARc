@@ -36,9 +36,14 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     [Header("Reader")]
     public RectTransform userDot;
 
-    [Tooltip("Drawn at the reported horizontal accuracy, so the reader can see how " +
-             "much the map is guessing.")]
+    [Tooltip("Faint fill at the reported horizontal accuracy, so the reader can " +
+             "see how much the map is guessing.")]
     public Image accuracyCircle;
+
+    [Tooltip("The edge of that circle, drawn as geometry. A scaled-up ring texture " +
+             "turns into a blur the moment accuracy is poor, which is precisely " +
+             "when the reader is looking at it.")]
+    public RingGraphic accuracyRing;
 
     [Header("Guidance")]
     [Tooltip("Straight line from the reader to whatever they are being guided to. " +
@@ -47,11 +52,6 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     public RectTransform guidanceRay;
 
     [Header("Chrome")]
-    [Tooltip("Rings at the scale bar distance and twice it. They move with the " +
-             "reader, so walking visibly changes the map, and they answer how far " +
-             "without anyone measuring.")]
-    public Image[] distanceRings;
-
     public RectTransform scaleBar;
     public TextMeshProUGUI scaleLabel;
     public Button recentreButton;
@@ -498,7 +498,6 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     {
         LayOutPins();
         LayOutReader();
-        LayOutRings();
         LayOutGuidance();
         LayOutScale();
     }
@@ -579,61 +578,34 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
             accuracyCircle.rectTransform.sizeDelta = new Vector2(radius * 2f, radius * 2f);
         }
 
+        // Barely there. The circle is context, not content - what the reader is
+        // looking for is their own dot and the pins, and a wash of accent across a
+        // quarter of the map buries both.
         Color tint = ThemeManager.Get(ThemeRole.Accent);
-        tint.a = 0.16f;
+        tint.a = 0.07f;
 
         if (tint != _lastAccuracyColour)
         {
             _lastAccuracyColour = tint;
             accuracyCircle.color = tint;
         }
-    }
 
-    /// <summary>
-    /// Sized from the same rounded step the scale bar uses, so a ring is always a
-    /// number the reader has just read rather than an arbitrary circle.
-    /// </summary>
-    void LayOutRings()
-    {
-        if (distanceRings == null || distanceRings.Length == 0)
+        if (accuracyRing == null)
             return;
 
-        bool known = _hasOrigin && locationService != null && locationService.HasValidPose;
-        Vector2 centre = known && userDot != null ? userDot.anchoredPosition : Vector2.zero;
+        if (accuracyRing.gameObject.activeSelf != show)
+            accuracyRing.gameObject.SetActive(show);
 
-        float scale = PixelsPerMetre;
-        double step = ScaleStepMetres();
+        accuracyRing.rectTransform.anchoredPosition = centre;
+        accuracyRing.rectTransform.sizeDelta = new Vector2(radius * 2f, radius * 2f);
 
-        Color tint = ThemeManager.Get(ThemeRole.TextPrimary);
-        tint.a = 0.16f;
+        Color edge = ThemeManager.Get(ThemeRole.Accent);
+        edge.a = 0.5f;
 
-        bool recolour = tint != _lastRingColour;
-        if (recolour)
-            _lastRingColour = tint;
-
-        for (int i = 0; i < distanceRings.Length; i++)
+        if (edge != _lastRingColour)
         {
-            Image ring = distanceRings[i];
-            if (ring == null)
-                continue;
-
-            if (ring.gameObject.activeSelf != known)
-                ring.gameObject.SetActive(known);
-
-            if (!known)
-                continue;
-
-            float radius = (float)(step * (i + 1)) * scale;
-
-            if (ring.rectTransform.anchoredPosition != centre)
-                ring.rectTransform.anchoredPosition = centre;
-
-            Vector2 size = new Vector2(radius * 2f, radius * 2f);
-            if (ring.rectTransform.sizeDelta != size)
-                ring.rectTransform.sizeDelta = size;
-
-            if (recolour)
-                ring.color = tint;
+            _lastRingColour = edge;
+            accuracyRing.color = edge;
         }
     }
 
