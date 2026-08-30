@@ -34,9 +34,27 @@ public class RemoteMarkerSource : MonoBehaviour
     [TextArea(2, 4)]
     public string anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhamJlYnlobXZwcHFsc3d5amlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NDg0OTQsImV4cCI6MjEwMzMyNDQ5NH0.e2-l3SbkBIRBCEOfbNrvQC0i2M_FbQxZ5Lwyg3zOHLo";
 
-    [Tooltip("Which world to load. Phase 0 only - Phase 3 replaces this with the join " +
-             "code entry screen.")]
+    [Tooltip("Fallback only. The trail actually shown comes from TrailService, " +
+             "which knows which ones this reader has joined. This is what gets " +
+             "used before anyone has joined anything.")]
     public string worldId = "c1bd0005-be21-409f-9e28-40faf3abb661";
+
+    /// <summary>
+    /// The trail to fetch: whichever one the reader has open, or the built-in one
+    /// while they have none.
+    /// </summary>
+    string ActiveWorld
+    {
+        get
+        {
+            TrailService trails = TrailService.Instance;
+
+            if (trails != null && !string.IsNullOrEmpty(trails.SelectedId))
+                return trails.SelectedId;
+
+            return worldId;
+        }
+    }
 
     [Header("Query")]
     [Tooltip("How far around the phone to ask for. MarkerSpawner still decides what to " +
@@ -94,11 +112,32 @@ public class RemoteMarkerSource : MonoBehaviour
     void OnEnable()
     {
         AppLifecycleWatcher.OnResumed += HandleResumed;
+        TrailService.OnTrailsChanged += HandleTrailChanged;
+        SupabaseAuth.OnSessionChanged += HandleTrailChanged;
     }
 
     void OnDisable()
     {
         AppLifecycleWatcher.OnResumed -= HandleResumed;
+        TrailService.OnTrailsChanged -= HandleTrailChanged;
+        SupabaseAuth.OnSessionChanged -= HandleTrailChanged;
+    }
+
+    string _fetchedWorld;
+
+    /// <summary>
+    /// A different trail, or a different reader, means the markers on screen
+    /// belong to neither. Refetched at once rather than on the usual throttle.
+    /// </summary>
+    void HandleTrailChanged()
+    {
+        if (_fetchedWorld == ActiveWorld)
+            return;
+
+        _fetchedWorld = ActiveWorld;
+
+        BuildingDatabase.SetBuildings(new System.Collections.Generic.List<BuildingData>());
+        Refresh();
     }
 
     void HandleResumed(float secondsBackgrounded)
@@ -196,12 +235,14 @@ public class RemoteMarkerSource : MonoBehaviour
         if (_fetching)
             yield break;
 
-        if (string.IsNullOrWhiteSpace(supabaseUrl) ||
-            string.IsNullOrWhiteSpace(anonKey) ||
-            string.IsNullOrWhiteSpace(worldId))
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        string endpoint = config != null ? config.url : supabaseUrl;
+        string world = ActiveWorld;
+
+        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(world))
         {
-            Debug.LogError("RemoteMarkerSource: set Supabase URL, anon key and world id " +
-                           "on the component before running.");
+            Debug.LogError("RemoteMarkerSource: no Supabase URL or no trail selected.");
             BuildingDatabase.SetFailed();
             yield break;
         }
@@ -209,22 +250,20 @@ public class RemoteMarkerSource : MonoBehaviour
         _fetching = true;
         _lastFetchTime = Time.unscaledTime;
 
-        string url = supabaseUrl.TrimEnd('/') + "/rest/v1/rpc/markers_near";
+        string url = endpoint.TrimEnd('/') + "/rest/v1/rpc/markers_near";
 
         // Invariant culture on the way out as well as the way in. On a phone set to
         // Bulgarian, string interpolation of a double writes "42,4842", which is two
         // JSON values and a syntax error rather than one coordinate.
         string body = string.Format(CultureInfo.InvariantCulture,
             "{{\"p_world_id\":\"{0}\",\"p_lat\":{1},\"p_lng\":{2},\"p_radius_m\":{3}}}",
-            worldId, latitude, longitude, radiusMetres);
+            world, latitude, longitude, radiusMetres);
 
-        using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
+        // Sent as the reader, not as the project. After Phase 1 the bearer is what
+        // decides which markers come back at all: a member sees their trail, and
+        // everyone else sees only what is published in a world that is not private.
+        using (UnityWebRequest request = SupabaseAuth.Post(url, body, null))
         {
-            request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(body));
-            request.downloadHandler = new DownloadHandlerBuffer();
-            request.SetRequestHeader("Content-Type", "application/json");
-            request.SetRequestHeader("apikey", anonKey);
-            request.SetRequestHeader("Authorization", "Bearer " + anonKey);
             request.timeout = timeoutSeconds;
 
             yield return request.SendWebRequest();
