@@ -131,6 +131,7 @@ MonoBehaviour:
   baseScale: 1.5
   clampDistance: 60
   billboard: 0
+  occlusionCheckInterval: 0.15
 --- !u!114 &1956337587921938496
 MonoBehaviour:
   m_ObjectHideFlags: 0
