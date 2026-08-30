@@ -136,8 +136,8 @@ public static class AppStrings
         { "tab.settings", "Settings" },
 
         { "camera.nearbyCount", "{0} nearby" },
-        { "nearby.title", "Nearby buildings" },
-        { "nearby.empty", "No buildings within {0} m" },
+        { "nearby.title", "Markers nearby" },
+        { "nearby.empty", "No markers within {0} m" },
         { "nearby.noLocation", "Waiting for location" },
 
         { "vps.good.title", "Well calibrated" },
@@ -153,15 +153,15 @@ public static class AppStrings
 
         { "info.learnMore", "Learn more" },
 
-        { "search.placeholder", "Search buildings" },
+        { "search.placeholder", "Search markers" },
         { "search.closest", "Closest to you" },
         { "search.suggestions", "Suggestions" },
         { "search.byEra", "By era" },
-        { "search.byType", "By type" },
-        { "search.empty", "No buildings found" },
-        { "buildings.offline", "Couldn't load buildings. Check your connection." },
-        { "search.discovered", "buildings discovered" },
-        { "search.discoveredNote", "* A building counts as explored once you open its details." },
+        { "search.byType", "By kind" },
+        { "search.empty", "No markers found" },
+        { "buildings.offline", "Couldn't load markers. Check your connection." },
+        { "search.discovered", "markers explored" },
+        { "search.discoveredNote", "* A marker counts as explored once you open it." },
 
         { "settings.appearance", "Appearance" },
         { "settings.theme", "Dark mode" },
@@ -178,8 +178,8 @@ public static class AppStrings
         { "settings.version", "Version {0}" },
         { "settings.back", "Back" },
 
-        { "sub.sources.body", "Building information is researched and written by hand, one entry at a time. Where a fact comes from a published source it is credited here." },
-        { "sub.about.body", "An augmented reality guide to the architecture around you." },
+        { "sub.sources.body", "Marker text is written by hand, one entry at a time. Where a fact comes from a published source it is credited here." },
+        { "sub.about.body", "Trails in augmented reality: markers left in real places, for other people to find." },
         { "live.warning", "Marker positions may be inaccurate" },
 
         { "unit.metres", "{0} m" },
@@ -246,8 +246,8 @@ public static class AppStrings
         { "tab.settings", "Настройки" },
 
         { "camera.nearbyCount", "{0} наблизо" },
-        { "nearby.title", "Сгради наблизо" },
-        { "nearby.empty", "Няма сгради в радиус от {0} м" },
+        { "nearby.title", "Маркери наблизо" },
+        { "nearby.empty", "Няма маркери в радиус от {0} м" },
         { "nearby.noLocation", "Изчакване на местоположение" },
 
         { "vps.good.title", "Добра калибрация" },
@@ -263,15 +263,15 @@ public static class AppStrings
 
         { "info.learnMore", "Научи повече" },
 
-        { "search.placeholder", "Търсене на сгради" },
+        { "search.placeholder", "Търсене на маркери" },
         { "search.closest", "Най-близо до вас" },
         { "search.suggestions", "Предложения" },
         { "search.byEra", "По период" },
         { "search.byType", "По вид" },
-        { "search.empty", "Няма намерени сгради" },
-        { "buildings.offline", "Неуспешно зареждане на сградите. Проверете връзката си." },
-        { "search.discovered", "открити сгради" },
-        { "search.discoveredNote", "* Сградата се отчита като разгледана, когато отворите информацията за нея." },
+        { "search.empty", "Няма намерени маркери" },
+        { "buildings.offline", "Неуспешно зареждане на маркерите. Проверете връзката си." },
+        { "search.discovered", "разгледани маркера" },
+        { "search.discoveredNote", "* Маркерът се отчита като разгледан, когато го отворите." },
 
         { "settings.appearance", "Външен вид" },
         { "settings.theme", "Тъмен режим" },
@@ -288,8 +288,8 @@ public static class AppStrings
         { "settings.version", "Версия {0}" },
         { "settings.back", "Назад" },
 
-        { "sub.sources.body", "Информацията за сградите е проучена и написана ръчно, запис по запис. Когато даден факт идва от публикуван източник, той е посочен тук." },
-        { "sub.about.body", "Приложение с добавена реалност за архитектурата около вас." },
+        { "sub.sources.body", "Текстовете на маркерите са написани ръчно, запис по запис. Когато даден факт идва от публикуван източник, той е посочен тук." },
+        { "sub.about.body", "Маршрути с добавена реалност: маркери, оставени на истински места, за да ги открият други." },
         { "live.warning", "Позициите на маркерите може да са неточни" },
 
         { "unit.metres", "{0} м" },
