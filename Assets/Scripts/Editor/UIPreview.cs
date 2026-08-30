@@ -54,14 +54,36 @@ public static class UIPreview
                 "These screenshots would have been of the previously saved scene.");
         }
 
-        Dump(canvas.transform, 0);
-
         Directory.CreateDirectory(OutputFolder);
 
         StandIn(canvas.transform);
         MockPins(canvas.transform);
 
         Rig rig = Rig.Create(canvas);
+
+        // After the rig, and after a rebuild. The first version dumped before any
+        // layout had run and reported every layout-driven rect as 100x100 at the
+        // origin, which sent me looking for a bug that was not there.
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)canvas.transform);
+        Canvas.ForceUpdateCanvases();
+
+        // The canvas has to be the size the screens were designed for, or every
+        // picture below is of a layout nobody will ever see. Screen Space - Camera
+        // sizes the canvas from the screen, and batch mode invents a 640x480 one -
+        // which is what these shots were, silently, for several rounds.
+        Rect canvasRect = ((RectTransform)canvas.transform).rect;
+        if (Mathf.Abs(canvasRect.width - Width) > 1f ||
+            Mathf.Abs(canvasRect.height - Height) > 1f)
+        {
+            throw new System.Exception(
+                "The canvas is " + canvasRect.width.ToString("0") + "x" +
+                canvasRect.height.ToString("0") + ", not " + Width + "x" + Height +
+                ". Every screenshot would be of the wrong layout.");
+        }
+
+        Dump(canvas.transform, 0);
+        BigGraphics(canvas);
 
         try
         {
@@ -116,6 +138,41 @@ public static class UIPreview
             Dump(t.GetChild(i), depth + 1);
     }
 
+    /// <summary>
+    /// Lists every graphic large enough to cover the screen, with its colour and
+    /// where it sits in the hierarchy.
+    ///
+    /// The map came back as a single flat colour with only the mock pins on it,
+    /// and three plausible culprits were all wrong. Rather than guess a fourth,
+    /// this asks the scene which object is actually big enough to have done it.
+    /// </summary>
+    static void BigGraphics(Canvas canvas)
+    {
+        Graphic[] all = Object.FindObjectsByType<Graphic>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            Graphic g = all[i];
+            Rect r = g.rectTransform.rect;
+
+            if (r.width * r.height < Width * Height * 0.7f)
+                continue;
+
+            Color c = g.color;
+            string path = g.name;
+            for (Transform t = g.transform.parent; t != null; t = t.parent)
+                path = t.name + "/" + path;
+
+            Debug.Log("[Big] " + path + "  " + r.width.ToString("0") + "x" +
+                      r.height.ToString("0") +
+                      "  rgba(" + (int)(c.r * 255) + "," + (int)(c.g * 255) + "," +
+                      (int)(c.b * 255) + "," + c.a.ToString("0.00") + ")" +
+                      (g.gameObject.activeInHierarchy ? "  ON" : "  off") +
+                      (g.enabled ? "" : "  disabled"));
+        }
+    }
+
     // ------------------------------------------------------------------ capture
 
     /// <summary>
@@ -165,13 +222,18 @@ public static class UIPreview
             go.transform.position = new Vector3(0f, 0f, -1000f);
             go.transform.rotation = Quaternion.identity;
 
-            canvas.renderMode = RenderMode.WorldSpace;
+            // Screen Space - Camera, not World Space.
+            //
+            // World space was the obvious way to point a camera at a canvas, and it
+            // lied: in that mode the map surface's nested canvas drew over all of
+            // its later siblings, so the map came back with no chrome and no nav
+            // bar. On device, in overlay mode, nested canvases keep hierarchy
+            // order - the field test navigated between tabs perfectly well. An
+            // instrument that reports faults the subject does not have is worse
+            // than no instrument, and this one cost most of a session.
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
             canvas.worldCamera = rig.camera;
-
-            rt.position = Vector3.zero;
-            rt.rotation = Quaternion.identity;
-            rt.localScale = Vector3.one;
-            rt.sizeDelta = new Vector2(Width, Height);
+            canvas.planeDistance = 100f;
 
             rig.texture = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
             rig.texture.antiAliasing = 4;
@@ -190,12 +252,7 @@ public static class UIPreview
 
             Canvas canvas = AppUIBuilder.FindRootCanvas();
             if (canvas != null)
-            {
-                RectTransform rt = (RectTransform)canvas.transform;
                 canvas.renderMode = _mode;
-                rt.sizeDelta = _size;
-                rt.position = _position;
-            }
 
             if (_scalerComponent != null)
                 _scalerComponent.enabled = _scaler;
@@ -216,14 +273,12 @@ public static class UIPreview
         {
             Transform child = canvas.transform.GetChild(i);
 
-            bool on = wanted.Contains(child.name);
+            // The nav bar is on every screen. Everything else is on only when the
+            // shot asks for it, by name or as the root of a requested path.
+            bool on = child.name == "BottomNav" || wanted.Contains(child.name);
 
-            // The nav bar and the always-on holders stay as they are.
-            if (child.name == "BottomNav" || child.name == "InfoSheet" ||
-                child.name == "ProximityToast" || child.name == "Tutorial")
-            {
-                on = child.gameObject.activeSelf;
-            }
+            for (int p = 0; p < visible.Length && !on; p++)
+                on = visible[p].StartsWith(child.name + "/");
 
             child.gameObject.SetActive(on);
         }

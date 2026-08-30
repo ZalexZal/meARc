@@ -447,8 +447,10 @@ public static class AppUIBuilder
         sheetPad.left = true;
         sheetPad.right = true;
 
+        const float SheetHeight = 1040f;
+
         RectTransform sheet = UIFactory.Rect("Sheet", sheetSafe);
-        UIFactory.BottomStretch(sheet, 1040f, Nav);
+        UIFactory.BottomStretch(sheet, SheetHeight, Nav);
         UIFactory.Fill(sheet, ThemeRole.Surface, 1f, UIShape.Rounded).raycastTarget = true;
         controller.panelRoot = sheet.gameObject;
 
@@ -550,7 +552,12 @@ public static class AppUIBuilder
 
         // The animator hides the sheet by moving it, not by disabling it, so this
         // object stays enabled or ShowPanel would have nothing to reveal.
-        sheet.anchoredPosition = new Vector2(0f, Nav - sheet.rect.height - 40f);
+        //
+        // Parked from the constant, not from rect.height: layout has not run when
+        // the builder gets here, so the height reads 0 and the sheet parks at 150 -
+        // which is fully on screen. SnapClosed hides it the moment the app plays,
+        // so this was invisible on device and covered the whole editor scene.
+        sheet.anchoredPosition = new Vector2(0f, Nav - SheetHeight - 40f);
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -592,17 +599,19 @@ public static class AppUIBuilder
         UIFactory.Fill(surface, ThemeRole.Background).raycastTarget = true;
         surface.gameObject.AddComponent<RectMask2D>();
 
-        // Its own canvas. Everything on the map moves when the reader walks, and a
-        // uGUI canvas rebuilds in full whenever anything on it is dirtied - without
-        // this split, panning the map re-batched the nav bar and every panel with
-        // it.
+        // No nested canvas here, deliberately.
         //
-        // The raycaster is not optional. A graphic registers against its nearest
-        // enabled Canvas, so adding one here takes the whole map out of the root
-        // raycaster's registry - the split would have cost every tap and drag on
-        // the map to save the rebuilds.
-        surface.gameObject.AddComponent<Canvas>();
-        surface.gameObject.AddComponent<GraphicRaycaster>();
+        // One was added to isolate the map's rebuilds from the rest of the screen,
+        // and it drew over every later sibling: the map covered its own title, its
+        // cards, the scale bar and the nav bar. That reproduced in both Screen
+        // Space - Camera and World Space, so it was not an artefact of the capture
+        // rig, and on device it would have left the reader with a map and no way
+        // off it.
+        //
+        // The rebuild cost it was meant to solve is already gone: MapView writes
+        // nothing unless a value changed and lays out only when something asks it
+        // to. That was the fix worth having. This one traded a rendering bug for a
+        // saving that had already been made.
 
         MapView map = surface.gameObject.AddComponent<MapView>();
         map.locationService = location;
