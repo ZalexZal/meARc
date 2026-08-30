@@ -38,6 +38,15 @@ public static class UISprites
     public static Sprite Triangle { get { return GetOrCreateTriangle("UITriangle", 64); } }
 
     /// <summary>
+    /// The cone of light in front of the reader, as Google Maps and Waze draw it:
+    /// bright at the dot and fading out into the distance.
+    ///
+    /// A flat triangle would read as a solid object sitting on the map. The fade is
+    /// what makes it read as a direction instead.
+    /// </summary>
+    public static Sprite Beam { get { return GetOrCreateBeam("UIBeam", 128); } }
+
+    /// <summary>
     /// The border of a rounded card, with nothing inside it.
     ///
     /// A card floating over a map needs an edge. Without one it reads as a hole in
@@ -57,6 +66,11 @@ public static class UISprites
     static Sprite GetOrCreateOutline(string name, int size, float radius, float thickness)
     {
         return Save(name, RenderOutline(size, radius, thickness), Mathf.CeilToInt(radius));
+    }
+
+    static Sprite GetOrCreateBeam(string name, int size)
+    {
+        return Save(name, RenderBeam(size), 0);
     }
 
     static Sprite GetOrCreateTriangle(string name, int size)
@@ -133,6 +147,44 @@ public static class UISprites
     /// A rounded rectangle drawn as an outline. Same signed-distance field as the
     /// filled one, taken in absolute value so only the edge is left.
     /// </summary>
+    /// <summary>
+    /// A wedge with its point at the bottom centre, opening upwards, fading out as
+    /// it goes. The spread is set by the rect it is drawn into, not by the sprite,
+    /// so the same texture serves any field of view.
+    /// </summary>
+    static Texture2D RenderBeam(int size)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+
+        float apexX = size * 0.5f;
+
+        for (int y = 0; y < size; y++)
+        {
+            // Height above the point, zero to one.
+            float up = (y + 0.5f) / size;
+
+            // The wedge opens to the full width of the texture at the top.
+            float halfWidth = up * size * 0.5f;
+
+            // Bright at the reader, gone by the far edge. Squared so it holds its
+            // brightness near the dot instead of fading immediately.
+            float strength = (1f - up) * (1f - up) * 0.9f + 0.1f;
+
+            for (int x = 0; x < size; x++)
+            {
+                float across = Mathf.Abs(x + 0.5f - apexX);
+
+                // One pixel of softness on the sloped edges, same as everywhere else.
+                float edge = Mathf.Clamp01(halfWidth - across + 0.5f);
+
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, edge * strength));
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
     static Texture2D RenderOutline(int size, float radius, float thickness)
     {
         Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);

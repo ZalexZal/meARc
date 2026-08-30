@@ -1190,24 +1190,33 @@ public static class AppUIBuilder
 
         // The wedge, pointing up from the middle. Half a phone camera's field of
         // view either side of straight ahead.
-        // Flipped vertically so the point is at the reader and it opens towards the
-        // rim. Drawn the other way up it says the camera can see everything far
-        // away and nothing close, which is backwards.
-        RectTransform wedge = UIFactory.Rect("Wedge", rt);
-        wedge.anchorMin = new Vector2(0.5f, 0.5f);
-        wedge.anchorMax = new Vector2(0.5f, 0.5f);
-        wedge.pivot = new Vector2(0.5f, 0.5f);
-        wedge.sizeDelta = new Vector2(Radius, Radius * 0.84f);
-        wedge.anchoredPosition = new Vector2(0f, Radius * 0.42f);
-        wedge.localScale = new Vector3(1f, -1f, 1f);
+        // The cone, pivoting on the reader. Its point sits at the centre and it
+        // opens outward, fading as it goes - the shape Google Maps and Waze both
+        // use, and the only thing on the disc that turns with the phone.
+        //
+        // Sized so its far corners stay inside the rim: at a 62 degree spread the
+        // corners sit 1.17 radii from the point, so the height is held below that.
+        RectTransform facing = UIFactory.Rect("Facing", rt);
+        facing.anchorMin = new Vector2(0.5f, 0.5f);
+        facing.anchorMax = new Vector2(0.5f, 0.5f);
+        facing.pivot = new Vector2(0.5f, 0f);
+        facing.sizeDelta = new Vector2(Radius * 1.02f, Radius * 0.85f);
+        facing.anchoredPosition = Vector2.zero;
 
-        Color wedgeTint = ThemeManager.Get(ThemeRole.Accent);
-        wedgeTint.a = 0.18f;
-        UIFactory.Plain(wedge, wedgeTint, UIShape.Triangle).raycastTarget = false;
-        radar.wedge = wedge;
+        Color beamTint = ThemeManager.Get(ThemeRole.Accent);
+        beamTint.a = 0.55f;
+        UIFactory.Plain(facing, beamTint, UIShape.Beam).raycastTarget = false;
+        radar.facing = facing;
 
         Ring(rt, "InnerRing", Size * 0.52f, ThemeRole.TextPrimary, 0.10f, 2f);
         Ring(rt, "Rim", Size - 3f, ThemeRole.TextPrimary, 0.16f, 2f);
+
+        // North is up and stays up, so it is worth one letter to say so.
+        TextMeshProUGUI north = UIFactory.Text("North", rt, 26f, ThemeRole.TextMuted,
+                                               TextAlignmentOptions.Center);
+        UIFactory.Corner(north.rectTransform, new Vector2(0.5f, 1f), new Vector2(40f, 34f),
+                         new Vector2(0f, -8f));
+        north.text = "N";
 
         // Dots go above the rings and below the reader's own mark.
         RectTransform dots = UIFactory.Rect("Dots", rt);

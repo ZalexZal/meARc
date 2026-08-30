@@ -13,7 +13,10 @@ public enum UIShape
     Ring,
 
     /// <summary>Points up at zero rotation. Every direction arrow in the app.</summary>
-    Triangle
+    Triangle,
+
+    /// <summary>The cone showing which way the reader is facing. Point at the bottom.</summary>
+    Beam
 }
 
 /// <summary>
@@ -97,6 +100,11 @@ public static class UIFactory
 
             case UIShape.Triangle:
                 image.sprite = UISprites.Triangle;
+                image.type = Image.Type.Simple;
+                break;
+
+            case UIShape.Beam:
+                image.sprite = UISprites.Beam;
                 image.type = Image.Type.Simple;
                 break;
         }

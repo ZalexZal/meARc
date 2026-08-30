@@ -488,8 +488,13 @@ public static class UIPreview
     /// </summary>
     static void MockRadar(Transform root)
     {
-        Transform dots = root.Find(
-            "CameraPanel/LiveARView/Safe/Panel/RadarRow/Radar/Dots");
+        Transform radar = root.Find("CameraPanel/LiveARView/Safe/Panel/RadarRow/Radar");
+        Transform dots = radar != null ? radar.Find("Dots") : null;
+
+        // Point the cone somewhere believable, since nothing is driving it here.
+        Transform facing = radar != null ? radar.Find("Facing") : null;
+        if (facing != null)
+            facing.localRotation = Quaternion.Euler(0f, 0f, -42f);
 
         if (dots == null)
         {
@@ -504,8 +509,8 @@ public static class UIPreview
             new Color32(0x72, 0x00, 0x7A, 0xFF)
         };
 
-        // Bearing relative to where the phone points, and how far out.
-        float[] angles = { 18f, 128f, -74f };
+        // True bearings, north up. The cone is what turns.
+        float[] angles = { 18f, 128f, 286f };
         float[] reach = { 58f, 124f, 92f };
 
         for (int i = 0; i < 3; i++)

@@ -12,8 +12,12 @@ using UnityEngine.UI;
 /// for everything at once, in a corner, and it means the reader does not have to
 /// leave the camera to answer "what is around me".
 ///
-/// Heading up, not north up. On a screen whose entire subject is where the phone
-/// is pointing, a north-up radar would need reading twice.
+/// North up, and the reader turns inside it - the same way Google Maps and Waze
+/// draw a map you are standing in. Turning the phone spins nothing but the cone,
+/// so a marker stays where it was and the reader learns where things are rather
+/// than re-reading a picture that moved. It also matches the main map, which is
+/// north up as well; two screens disagreeing about which way is up is worse than
+/// either choice.
 /// </summary>
 public class CameraRadar : MonoBehaviour
 {
@@ -23,9 +27,9 @@ public class CameraRadar : MonoBehaviour
     [Tooltip("Dots are created under here, one per marker in range.")]
     public RectTransform dotParent;
 
-    [Tooltip("The slice of the world the camera can see. Fixed, pointing up: the " +
-             "dots move around it rather than it moving around them.")]
-    public RectTransform wedge;
+    [Tooltip("The cone in front of the reader. This is the only thing that turns " +
+             "when the phone does.")]
+    public RectTransform facing;
 
     [Header("Shape")]
     [Tooltip("Distance from the centre of the disc to its edge, in canvas units.")]
@@ -201,12 +205,25 @@ public class CameraRadar : MonoBehaviour
     {
         bool known = locationService != null && locationService.HasValidPose;
 
-        // Without a compass the dots would be placed at angles that mean nothing.
-        // Better to show an empty disc than a confident wrong one.
+        // The dots only need a position; north is north whether or not the
+        // magnetometer is working. Only the cone needs the compass, so indoors the
+        // radar still shows what is around - it just stops claiming which way the
+        // reader is looking.
         bool usable = known && locationService.HasHeading;
 
-        if (wedge != null && wedge.gameObject.activeSelf != usable)
-            wedge.gameObject.SetActive(usable);
+        if (facing != null)
+        {
+            if (facing.gameObject.activeSelf != usable)
+                facing.gameObject.SetActive(usable);
+
+            if (usable)
+            {
+                // A compass bearing runs clockwise from north; Unity's Z rotation
+                // runs the other way, and north is up.
+                facing.localRotation =
+                    Quaternion.Euler(0f, 0f, -locationService.DeviceHeading);
+            }
+        }
 
         foreach (KeyValuePair<BuildingData, RectTransform> pair in _dots)
         {
@@ -214,7 +231,7 @@ public class CameraRadar : MonoBehaviour
             if (dot == null)
                 continue;
 
-            double distance = usable ? locationService.DistanceMetresTo(pair.Key) : -1d;
+            double distance = known ? locationService.DistanceMetresTo(pair.Key) : -1d;
 
             if (distance < 0d)
             {
@@ -231,8 +248,9 @@ public class CameraRadar : MonoBehaviour
                 locationService.Latitude, locationService.Longitude,
                 pair.Key.latitude, pair.Key.longitude);
 
-            float relative = Mathf.DeltaAngle(locationService.DeviceHeading, (float)bearing);
-            float radians = relative * Mathf.Deg2Rad;
+            // North up: the true bearing, not one relative to the phone. The dots
+            // hold still and the cone sweeps across them.
+            float radians = (float)bearing * Mathf.Deg2Rad;
 
             // Held at the rim rather than dropped past the range, so a marker the
             // map is showing never silently disappears from the radar.
