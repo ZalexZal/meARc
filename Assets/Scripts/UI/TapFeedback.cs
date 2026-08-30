@@ -40,6 +40,7 @@ public class TapFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     float _elapsed;
     bool _running;
     bool _held;
+    bool _wasDisabled;
 
     void Awake()
     {
@@ -55,6 +56,7 @@ public class TapFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         // and its pointer-up would never arrive.
         _running = false;
         _held = false;
+        _wasDisabled = false;
 
         if (_group != null)
             _group.alpha = 1f;
@@ -65,24 +67,31 @@ public class TapFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         if (_group == null)
             return;
 
-        // A disabled control stays dimmed, and no press animation runs on it.
-        if (target != null && !target.IsInteractable())
+        // A disabled control stays dimmed, and no press animation runs on it. The
+        // value is written once on the change rather than every frame - a
+        // CanvasGroup alpha marks the whole canvas dirty either way.
+        bool disabled = target != null && !target.IsInteractable();
+
+        if (disabled)
         {
-            _group.alpha = disabledAlpha;
+            if (!_wasDisabled)
+            {
+                _wasDisabled = true;
+                _group.alpha = disabledAlpha;
+            }
+
             _running = false;
             return;
         }
 
-        if (!_running)
+        if (_wasDisabled)
         {
-            // Restores a control that was dimmed while disabled. Guarded on _held,
-            // because a finger still down is holding it dim on purpose - without
-            // that check the press flashes back to full the frame it lands.
-            if (!_held && _group.alpha < 1f)
-                _group.alpha = 1f;
-
-            return;
+            _wasDisabled = false;
+            _group.alpha = 1f;
         }
+
+        if (!_running)
+            return;
 
         _elapsed += Time.unscaledDeltaTime;
 

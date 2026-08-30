@@ -281,26 +281,6 @@ public static class UIFactory
         return field;
     }
 
-    /// <summary>
-    /// Draws a close cross from two rotated bars rather than a text glyph. The
-    /// project's font atlas is Latin-only, so multiplication signs and similar
-    /// symbols render as empty boxes on device.
-    /// </summary>
-    public static void Cross(RectTransform parent, ThemeRole role,
-                             float size = 26f, float thickness = 3f)
-    {
-        for (int i = 0; i < 2; i++)
-        {
-            RectTransform bar = Rect("Bar" + i, parent);
-            Corner(bar, new Vector2(0.5f, 0.5f), new Vector2(size, thickness), Vector2.zero);
-
-            Image image = Fill(bar, role);
-            image.raycastTarget = false;
-
-            bar.localRotation = Quaternion.Euler(0f, 0f, i == 0 ? 45f : -45f);
-        }
-    }
-
     // ------------------------------------------------------------------ layout
 
     public static VerticalLayoutGroup Card(RectTransform rt, float padding = 24f,

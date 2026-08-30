@@ -37,7 +37,15 @@ public class StateCardView : MonoBehaviour
 
     [Header("Parts")]
     public GameObject root;
+
+    [Tooltip("One icon per state. A single generic glyph makes five different " +
+             "situations look like the same shrug.")]
     public Image icon;
+    public Sprite locatingIcon;
+    public Sprite loadingIcon;
+    public Sprite emptyIcon;
+    public Sprite failedIcon;
+    public Sprite offlineIcon;
     public TextMeshProUGUI titleText;
     public TextMeshProUGUI bodyText;
     public Button actionButton;
@@ -94,6 +102,7 @@ public class StateCardView : MonoBehaviour
         string body;
         string action;
         ThemeRole tint;
+        Sprite glyph;
 
         switch (_kind)
         {
@@ -102,6 +111,7 @@ public class StateCardView : MonoBehaviour
                 body = "state.locating.body";
                 action = null;
                 tint = ThemeRole.StatusNone;
+                glyph = locatingIcon;
                 break;
 
             case Kind.Loading:
@@ -109,6 +119,7 @@ public class StateCardView : MonoBehaviour
                 body = "state.loading.body";
                 action = null;
                 tint = ThemeRole.StatusNone;
+                glyph = loadingIcon;
                 break;
 
             case Kind.Failed:
@@ -116,6 +127,7 @@ public class StateCardView : MonoBehaviour
                 body = "state.failed.body";
                 action = "state.retry";
                 tint = ThemeRole.StatusPoor;
+                glyph = failedIcon;
                 break;
 
             case Kind.Offline:
@@ -123,6 +135,7 @@ public class StateCardView : MonoBehaviour
                 body = "state.offline.body";
                 action = "state.retry";
                 tint = ThemeRole.StatusFair;
+                glyph = offlineIcon;
                 break;
 
             default:
@@ -130,6 +143,7 @@ public class StateCardView : MonoBehaviour
                 body = "state.empty.body";
                 action = "state.widen";
                 tint = ThemeRole.TextMuted;
+                glyph = emptyIcon;
                 break;
         }
 
@@ -148,7 +162,12 @@ public class StateCardView : MonoBehaviour
         }
 
         if (icon != null)
+        {
             icon.color = ThemeManager.Get(tint);
+
+            if (glyph != null)
+                icon.sprite = glyph;
+        }
 
         bool hasAction = action != null;
 

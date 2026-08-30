@@ -463,11 +463,7 @@ public static class AppUIBuilder
         HorizontalLayoutGroup guideLayout = UIFactory.HorizontalStack(guideInner, 16f);
         guideLayout.childAlignment = TextAnchor.MiddleCenter;
 
-        RectTransform guideIcon = UIFactory.Rect("Icon", guideInner);
-        LayoutElement guideIconSize = UIFactory.Size(guideIcon.gameObject, 40f, 40f);
-        guideIconSize.flexibleWidth = 0f;
-        UIFactory.Plain(guideIcon, ThemeManager.Get(ThemeRole.OnAccent), UIShape.Triangle)
-            .raycastTarget = false;
+        Icon(guideInner, AppIcon.Navigation, 44f, ThemeRole.OnAccent);
 
         controller.guideLabel = UIFactory.Text("Label", guideInner, Body, ThemeRole.OnAccent,
                                                TextAlignmentOptions.Left, null, FontStyles.Bold);
@@ -496,7 +492,7 @@ public static class AppUIBuilder
                          new Vector2(-24f, -6f));
         Button closeButton = UIFactory.Button(close, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
         Wire(closeButton.onClick, controller.ClosePanel, "Marker sheet close");
-        UIFactory.Cross(close, ThemeRole.TextSecondary, 34f, 4f);
+        Icon(close, AppIcon.Close, 44f, ThemeRole.TextSecondary);
 
         // The animator hides the sheet by moving it, not by disabling it, so this
         // object stays enabled or ShowPanel would have nothing to reveal.
@@ -542,6 +538,18 @@ public static class AppUIBuilder
         UIFactory.Fill(surface, ThemeRole.Background).raycastTarget = true;
         surface.gameObject.AddComponent<RectMask2D>();
 
+        // Its own canvas. Everything on the map moves when the reader walks, and a
+        // uGUI canvas rebuilds in full whenever anything on it is dirtied - without
+        // this split, panning the map re-batched the nav bar and every panel with
+        // it.
+        //
+        // The raycaster is not optional. A graphic registers against its nearest
+        // enabled Canvas, so adding one here takes the whole map out of the root
+        // raycaster's registry - the split would have cost every tap and drag on
+        // the map to save the rebuilds.
+        surface.gameObject.AddComponent<Canvas>();
+        surface.gameObject.AddComponent<GraphicRaycaster>();
+
         MapView map = surface.gameObject.AddComponent<MapView>();
         map.locationService = location;
         map.pinPrefab = pinPrefab;
@@ -549,6 +557,14 @@ public static class AppUIBuilder
         map.minMetresAcross = 60f;
         map.maxMetresAcross = 4000f;
         controller.map = map;
+
+        // Tiles first, so every marker draws over them.
+        RectTransform tiles = UIFactory.Rect("Tiles", surface);
+        UIFactory.Stretch(tiles);
+
+        MapTileLayer tileLayer = surface.gameObject.AddComponent<MapTileLayer>();
+        tileLayer.map = map;
+        tileLayer.tileParent = tiles;
 
         RectTransform content = UIFactory.Rect("Content", surface);
         UIFactory.Stretch(content);
@@ -573,9 +589,12 @@ public static class AppUIBuilder
         map.guidanceRay = ray;
 
         // The reader's own dot is drawn last, so it is never buried under a pin.
+        // Its outer ring is white in both themes rather than the background colour:
+        // over a dark map a dark halo is no halo, and this is the one mark on the
+        // screen that must never be hard to find.
         RectTransform dot = UIFactory.Rect("UserDot", content);
-        UIFactory.Corner(dot, new Vector2(0.5f, 0.5f), new Vector2(52f, 52f), Vector2.zero);
-        UIFactory.Fill(dot, ThemeRole.Background, 1f, UIShape.Circle).raycastTarget = false;
+        UIFactory.Corner(dot, new Vector2(0.5f, 0.5f), new Vector2(54f, 54f), Vector2.zero);
+        UIFactory.Plain(dot, Color.white, UIShape.Circle).raycastTarget = false;
 
         RectTransform dotInner = UIFactory.Rect("Inner", dot);
         UIFactory.Corner(dotInner, new Vector2(0.5f, 0.5f), new Vector2(34f, 34f), Vector2.zero);
@@ -609,14 +628,7 @@ public static class AppUIBuilder
         HorizontalLayoutGroup recentreLayout = UIFactory.HorizontalStack(recentreRow, 14f);
         recentreLayout.childAlignment = TextAnchor.MiddleCenter;
 
-        RectTransform recentreGlyph = UIFactory.Rect("Glyph", recentreRow);
-        LayoutElement recentreGlyphSize = UIFactory.Size(recentreGlyph.gameObject, 40f, 40f);
-        recentreGlyphSize.flexibleWidth = 0f;
-        UIFactory.Fill(recentreGlyph, ThemeRole.Accent, 1f, UIShape.Ring).raycastTarget = false;
-
-        RectTransform recentreCore = UIFactory.Rect("Core", recentreGlyph);
-        UIFactory.Corner(recentreCore, new Vector2(0.5f, 0.5f), new Vector2(14f, 14f), Vector2.zero);
-        UIFactory.Fill(recentreCore, ThemeRole.Accent, 1f, UIShape.Circle).raycastTarget = false;
+        Icon(recentreRow, AppIcon.MyLocation, 44f, ThemeRole.Accent);
 
         TextMeshProUGUI recentreLabel = UIFactory.Text("Label", recentreRow, Secondary,
                                                        ThemeRole.TextPrimary,
@@ -643,6 +655,14 @@ public static class AppUIBuilder
         UIFactory.Fill(bar, ThemeRole.TextSecondary, 1f, UIShape.Pill).raycastTarget = false;
         map.scaleBar = bar;
 
+        // Required by the tile licence, and it belongs on screen anyway - the map
+        // is somebody else's work.
+        TextMeshProUGUI credit = UIFactory.Text("Attribution", safe, 26f, ThemeRole.TextMuted,
+                                                TextAlignmentOptions.Left);
+        UIFactory.Corner(credit.rectTransform, new Vector2(0f, 1f), new Vector2(560f, 34f),
+                         new Vector2(Margin, -256f));
+        credit.text = "\u00A9 OpenStreetMap contributors";
+
         // --- the states where there is nothing to draw ---
         controller.stateCard = BuildStateCard(safe);
 
@@ -660,6 +680,7 @@ public static class AppUIBuilder
         controller.nearestButton = UIFactory.Button(nearest, ThemeRole.Surface, 0.97f,
                                                     UIShape.Rounded);
         controller.nearestCard = nearest.gameObject;
+        Outline(nearest);
 
         RectTransform nearestRow = UIFactory.Rect("Row", nearest);
         UIFactory.Stretch(nearestRow);
@@ -698,10 +719,22 @@ public static class AppUIBuilder
         UIFactory.Size(browse.gameObject, Tap);
         controller.browseButton = UIFactory.Button(browse, ThemeRole.Surface, 0.97f,
                                                    UIShape.Rounded);
-        controller.browseLabel = UIFactory.Text("Label", browse, Secondary, ThemeRole.TextPrimary,
-                                                TextAlignmentOptions.Center, "map.browse",
+        Outline(browse);
+
+        RectTransform browseRow = UIFactory.Rect("Row", browse);
+        UIFactory.Stretch(browseRow);
+        HorizontalLayoutGroup browseLayout = UIFactory.HorizontalStack(browseRow, 16f);
+        browseLayout.childAlignment = TextAnchor.MiddleCenter;
+
+        Icon(browseRow, AppIcon.List, 38f, ThemeRole.TextSecondary);
+
+        controller.browseLabel = UIFactory.Text("Label", browseRow, Secondary,
+                                                ThemeRole.TextPrimary,
+                                                TextAlignmentOptions.Left, "map.browse",
                                                 FontStyles.Bold);
-        UIFactory.Stretch(controller.browseLabel.rectTransform);
+        LayoutElement browseLabelSize = UIFactory.Size(controller.browseLabel.gameObject,
+                                                       Tap, 320f);
+        browseLabelSize.flexibleWidth = 0f;
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -715,6 +748,57 @@ public static class AppUIBuilder
         Image image = UIFactory.Plain(rt, ThemeManager.Get(ThemeRole.Line), UIShape.Ring);
         image.raycastTarget = false;
         return image;
+    }
+
+    /// <summary>
+    /// An icon, from the rasterized set rather than assembled out of rectangles.
+    /// The first version of this screen drew its own, and the camera came out
+    /// looking like an apple.
+    /// </summary>
+    static Image Icon(Transform parent, AppIcon icon, float size, ThemeRole role,
+                      out RectTransform rect)
+    {
+        rect = UIFactory.Rect("Icon", parent);
+        UIFactory.Corner(rect, new Vector2(0.5f, 0.5f), new Vector2(size, size), Vector2.zero);
+
+        LayoutElement element = UIFactory.Size(rect.gameObject, size, size);
+        element.flexibleWidth = 0f;
+
+        Image image = UIFactory.Fill(rect, role);
+        image.sprite = UIIcons.Get(icon);
+        image.type = Image.Type.Simple;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+
+        return image;
+    }
+
+    static Image Icon(Transform parent, AppIcon icon, float size, ThemeRole role)
+    {
+        return Icon(parent, icon, size, role, out RectTransform _);
+    }
+
+    /// <summary>
+    /// Draws a hairline border around a card.
+    ///
+    /// Anything sitting over the map needs one. A surface with no edge over a busy
+    /// background reads as a hole punched in the screen, and no amount of corner
+    /// radius fixes it.
+    /// </summary>
+    static void Outline(RectTransform card, ThemeRole role = ThemeRole.Line)
+    {
+        RectTransform rt = UIFactory.Rect("Outline", card);
+        UIFactory.Stretch(rt);
+
+        Image image = UIFactory.Fill(rt, role);
+        image.sprite = UISprites.RoundedOutline;
+        image.type = Image.Type.Sliced;
+        image.pixelsPerUnitMultiplier = 1f;
+        image.raycastTarget = false;
+
+        // First child, so anything the card puts inside it draws over the border
+        // rather than under it.
+        rt.SetAsFirstSibling();
     }
 
     /// <summary>A coloured disc, or the ring that separates one from its background.</summary>
@@ -741,10 +825,9 @@ public static class AppUIBuilder
         LayoutElement element = UIFactory.Size(holder.gameObject, size, size);
         element.flexibleWidth = 0f;
 
-        RectTransform tip = UIFactory.Rect("Tip", holder);
-        UIFactory.Corner(tip, new Vector2(0.5f, 0.5f), new Vector2(size, size), Vector2.zero);
-        Image glyph = UIFactory.Plain(tip, ThemeManager.Get(ThemeRole.Accent), UIShape.Triangle);
-        glyph.raycastTarget = false;
+        Image glyph = Icon(holder, AppIcon.Navigation, size, ThemeRole.Accent,
+                           out RectTransform tip);
+        Unthemed(tip.gameObject); // BearingArrow drives this colour itself
 
         // Replaces the arrow once the reader is close enough that a direction would
         // be noise rather than help.
@@ -770,6 +853,7 @@ public static class AppUIBuilder
         RectTransform rt = UIFactory.Rect("Guidance", parent);
         UIFactory.Size(rt.gameObject, 150f);
         UIFactory.Fill(rt, ThemeRole.Surface, 0.97f, UIShape.Rounded).raycastTarget = true;
+        Outline(rt, ThemeRole.Accent);
 
         RectTransform row = UIFactory.Rect("Row", rt);
         UIFactory.Stretch(row);
@@ -815,15 +899,19 @@ public static class AppUIBuilder
         RectTransform rt = UIFactory.Rect("StateCard", parent);
         UIFactory.Corner(rt, new Vector2(0.5f, 0.5f), new Vector2(780f, 0f), new Vector2(0f, 90f));
         UIFactory.Card(rt, 38f, 18f, true);
+        Outline(rt);
 
         StateCardView view = rt.gameObject.AddComponent<StateCardView>();
         view.root = rt.gameObject;
 
-        RectTransform iconRect = UIFactory.Rect("Icon", rt);
-        LayoutElement iconSize = UIFactory.Size(iconRect.gameObject, 56f, 56f);
-        iconSize.flexibleWidth = 0f;
-        view.icon = UIFactory.Plain(iconRect, ThemeManager.Get(ThemeRole.TextMuted), UIShape.Ring);
-        view.icon.raycastTarget = false;
+        view.icon = Icon(rt, AppIcon.Search, 60f, ThemeRole.TextMuted, out RectTransform iconRect);
+        Unthemed(iconRect.gameObject); // the card drives this colour from its state
+
+        view.locatingIcon = UIIcons.Get(AppIcon.MyLocation);
+        view.loadingIcon = UIIcons.Get(AppIcon.MyLocation);
+        view.emptyIcon = UIIcons.Get(AppIcon.Search);
+        view.failedIcon = UIIcons.Get(AppIcon.Warning);
+        view.offlineIcon = UIIcons.Get(AppIcon.Warning);
 
         view.titleText = UIFactory.Text("Title", rt, Title, ThemeRole.TextPrimary,
                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
@@ -860,6 +948,14 @@ public static class AppUIBuilder
         controller.infoPanel = info;
         controller.liveARView = live.gameObject;
         controller.arSession = Object.FindFirstObjectByType<ARSession>(FindObjectsInactive.Include);
+        controller.cameraBackground =
+            Object.FindFirstObjectByType<ARCameraBackground>(FindObjectsInactive.Include);
+
+        if (controller.cameraBackground == null)
+        {
+            _notes.Add("No ARCameraBackground found, so the camera feed will keep " +
+                       "drawing behind the map. Not fatal, just wasteful.");
+        }
 
         RectTransform safe = SafeContent(live);
 
@@ -903,6 +999,7 @@ public static class AppUIBuilder
         UIFactory.Size(dock.gameObject, 150f);
         controller.dockButton = UIFactory.Button(dock, ThemeRole.Surface, 1f, UIShape.Rounded);
         controller.dock = dock.gameObject;
+        Outline(dock);
 
         RectTransform dockRow = UIFactory.Rect("Row", dock);
         UIFactory.Stretch(dockRow);
@@ -957,18 +1054,19 @@ public static class AppUIBuilder
         banner.sizeDelta = new Vector2(-Margin * 2f, 130f);
         banner.anchoredPosition = new Vector2(0f, -(Margin + Tap + 20f));
         UIFactory.Fill(banner, ThemeRole.Surface, 1f, UIShape.Rounded);
+        Outline(banner, ThemeRole.StatusFair);
 
-        // A coloured stripe rather than a coloured background: the message has to
-        // stay readable, and status is carried by shape as well as by hue.
-        RectTransform stripe = UIFactory.Rect("Stripe", banner);
-        UIFactory.Corner(stripe, new Vector2(0f, 0.5f), new Vector2(10f, 80f),
-                         new Vector2(18f, 0f));
-        UIFactory.Fill(stripe, ThemeRole.StatusFair, 1f, UIShape.Pill).raycastTarget = false;
+        // A glyph rather than a coloured background: the message has to stay
+        // readable, and the state is then carried by shape as well as by hue.
+        Image warning = Icon(banner, AppIcon.Warning, 46f, ThemeRole.StatusFair,
+                             out RectTransform warningRect);
+        UIFactory.Corner(warningRect, new Vector2(0f, 0.5f), new Vector2(46f, 46f),
+                         new Vector2(30f, 0f));
 
         controller.warningLabel = UIFactory.Text("Label", banner, Secondary, ThemeRole.TextPrimary,
                                                  TextAlignmentOptions.Left);
         UIFactory.Stretch(controller.warningLabel.rectTransform);
-        controller.warningLabel.rectTransform.offsetMin = new Vector2(48f, 0f);
+        controller.warningLabel.rectTransform.offsetMin = new Vector2(70f, 0f);
         controller.warningLabel.rectTransform.offsetMax = new Vector2(-(Tap + 10f), 0f);
         controller.warningLabel.text = AppStrings.Get("live.warning");
 
@@ -977,7 +1075,7 @@ public static class AppUIBuilder
                          new Vector2(-6f, 0f));
         controller.warningDismissButton =
             UIFactory.Button(dismiss, ThemeRole.Surface, 0f, UIShape.Circle);
-        UIFactory.Cross(dismiss, ThemeRole.TextSecondary, 30f, 4f);
+        Icon(dismiss, AppIcon.Close, 40f, ThemeRole.TextSecondary);
 
         controller.warningBanner = banner.gameObject;
         banner.gameObject.SetActive(false);
@@ -1010,6 +1108,7 @@ public static class AppUIBuilder
         CameraEdgePills.Pill pill = new CameraEdgePills.Pill();
         pill.root = rt.gameObject;
         pill.button = UIFactory.Button(rt, ThemeRole.Surface, 1f, UIShape.Rounded);
+        Outline(rt);
 
         RectTransform row = UIFactory.Rect("Row", rt);
         UIFactory.Stretch(row);
@@ -1136,7 +1235,7 @@ public static class AppUIBuilder
         RectTransform closeRect = UIFactory.Rect("CloseButton", head);
         UIFactory.Corner(closeRect, new Vector2(1f, 0.5f), new Vector2(Tap, Tap), Vector2.zero);
         Button close = UIFactory.Button(closeRect, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
-        UIFactory.Cross(closeRect, ThemeRole.TextSecondary, 32f, 4f);
+        Icon(closeRect, AppIcon.Close, 42f, ThemeRole.TextSecondary);
 
         RectTransform listArea = UIFactory.Rect("ListArea", sheet);
         UIFactory.Stretch(listArea);
@@ -1231,6 +1330,7 @@ public static class AppUIBuilder
         toast.card = card;
 
         toast.openButton = UIFactory.Button(card, ThemeRole.Surface, 1f, UIShape.Rounded);
+        Outline(card, ThemeRole.Accent);
 
         RectTransform row = UIFactory.Rect("Row", card);
         UIFactory.Stretch(row);
@@ -1265,7 +1365,7 @@ public static class AppUIBuilder
         LayoutElement dismissSize = UIFactory.Size(dismiss.gameObject, Tap, Tap);
         dismissSize.flexibleWidth = 0f;
         toast.dismissButton = UIFactory.Button(dismiss, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
-        UIFactory.Cross(dismiss, ThemeRole.TextSecondary, 30f, 4f);
+        Icon(dismiss, AppIcon.Close, 40f, ThemeRole.TextSecondary);
 
         cardHolder.gameObject.SetActive(false);
         return toast;
@@ -1429,6 +1529,20 @@ public static class AppUIBuilder
         UIFactory.Stretch((RectTransform)controller.searchField.transform);
         controller.searchPlaceholder = placeholder;
 
+        // The glyph, and room made for it. A search box with no icon is a text
+        // field, and the difference matters on a screen full of other text.
+        Image searchGlyph = Icon(fieldRect, AppIcon.Search, 42f, ThemeRole.TextMuted,
+                                 out RectTransform searchGlyphRect);
+        UIFactory.Corner(searchGlyphRect, new Vector2(0f, 0.5f), new Vector2(42f, 42f),
+                         new Vector2(34f, 0f));
+        searchGlyph.transform.SetAsLastSibling();
+
+        if (controller.searchField.textViewport != null)
+        {
+            controller.searchField.textViewport.offsetMin = new Vector2(96f, 8f);
+            controller.searchField.textViewport.offsetMax = new Vector2(-30f, -8f);
+        }
+
         // One scroll for the whole screen. The filter rows live inside it alongside
         // the results, so choosing a filter never takes the pills off screen.
         RectTransform body = UIFactory.Rect("Body", rt);
@@ -1550,17 +1664,18 @@ public static class AppUIBuilder
 
         controller.appearanceLabel = SectionLabel(content, "settings.appearance");
         RectTransform appearance = UIFactory.Rect("AppearanceCard", content);
-        UIFactory.Card(appearance);
+        UIFactory.Card(appearance, 34f, 0f);
         controller.themeRowLabel = RowLabel(appearance, "settings.theme",
                                             out RectTransform themeRow);
         controller.themeToggle = UIFactory.Switch("Toggle", themeRow);
+        Divider(appearance);
         controller.occlusionRowLabel = RowLabel(appearance, "settings.occlusion",
                                                 out RectTransform occlusionRow);
         controller.occlusionToggle = UIFactory.Switch("Toggle", occlusionRow);
 
         controller.languageSectionLabel = SectionLabel(content, "settings.language");
         RectTransform language = UIFactory.Rect("LanguageCard", content);
-        UIFactory.Card(language);
+        UIFactory.Card(language, 34f, 0f);
         controller.languageRowLabel = RowLabel(language, "settings.appLanguage",
                                                out RectTransform langRow);
 
@@ -1580,29 +1695,26 @@ public static class AppUIBuilder
         // Privacy: the reader's own control over what is allowed on their map.
         controller.privacyLabel = SectionLabel(content, "settings.privacy");
         RectTransform privacy = UIFactory.Rect("PrivacyCard", content);
-        UIFactory.Card(privacy);
+        UIFactory.Card(privacy, 34f, 0f);
         controller.hiddenRowLabel = RowLabel(privacy, "settings.hidden",
                                              out RectTransform hiddenRow);
-        controller.hiddenCountLabel = UIFactory.Text("Count", hiddenRow, Secondary,
+        controller.hiddenCountLabel = UIFactory.Text("Count", hiddenRow, Body,
                                                      ThemeRole.TextMuted,
                                                      TextAlignmentOptions.Right);
         LayoutElement hiddenCountSize = UIFactory.Size(controller.hiddenCountLabel.gameObject,
-                                                        84f, 260f);
+                                                        Tap, 260f);
         hiddenCountSize.flexibleWidth = 0f;
 
-        RectTransform unhide = UIFactory.Rect("UnhideAll", privacy);
-        UIFactory.Size(unhide.gameObject, Tap);
-        controller.unhideAllButton = UIFactory.Button(unhide, ThemeRole.SurfaceAlt, 1f,
-                                                      UIShape.Rounded);
-        controller.unhideAllLabel = UIFactory.Text("Label", unhide, Secondary,
-                                                   ThemeRole.TextPrimary,
-                                                   TextAlignmentOptions.Center,
-                                                   "settings.unhideAll", FontStyles.Bold);
-        UIFactory.Stretch(controller.unhideAllLabel.rectTransform);
+        Divider(privacy);
+
+        // A row, not a filled button parked inside a card. It sits with the other
+        // rows because it is the same kind of thing: a line you press.
+        controller.unhideAllButton = ActionRow(privacy, "settings.unhideAll", ThemeRole.Accent,
+                                               out controller.unhideAllLabel);
 
         controller.notificationsLabel = SectionLabel(content, "settings.notifications");
         RectTransform notifications = UIFactory.Rect("NotificationsCard", content);
-        UIFactory.Card(notifications);
+        UIFactory.Card(notifications, 34f, 0f);
         controller.nearbyRowLabel = RowLabel(notifications, "settings.nearbyBuildings",
                                              out RectTransform nearbyRow);
         controller.nearbyToggle = UIFactory.Switch("Toggle", nearbyRow);
@@ -1613,15 +1725,17 @@ public static class AppUIBuilder
                                                     ThemeRole.TextMuted,
                                                     TextAlignmentOptions.TopLeft,
                                                     "settings.nearbyNote");
-        UIFactory.Size(controller.nearbyNoteLabel.gameObject, 76f);
+        UIFactory.Size(controller.nearbyNoteLabel.gameObject, 84f);
 
         controller.helpLabel = SectionLabel(content, "settings.help");
         RectTransform help = UIFactory.Rect("HelpCard", content);
-        UIFactory.Card(help);
+        UIFactory.Card(help, 34f, 0f);
         controller.tutorialButton = HelpRow(help, "settings.replayTutorial",
                                             out controller.tutorialRowLabel);
+        Divider(help);
         controller.sourcesButton = HelpRow(help, "settings.dataSources",
                                            out controller.sourcesRowLabel);
+        Divider(help);
         controller.aboutButton = HelpRow(help, "settings.about", out controller.aboutRowLabel);
 
         RectTransform versionRow = UIFactory.Rect("Version", content);
@@ -1655,17 +1769,46 @@ public static class AppUIBuilder
         return controller;
     }
 
+    /// <summary>
+    /// A settings row. Every row is the same height and separated by a rule, which
+    /// is the difference between a settings screen and a stack of controls that
+    /// happen to be near each other.
+    /// </summary>
     static TextMeshProUGUI RowLabel(Transform card, string key, out RectTransform row)
     {
         row = UIFactory.Rect("Row", card);
-        UIFactory.Size(row.gameObject, 88f);
+        UIFactory.Size(row.gameObject, Tap);
         UIFactory.HorizontalStack(row, 18f, false);
 
         TextMeshProUGUI label = UIFactory.Text("Label", row, Body, ThemeRole.TextPrimary,
                                                TextAlignmentOptions.Left, key);
-        UIFactory.Size(label.gameObject, 88f);
+        UIFactory.Size(label.gameObject, Tap);
         UIFactory.Flexible(label.gameObject);
         return label;
+    }
+
+    /// <summary>The rule between two rows of a card.</summary>
+    static void Divider(Transform card)
+    {
+        RectTransform rt = UIFactory.Rect("Divider", card);
+        UIFactory.Size(rt.gameObject, 2f);
+        UIFactory.Fill(rt, ThemeRole.Line).raycastTarget = false;
+    }
+
+    /// <summary>A row whose whole width is the control, for an action rather than a value.</summary>
+    static Button ActionRow(Transform card, string key, ThemeRole role,
+                            out TextMeshProUGUI label)
+    {
+        RectTransform row = UIFactory.Rect("Row", card);
+        UIFactory.Size(row.gameObject, Tap);
+
+        Button button = UIFactory.Button(row, ThemeRole.Surface, 0f);
+
+        label = UIFactory.Text("Label", row, Body, role,
+                               TextAlignmentOptions.Left, key, FontStyles.Bold);
+        UIFactory.Stretch(label.rectTransform);
+
+        return button;
     }
 
     static Button HelpRow(Transform card, string key, out TextMeshProUGUI label)
@@ -1679,13 +1822,10 @@ public static class AppUIBuilder
         UIFactory.Stretch(label.rectTransform);
         label.rectTransform.offsetMax = new Vector2(-56f, 0f);
 
-        // A drawn chevron, not a typed one: the font atlas has no arrows, and a
-        // glyph it does not have renders as an empty box on device.
-        RectTransform chevron = UIFactory.Rect("Chevron", row);
-        UIFactory.Corner(chevron, new Vector2(1f, 0.5f), new Vector2(24f, 24f),
-                         new Vector2(-12f, 0f));
-        UIFactory.Fill(chevron, ThemeRole.TextMuted, 1f, UIShape.Triangle).raycastTarget = false;
-        chevron.localRotation = Quaternion.Euler(0f, 0f, -90f);
+        Image chevron = Icon(row, AppIcon.ChevronRight, 36f, ThemeRole.TextMuted,
+                             out RectTransform chevronRect);
+        UIFactory.Corner(chevronRect, new Vector2(1f, 0.5f), new Vector2(36f, 36f),
+                         new Vector2(-14f, 0f));
 
         return button;
     }
@@ -1850,77 +1990,23 @@ public static class AppUIBuilder
     }
 
     /// <summary>
-    /// Nav icons drawn from primitives rather than typed from an icon font. The
-    /// project's font atlas is Latin and Cyrillic only, so a Material Icons glyph
-    /// renders as an empty box on device.
+    /// One rasterized sprite per tab. This used to stack rectangles and circles by
+    /// eye, which is how the camera ended up reading as an apple - a round body
+    /// with a stem off to one side.
     ///
-    /// Every piece is handed back, because the active-tab colour has to reach all
-    /// of them - a UI Image does not inherit its parent's colour.
+    /// Still an array, because TabNavigationController colours whatever it is given
+    /// and a future icon may want more than one piece.
     /// </summary>
     static Graphic[] DrawGlyph(RectTransform holder, NavGlyph glyph)
     {
-        switch (glyph)
-        {
-            case NavGlyph.Map:
-            {
-                // A pin: a ring over a downward point.
-                RectTransform ring = UIFactory.Rect("Ring", holder);
-                UIFactory.Corner(ring, new Vector2(0.5f, 1f), new Vector2(40f, 40f), Vector2.zero);
-                Image ringImage = UIFactory.Plain(ring, Color.white, UIShape.Ring);
-                ringImage.raycastTarget = false;
+        AppIcon icon = glyph == NavGlyph.Map ? AppIcon.MapPin
+                     : glyph == NavGlyph.Camera ? AppIcon.Camera
+                     : AppIcon.Settings;
 
-                RectTransform tip = UIFactory.Rect("Tip", holder);
-                UIFactory.Corner(tip, new Vector2(0.5f, 0f), new Vector2(24f, 24f), Vector2.zero);
-                Image tipImage = UIFactory.Plain(tip, Color.white, UIShape.Triangle);
-                tipImage.raycastTarget = false;
-                tip.localRotation = Quaternion.Euler(0f, 0f, 180f);
+        Image image = Icon(holder, icon, 54f, ThemeRole.TextMuted);
+        Unthemed(image.gameObject); // the tab controller drives this colour
 
-                return new Graphic[] { ringImage, tipImage };
-            }
-
-            case NavGlyph.Camera:
-            {
-                RectTransform bodyRect = UIFactory.Rect("Body", holder);
-                UIFactory.Corner(bodyRect, new Vector2(0.5f, 0.5f), new Vector2(54f, 42f),
-                                 new Vector2(0f, -4f));
-                Image bodyImage = UIFactory.Plain(bodyRect, Color.white, UIShape.Rounded);
-                bodyImage.raycastTarget = false;
-
-                RectTransform lens = UIFactory.Rect("Lens", holder);
-                UIFactory.Corner(lens, new Vector2(0.5f, 0.5f), new Vector2(22f, 22f),
-                                 new Vector2(0f, -4f));
-                Image lensImage = UIFactory.Plain(lens, Color.white, UIShape.Ring);
-                lensImage.raycastTarget = false;
-
-                RectTransform bump = UIFactory.Rect("Bump", holder);
-                UIFactory.Corner(bump, new Vector2(0.5f, 1f), new Vector2(24f, 12f),
-                                 new Vector2(-9f, 0f));
-                Image bumpImage = UIFactory.Plain(bump, Color.white, UIShape.Pill);
-                bumpImage.raycastTarget = false;
-
-                return new Graphic[] { bodyImage, lensImage, bumpImage };
-            }
-
-            default:
-            {
-                // Three sliders, which reads as settings without needing a gear.
-                Graphic[] bars = new Graphic[3];
-                float[] widths = { 48f, 34f, 42f };
-
-                for (int i = 0; i < 3; i++)
-                {
-                    RectTransform bar = UIFactory.Rect("Bar" + i, holder);
-                    UIFactory.Corner(bar, new Vector2(0.5f, 0.5f), new Vector2(widths[i], 8f),
-                                     new Vector2(0f, 16f - i * 16f));
-
-                    Image image = UIFactory.Plain(bar, Color.white, UIShape.Pill);
-                    image.raycastTarget = false;
-                    bars[i] = image;
-                }
-
-                return bars;
-            }
-        }
+        return new Graphic[] { image };
     }
 
     // ----------------------------------------------------------------- prefabs

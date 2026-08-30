@@ -32,6 +32,10 @@ public class CameraTabController : MonoBehaviour
              "disabled - see the note on this class.")]
     public ARSession arSession;
 
+    [Tooltip("Switched off while the reader is on another tab. The session keeps " +
+             "running and keeps localizing; only the blit stops.")]
+    public ARCameraBackground cameraBackground;
+
     [Header("Overlays")]
     public Button nearbyButton;
     public TextMeshProUGUI nearbyCountText;
@@ -103,6 +107,8 @@ public class CameraTabController : MonoBehaviour
         if (liveARView != null)
             liveARView.SetActive(true);
 
+        SetFeedVisible(true);
+
         // Whatever the reader is walking to is what the camera should be talking
         // about when they raise the phone.
         if (GuidanceService.IsGuiding)
@@ -123,6 +129,12 @@ public class CameraTabController : MonoBehaviour
         BuildingDatabase.OnBuildingsChanged -= HandleBuildingsChanged;
         GuidanceService.OnGuidanceChanged -= Refresh;
 
+        // The camera feed is a full-screen texture drawn every frame. On the map
+        // it is behind an opaque panel and nobody can see it, so it stops - but the
+        // session stays up, because localization is the slow part and losing it
+        // would mean starting again on every tab switch.
+        SetFeedVisible(false);
+
         // Leaving the tab with a sheet open would strand it half-drawn behind
         // whichever tab the reader switched to.
         CloseNearby();
@@ -132,6 +144,12 @@ public class CameraTabController : MonoBehaviour
 
         if (vpsIndicator != null)
             vpsIndicator.CloseBubble();
+    }
+
+    void SetFeedVisible(bool visible)
+    {
+        if (cameraBackground != null)
+            cameraBackground.enabled = visible;
     }
 
     void Update()

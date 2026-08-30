@@ -7,23 +7,27 @@ using UnityEngine.UI;
 
 /// <summary>
 /// The map the app opens on: the reader at the centre, markers where they really
-/// are, north up.
+/// are, north up, over OpenStreetMap tiles.
 ///
-/// It is drawn rather than tiled. Nothing is fetched, so it works with no signal
-/// and costs nothing to render, and the price - no streets - is paid back by the
-/// scale bar and the distance rings, which answer "how far" more directly than a
-/// tile of a town centre at 200 m does. The projection is deliberately trivial: a
-/// local east/north offset in metres, scaled to pixels. Swapping in raster tiles
-/// later means adding a tile layer under the content and leaving every other line
-/// in this file alone, because pins are placed from metres, not from a tile's
-/// pixel grid.
+/// The projection is deliberately trivial - a local east/north offset in metres,
+/// scaled to pixels. Everything on the map goes through <see cref="Project"/>,
+/// including the tiles, which are placed by projecting their own corners. That is
+/// what keeps a pin over the right building: both answers come from the same
+/// question in the same units.
+///
+/// On redrawing: this used to lay itself out every frame, which wrote colours and
+/// sizes into the canvas sixty times a second whether or not anything had moved.
+/// A uGUI canvas rebuilds and re-batches in full when any element on it is dirtied,
+/// so that one habit was rebuilding every panel, the nav bar and the sheet,
+/// continuously. Now nothing is written unless it changed, and layout only runs
+/// when something asked it to.
 /// </summary>
 public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHandler
 {
     [Header("References")]
     public UserLocationService locationService;
 
-    [Tooltip("Pins, the user dot and the guidance ray are all children of this, so " +
+    [Tooltip("Pins, the reader dot and the guidance ray are children of this, so " +
              "they clip to the map rather than to the panel.")]
     public RectTransform contentParent;
 
@@ -43,10 +47,9 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     public RectTransform guidanceRay;
 
     [Header("Chrome")]
-    [Tooltip("Rings drawn around the reader at the scale bar's distance and twice " +
-             "it. They replace a street grid: they move with the reader, so the map " +
-             "visibly responds to walking, and they answer \"how far is that\" " +
-             "without the reader measuring anything.")]
+    [Tooltip("Rings at the scale bar distance and twice it. They move with the " +
+             "reader, so walking visibly changes the map, and they answer how far " +
+             "without anyone measuring.")]
     public Image[] distanceRings;
 
     public RectTransform scaleBar;
@@ -84,14 +87,13 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     RectTransform _rect;
     BuildingData _selected;
 
-    // Where the map is looking, as an offset in metres from the origin. Following
-    // the reader means this tracks their position.
+    // Where the map is looking, as an offset in metres from the origin.
     double _panEast;
     double _panNorth;
     bool _followsReader = true;
 
     // The point every offset is measured from. Held rather than read live, because
-    // rewriting it every second is what makes a drawn map shiver under GPS jitter.
+    // rewriting it every second is what makes a map shiver under GPS jitter.
     double _originLat;
     double _originLon;
     bool _hasOrigin;
@@ -99,14 +101,40 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     float _pinchStart;
     float _metresAtPinchStart;
 
-    // The last step the scale bar was labelled with. Held so the label is only
-    // rewritten when the number changes rather than once a frame - LayOut runs
-    // every frame, and formatting a string every frame is free garbage.
+    bool _dirty = true;
+    Vector2 _lastSize;
+
+    // Last values written to the canvas. Writing an unchanged colour still marks
+    // the graphic dirty, which is the whole cost being avoided here.
     double _labelledStep = -1d;
+    float _lastAccuracyRadius = -1f;
+    Color _lastAccuracyColour;
+    Color _lastRingColour;
+    Color _lastRayColour;
 
     public bool FollowsReader { get { return _followsReader; } }
 
     public bool HasOrigin { get { return _hasOrigin; } }
+
+    /// <summary>Bumped whenever the view changes, so layers over the map can skip work.</summary>
+    public int Version { get; private set; }
+
+    public Rect ViewRect
+    {
+        get { return _rect != null ? _rect.rect : new Rect(); }
+    }
+
+    public float PixelsPerMetre
+    {
+        get
+        {
+            float width = _rect != null ? _rect.rect.width : 0f;
+            if (width <= 1f || metresAcross <= 0f)
+                return 1f;
+
+            return width / metresAcross;
+        }
+    }
 
     void Awake()
     {
@@ -127,9 +155,10 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         BuildingDatabase.OnBuildingsChanged += Rebuild;
         ThemeManager.OnThemeChanged += Repaint;
         AppStrings.OnLanguageChanged += Repaint;
-        GuidanceService.OnGuidanceChanged += ApplySelection;
+        GuidanceService.OnGuidanceChanged += HandleGuidanceChanged;
 
         Rebuild();
+        MarkDirty();
     }
 
     void OnDisable()
@@ -140,28 +169,35 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         BuildingDatabase.OnBuildingsChanged -= Rebuild;
         ThemeManager.OnThemeChanged -= Repaint;
         AppStrings.OnLanguageChanged -= Repaint;
-        GuidanceService.OnGuidanceChanged -= ApplySelection;
+        GuidanceService.OnGuidanceChanged -= HandleGuidanceChanged;
     }
 
     void Update()
     {
         HandlePinch();
+
+        // A rotation or a fold changes the rect without anything else knowing.
+        if (_rect != null && _rect.rect.size != _lastSize)
+        {
+            _lastSize = _rect.rect.size;
+            MarkDirty();
+        }
+
+        if (!_dirty)
+            return;
+
+        _dirty = false;
         LayOut();
     }
 
-    // --------------------------------------------------------------- projection
-
-    float PixelsPerMetre
+    /// <summary>Asks for one more layout pass. Cheap, and idempotent within a frame.</summary>
+    public void MarkDirty()
     {
-        get
-        {
-            float width = _rect != null ? _rect.rect.width : 0f;
-            if (width <= 1f || metresAcross <= 0f)
-                return 1f;
-
-            return width / metresAcross;
-        }
+        _dirty = true;
+        Version++;
     }
+
+    // --------------------------------------------------------------- projection
 
     /// <summary>Where a coordinate lands on the map, in this rect's local pixels.</summary>
     public Vector2 Project(double latitude, double longitude)
@@ -175,6 +211,38 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         float scale = PixelsPerMetre;
         return new Vector2((float)((east - _panEast) * scale),
                            (float)((north - _panNorth) * scale));
+    }
+
+    /// <summary>The inverse: what coordinate a point on the map is over.</summary>
+    public void Unproject(Vector2 point, out double latitude, out double longitude)
+    {
+        latitude = 0d;
+        longitude = 0d;
+
+        if (!_hasOrigin)
+            return;
+
+        float scale = PixelsPerMetre;
+        if (scale <= 0f)
+            return;
+
+        GeoMath.OffsetToLatLon(_originLat, _originLon,
+                               point.x / scale + _panEast,
+                               point.y / scale + _panNorth,
+                               out latitude, out longitude);
+    }
+
+    /// <summary>What the middle of the map is over. False until there is a position.</summary>
+    public bool TryGetViewCentre(out double latitude, out double longitude)
+    {
+        latitude = 0d;
+        longitude = 0d;
+
+        if (!_hasOrigin)
+            return false;
+
+        Unproject(Vector2.zero, out latitude, out longitude);
+        return true;
     }
 
     // -------------------------------------------------------------------- input
@@ -208,13 +276,7 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
     void HandlePinch()
     {
-        if (!interactable)
-        {
-            _pinchStart = 0f;
-            return;
-        }
-
-        if (Input.touchCount != 2)
+        if (!interactable || Input.touchCount != 2)
         {
             _pinchStart = 0f;
             return;
@@ -256,6 +318,8 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
     void Moved()
     {
+        MarkDirty();
+
         if (onViewMoved != null)
             onViewMoved();
     }
@@ -305,6 +369,8 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
         if (_followsReader)
             SnapPanToReader();
+
+        MarkDirty();
     }
 
     void SnapPanToReader()
@@ -315,6 +381,12 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         GeoMath.LocalOffsetMetres(_originLat, _originLon,
                                   locationService.Latitude, locationService.Longitude,
                                   out _panEast, out _panNorth);
+    }
+
+    void HandleGuidanceChanged()
+    {
+        ApplySelection();
+        MarkDirty();
     }
 
     /// <summary>Creates and destroys pins to match the database. Called rarely.</summary>
@@ -365,12 +437,17 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
         GuidanceService.Validate();
         ApplySelection();
+        MarkDirty();
     }
 
     void Repaint()
     {
-        // The cached scale label is in the old language until this is cleared.
+        // Everything cached below is now in the wrong theme or the wrong language.
         _labelledStep = -1d;
+        _lastAccuracyRadius = -1f;
+        _lastAccuracyColour = default;
+        _lastRingColour = default;
+        _lastRayColour = default;
 
         foreach (KeyValuePair<BuildingData, MapPinView> pair in _pins)
         {
@@ -379,12 +456,14 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         }
 
         ApplySelection();
+        MarkDirty();
     }
 
     public void Select(BuildingData building)
     {
         _selected = building;
         ApplySelection();
+        MarkDirty();
     }
 
     void ApplySelection()
@@ -432,11 +511,16 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
                 continue;
 
             Vector2 position = Project(pair.Key.latitude, pair.Key.longitude);
-            ((RectTransform)pair.Value.transform).anchoredPosition = position;
+            RectTransform rt = (RectTransform)pair.Value.transform;
+
+            if (rt.anchoredPosition != position)
+                rt.anchoredPosition = position;
 
             // Hidden rather than clamped to the edge. A pin pinned to the frame
             // claims a position it does not have.
-            pair.Value.gameObject.SetActive(_hasOrigin && Within(position, 60f));
+            bool visible = _hasOrigin && Within(position, 60f);
+            if (pair.Value.gameObject.activeSelf != visible)
+                pair.Value.gameObject.SetActive(visible);
         }
     }
 
@@ -456,12 +540,14 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
         if (userDot != null)
         {
-            userDot.gameObject.SetActive(known);
+            if (userDot.gameObject.activeSelf != known)
+                userDot.gameObject.SetActive(known);
 
             if (known)
             {
-                userDot.anchoredPosition =
-                    Project(locationService.Latitude, locationService.Longitude);
+                Vector2 position = Project(locationService.Latitude, locationService.Longitude);
+                if (userDot.anchoredPosition != position)
+                    userDot.anchoredPosition = position;
             }
         }
 
@@ -474,24 +560,37 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
             : 0f;
 
         bool show = known && radius > 12f;
-        accuracyCircle.gameObject.SetActive(show);
+
+        if (accuracyCircle.gameObject.activeSelf != show)
+            accuracyCircle.gameObject.SetActive(show);
 
         if (!show)
             return;
 
-        accuracyCircle.rectTransform.anchoredPosition =
-            userDot != null ? userDot.anchoredPosition : Vector2.zero;
+        Vector2 centre = userDot != null ? userDot.anchoredPosition : Vector2.zero;
+        if (accuracyCircle.rectTransform.anchoredPosition != centre)
+            accuracyCircle.rectTransform.anchoredPosition = centre;
 
         radius = Mathf.Min(radius, _rect.rect.width);
-        accuracyCircle.rectTransform.sizeDelta = new Vector2(radius * 2f, radius * 2f);
+
+        if (!Mathf.Approximately(radius, _lastAccuracyRadius))
+        {
+            _lastAccuracyRadius = radius;
+            accuracyCircle.rectTransform.sizeDelta = new Vector2(radius * 2f, radius * 2f);
+        }
 
         Color tint = ThemeManager.Get(ThemeRole.Accent);
-        tint.a = 0.14f;
-        accuracyCircle.color = tint;
+        tint.a = 0.16f;
+
+        if (tint != _lastAccuracyColour)
+        {
+            _lastAccuracyColour = tint;
+            accuracyCircle.color = tint;
+        }
     }
 
     /// <summary>
-    /// Sized from the same rounded step the scale bar uses, so the ring is always a
+    /// Sized from the same rounded step the scale bar uses, so a ring is always a
     /// number the reader has just read rather than an arbitrary circle.
     /// </summary>
     void LayOutRings()
@@ -505,25 +604,36 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         float scale = PixelsPerMetre;
         double step = ScaleStepMetres();
 
+        Color tint = ThemeManager.Get(ThemeRole.TextPrimary);
+        tint.a = 0.16f;
+
+        bool recolour = tint != _lastRingColour;
+        if (recolour)
+            _lastRingColour = tint;
+
         for (int i = 0; i < distanceRings.Length; i++)
         {
             Image ring = distanceRings[i];
             if (ring == null)
                 continue;
 
-            ring.gameObject.SetActive(known);
+            if (ring.gameObject.activeSelf != known)
+                ring.gameObject.SetActive(known);
 
             if (!known)
                 continue;
 
             float radius = (float)(step * (i + 1)) * scale;
 
-            ring.rectTransform.anchoredPosition = centre;
-            ring.rectTransform.sizeDelta = new Vector2(radius * 2f, radius * 2f);
+            if (ring.rectTransform.anchoredPosition != centre)
+                ring.rectTransform.anchoredPosition = centre;
 
-            Color tint = ThemeManager.Get(ThemeRole.Line);
-            tint.a = 0.55f;
-            ring.color = tint;
+            Vector2 size = new Vector2(radius * 2f, radius * 2f);
+            if (ring.rectTransform.sizeDelta != size)
+                ring.rectTransform.sizeDelta = size;
+
+            if (recolour)
+                ring.color = tint;
         }
     }
 
@@ -537,7 +647,8 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         bool show = target != null && _hasOrigin &&
                     locationService != null && locationService.HasValidPose;
 
-        guidanceRay.gameObject.SetActive(show);
+        if (guidanceRay.gameObject.activeSelf != show)
+            guidanceRay.gameObject.SetActive(show);
 
         if (!show)
             return;
@@ -546,23 +657,35 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         Vector2 to = Project(target.latitude, target.longitude);
         Vector2 delta = to - from;
 
-        guidanceRay.anchoredPosition = from + delta * 0.5f;
-        guidanceRay.sizeDelta = new Vector2(delta.magnitude, guidanceRay.sizeDelta.y);
-        guidanceRay.localRotation =
-            Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        Vector2 middle = from + delta * 0.5f;
+        if (guidanceRay.anchoredPosition != middle)
+            guidanceRay.anchoredPosition = middle;
+
+        Vector2 size = new Vector2(delta.magnitude, guidanceRay.sizeDelta.y);
+        if (guidanceRay.sizeDelta != size)
+            guidanceRay.sizeDelta = size;
+
+        Quaternion rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        if (guidanceRay.localRotation != rotation)
+            guidanceRay.localRotation = rotation;
 
         Image ray = guidanceRay.GetComponent<Image>();
-        if (ray != null)
+        if (ray == null)
+            return;
+
+        Color tint = ThemeManager.Get(ThemeRole.Accent);
+        tint.a = 0.85f;
+
+        if (tint != _lastRayColour)
         {
-            Color tint = ThemeManager.Get(ThemeRole.Accent);
-            tint.a = 0.75f;
+            _lastRayColour = tint;
             ray.color = tint;
         }
     }
 
     /// <summary>
-    /// The scale bar is the reason a map with no streets is still readable, so it
-    /// always shows a round number of metres rather than a round number of pixels.
+    /// The scale bar is what makes a distance on this map checkable, so it always
+    /// shows a round number of metres rather than a round number of pixels.
     /// </summary>
     void LayOutScale()
     {
@@ -575,9 +698,11 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
         double chosen = ScaleStepMetres();
 
-        scaleBar.sizeDelta = new Vector2((float)(chosen * scale), scaleBar.sizeDelta.y);
+        Vector2 size = new Vector2((float)(chosen * scale), scaleBar.sizeDelta.y);
+        if (scaleBar.sizeDelta != size)
+            scaleBar.sizeDelta = size;
 
-        if (scaleLabel == null || System.Math.Abs(chosen - _labelledStep) < 0.001d)
+        if (scaleLabel == null || Math.Abs(chosen - _labelledStep) < 0.001d)
             return;
 
         _labelledStep = chosen;

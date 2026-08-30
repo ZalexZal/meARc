@@ -16,7 +16,7 @@ public static class UISprites
     const string Folder = "Assets/UI";
 
     /// <summary>Soft-cornered rectangle for cards, fields and buttons.</summary>
-    public static Sprite Rounded { get { return GetOrCreate("UIRounded", 64, 20); } }
+    public static Sprite Rounded { get { return GetOrCreate("UIRounded28", 96, 28); } }
 
     /// <summary>Fully round ends, for pills, switch tracks and segmented controls.</summary>
     public static Sprite Pill { get { return GetOrCreate("UIPill", 64, 32); } }
@@ -32,15 +32,31 @@ public static class UISprites
     public static Sprite Ring { get { return GetOrCreateRing("UIRing", 64, 7); } }
 
     /// <summary>
-    /// A triangle pointing up, for every direction arrow in the app. Drawn rather
-    /// than typed: the font atlas is Latin plus Cyrillic, and an arrow glyph
-    /// renders as an empty box on device.
+    /// A triangle pointing up. Kept for anything that needs a bare wedge; the
+    /// direction arrows use the icon set.
     /// </summary>
     public static Sprite Triangle { get { return GetOrCreateTriangle("UITriangle", 64); } }
+
+    /// <summary>
+    /// The border of a rounded card, with nothing inside it.
+    ///
+    /// A card floating over a map needs an edge. Without one it reads as a hole in
+    /// the screen rather than as a surface above it, and that is most of what makes
+    /// a screen look unfinished.
+    /// </summary>
+    public static Sprite RoundedOutline
+    {
+        get { return GetOrCreateOutline("UIRoundedOutline", 96, 28f, 3f); }
+    }
 
     static Sprite GetOrCreateRing(string name, int size, float thickness)
     {
         return Save(name, RenderRing(size, thickness), 0);
+    }
+
+    static Sprite GetOrCreateOutline(string name, int size, float radius, float thickness)
+    {
+        return Save(name, RenderOutline(size, radius, thickness), Mathf.CeilToInt(radius));
     }
 
     static Sprite GetOrCreateTriangle(string name, int size)
@@ -111,6 +127,38 @@ public static class UISprites
         importer.SaveAndReimport();
 
         return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+    }
+
+    /// <summary>
+    /// A rounded rectangle drawn as an outline. Same signed-distance field as the
+    /// filled one, taken in absolute value so only the edge is left.
+    /// </summary>
+    static Texture2D RenderOutline(int size, float radius, float thickness)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        float half = size * 0.5f;
+        float inner = half - radius;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                // The standard rounded-rectangle distance: negative inside,
+                // positive outside, and correct in the middle rather than only
+                // near the edge. Its absolute value is what leaves a border.
+                float qx = Mathf.Abs(x + 0.5f - half) - inner;
+                float qy = Mathf.Abs(y + 0.5f - half) - inner;
+
+                float outside = new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude;
+                float distance = Mathf.Min(Mathf.Max(qx, qy), 0f) + outside - radius;
+
+                float alpha = Mathf.Clamp01(thickness * 0.5f - Mathf.Abs(distance) + 0.5f);
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+            }
+        }
+
+        texture.Apply();
+        return texture;
     }
 
     static Texture2D RenderRing(int size, float thickness)
