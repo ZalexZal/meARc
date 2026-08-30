@@ -52,11 +52,18 @@ public class CameraTabController : MonoBehaviour
     public Image dockRing;
     public TextMeshProUGUI dockName;
     public TextMeshProUGUI dockDistance;
+
+    [Tooltip("Says whether the marker in the dock is one the camera can currently " +
+             "see, or merely the closest. Without it the reader cannot tell why " +
+             "the street looks empty.")]
+    public TextMeshProUGUI dockCaption;
     public BearingArrow dockArrow;
     public TextMeshProUGUI dockEmptyLabel;
 
     [Header("Off-screen markers")]
-    public CameraEdgePills edgePills;
+    [Tooltip("The disc in the corner. It replaced two edge tabs that could name " +
+             "one marker each way and nothing behind.")]
+    public CameraRadar radar;
 
     [Header("Guidance")]
     public GuidanceBanner guidance;
@@ -81,9 +88,6 @@ public class CameraTabController : MonoBehaviour
 
         if (nearbyPanel != null)
             nearbyPanel.onBuildingSelected = SelectAndShow;
-
-        if (edgePills != null)
-            edgePills.onSelected = Select;
 
         if (infoPanel != null)
             infoPanel.onWillOpen = CloseNearby;
@@ -303,6 +307,9 @@ public class CameraTabController : MonoBehaviour
         if (dockName != null)
             dockName.gameObject.SetActive(has);
 
+        if (dockCaption != null)
+            dockCaption.gameObject.SetActive(has);
+
         if (dockDistance != null)
             dockDistance.gameObject.SetActive(has);
 
@@ -334,6 +341,10 @@ public class CameraTabController : MonoBehaviour
         if (dockName != null)
             dockName.text = _selected.DisplayName;
 
+        if (dockCaption != null)
+            dockCaption.text = AppStrings.Get(InView(_selected) ? "camera.inView"
+                                                                : "camera.nearest");
+
         if (dockArrow != null)
             dockArrow.SetTarget(_selected);
 
@@ -348,6 +359,25 @@ public class CameraTabController : MonoBehaviour
             ? AppStrings.Get("map.noLocation")
             : AppStrings.FormatDistance(metres,
                 locationService != null && locationService.IsApproximate);
+    }
+
+    /// <summary>
+    /// Whether the camera is pointing close enough at a marker to be showing it.
+    /// Roughly a phone camera's field of view, halved.
+    /// </summary>
+    bool InView(BuildingData marker)
+    {
+        if (marker == null || locationService == null ||
+            !locationService.HasValidPose || !locationService.HasHeading)
+        {
+            return false;
+        }
+
+        double bearing = GeoMath.BearingDegrees(
+            locationService.Latitude, locationService.Longitude,
+            marker.latitude, marker.longitude);
+
+        return Mathf.Abs(Mathf.DeltaAngle(locationService.DeviceHeading, (float)bearing)) <= 31f;
     }
 
     BuildingData Nearest()

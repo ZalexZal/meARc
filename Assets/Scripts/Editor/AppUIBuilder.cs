@@ -645,17 +645,33 @@ public static class AppUIBuilder
         // covering information.
         RectTransform accuracy = UIFactory.Rect("Accuracy", content);
         UIFactory.Corner(accuracy, new Vector2(0.5f, 0.5f), new Vector2(200f, 200f), Vector2.zero);
-        map.accuracyCircle = UIFactory.Plain(accuracy, ThemeManager.Get(ThemeRole.Accent),
-                                             UIShape.Circle);
+        Color accuracyTint = ThemeManager.Get(ThemeRole.Accent);
+        accuracyTint.a = 0.07f;
+
+        map.accuracyCircle = UIFactory.Plain(accuracy, accuracyTint, UIShape.Circle);
         map.accuracyCircle.raycastTarget = false;
+
+        // Off until MapView has a real accuracy to size it from. Built visible, it
+        // was a solid teal disc across the middle of the map in the editor, and a
+        // frame of one on device before the first layout pass.
+        accuracy.gameObject.SetActive(false);
 
         RectTransform accuracyEdge = UIFactory.Rect("AccuracyEdge", content);
         UIFactory.Corner(accuracyEdge, new Vector2(0.5f, 0.5f), new Vector2(200f, 200f),
                          Vector2.zero);
+        // Added by hand, before the graphic that needs it. Belt and braces after
+        // this threw thirty-one times a frame in the editor.
+        accuracyEdge.gameObject.AddComponent<CanvasRenderer>();
+
         map.accuracyRing = accuracyEdge.gameObject.AddComponent<RingGraphic>();
         map.accuracyRing.thickness = 3f;
-        map.accuracyRing.color = ThemeManager.Get(ThemeRole.Accent);
         map.accuracyRing.raycastTarget = false;
+
+        Color edgeTint = ThemeManager.Get(ThemeRole.Accent);
+        edgeTint.a = 0.5f;
+        map.accuracyRing.color = edgeTint;
+
+        accuracyEdge.gameObject.SetActive(false);
 
         RectTransform ray = UIFactory.Rect("GuidanceRay", content);
         UIFactory.Corner(ray, new Vector2(0.5f, 0.5f), new Vector2(0f, 8f), Vector2.zero);
@@ -1026,28 +1042,7 @@ public static class AppUIBuilder
         controller.nearbyPanel = BuildNearbyPanel(live, location, rowPrefab);
         controller.vpsIndicator = BuildVpsIndicator(safe, location);
 
-        // Everything over the feed sits on a solid surface, never on glass. A camera
-        // feed is the one background the app does not control, and translucent
-        // chrome over it is unreadable roughly half the time.
-        RectTransform nearby = UIFactory.Rect("NearbyButton", safe);
-        UIFactory.Corner(nearby, new Vector2(0f, 1f), new Vector2(330f, 112f),
-                         new Vector2(Margin, -Margin));
-        controller.nearbyButton = UIFactory.Button(nearby, ThemeRole.Surface, 1f, UIShape.Pill);
-
-        RectTransform pin = UIFactory.Rect("Pin", nearby);
-        UIFactory.Corner(pin, new Vector2(0f, 0.5f), new Vector2(24f, 24f), new Vector2(32f, 0f));
-        UIFactory.Fill(pin, ThemeRole.Accent, 1f, UIShape.Circle).raycastTarget = false;
-
-        controller.nearbyCountText = UIFactory.Text("Count", nearby, Secondary,
-                                                    ThemeRole.TextPrimary,
-                                                    TextAlignmentOptions.Left);
-        UIFactory.Stretch(controller.nearbyCountText.rectTransform);
-        controller.nearbyCountText.rectTransform.offsetMin = new Vector2(70f, 0f);
-        controller.nearbyCountText.rectTransform.offsetMax = new Vector2(-24f, 0f);
-        controller.nearbyCountText.text = string.Format(AppStrings.Get("camera.nearbyCount"), 0);
-
         BuildWarningBanner(safe, controller);
-        BuildEdgePills(safe, location, controller);
 
         // --- bottom stack: guidance above the dock, both above the nav bar ---
         RectTransform dockArea = UIFactory.Rect("Panel", safe);
@@ -1055,6 +1050,10 @@ public static class AppUIBuilder
         dockArea.sizeDelta = new Vector2(-Margin * 2f, 0f);
         VerticalLayoutGroup dockStack = UIFactory.VerticalStack(dockArea, 16f);
         dockStack.childAlignment = TextAnchor.LowerCenter;
+
+        // The radar sits in the same stack as the cards so it rises with them
+        // when guidance appears, rather than being buried under it.
+        controller.radar = BuildRadar(dockArea, location, controller);
 
         controller.guidance = BuildGuidanceBanner(dockArea, location,
                                                   BearingArrow.Frame.DeviceRelative);
@@ -1076,10 +1075,19 @@ public static class AppUIBuilder
         controller.dockDot = Disc(dockRingRect, 32f, ThemeRole.Accent, UIShape.Circle,
                                   out RectTransform _);
 
-        controller.dockName = UIFactory.Text("Name", dockRow, Body, ThemeRole.TextPrimary,
+        RectTransform dockText = UIFactory.Rect("Text", dockRow);
+        UIFactory.Size(dockText.gameObject, 100f);
+        UIFactory.Flexible(dockText.gameObject);
+        UIFactory.VerticalStack(dockText, 2f, false);
+
+        controller.dockCaption = UIFactory.Text("Caption", dockText, Caption,
+                                                ThemeRole.TextMuted,
+                                                TextAlignmentOptions.Left, "camera.nearest");
+        UIFactory.Size(controller.dockCaption.gameObject, 40f);
+
+        controller.dockName = UIFactory.Text("Name", dockText, Body, ThemeRole.TextPrimary,
                                              TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(controller.dockName.gameObject, 62f);
-        UIFactory.Flexible(controller.dockName.gameObject);
+        UIFactory.Size(controller.dockName.gameObject, 56f);
 
         controller.dockEmptyLabel = UIFactory.Text("Empty", dockRow, Secondary,
                                                    ThemeRole.TextMuted,
@@ -1144,75 +1152,93 @@ public static class AppUIBuilder
         banner.gameObject.SetActive(false);
     }
 
-    static void BuildEdgePills(RectTransform parent, UserLocationService location,
-                               CameraTabController controller)
+    /// <summary>
+    /// The disc in the corner: every marker around the reader, and the slice the
+    /// camera can actually see.
+    ///
+    /// Heading up rather than north up. On a screen whose whole subject is where
+    /// the phone is pointing, a north-up radar would have to be read twice.
+    ///
+    /// Tapping it opens the nearby list, which is where the names are. The disc
+    /// answers "what is around me" at a glance and hands off the rest, rather than
+    /// trying to label three dots the size of a full stop.
+    /// </summary>
+    static CameraRadar BuildRadar(RectTransform parent, UserLocationService location,
+                                  CameraTabController controller)
     {
-        RectTransform holder = UIFactory.Rect("EdgePills", parent);
-        UIFactory.Stretch(holder);
+        const float Size = 300f;
+        const float Radius = Size * 0.5f;
 
-        CameraEdgePills pills = holder.gameObject.AddComponent<CameraEdgePills>();
-        pills.locationService = location;
-        pills.left = EdgePill(holder, "Left", true);
-        pills.right = EdgePill(holder, "Right", false);
+        // A full-width row so the vertical stack keeps its rhythm; the disc itself
+        // sits at the right-hand end of it.
+        RectTransform row = UIFactory.Rect("RadarRow", parent);
+        UIFactory.Size(row.gameObject, Size);
 
-        controller.edgePills = pills;
+        RectTransform rt = UIFactory.Rect("Radar", row);
+        UIFactory.Corner(rt, new Vector2(1f, 0.5f), new Vector2(Size, Size), Vector2.zero);
+
+        // Tapping the disc opens the list. That is also what the nearby button
+        // used to do, so the controller keeps its existing wiring.
+        controller.nearbyButton = UIFactory.Button(rt, ThemeRole.Surface, 0.9f, UIShape.Circle);
+
+        CameraRadar radar = rt.gameObject.AddComponent<CameraRadar>();
+        radar.locationService = location;
+        radar.radius = Radius;
+        radar.dotSize = 26f;
+        radar.maxRangeMetres = 500d;
+        radar.circleSprite = UISprites.Circle;
+
+        // The wedge, pointing up from the middle. Half a phone camera's field of
+        // view either side of straight ahead.
+        // Flipped vertically so the point is at the reader and it opens towards the
+        // rim. Drawn the other way up it says the camera can see everything far
+        // away and nothing close, which is backwards.
+        RectTransform wedge = UIFactory.Rect("Wedge", rt);
+        wedge.anchorMin = new Vector2(0.5f, 0.5f);
+        wedge.anchorMax = new Vector2(0.5f, 0.5f);
+        wedge.pivot = new Vector2(0.5f, 0.5f);
+        wedge.sizeDelta = new Vector2(Radius, Radius * 0.84f);
+        wedge.anchoredPosition = new Vector2(0f, Radius * 0.42f);
+        wedge.localScale = new Vector3(1f, -1f, 1f);
+
+        Color wedgeTint = ThemeManager.Get(ThemeRole.Accent);
+        wedgeTint.a = 0.18f;
+        UIFactory.Plain(wedge, wedgeTint, UIShape.Triangle).raycastTarget = false;
+        radar.wedge = wedge;
+
+        Ring(rt, "InnerRing", Size * 0.52f, ThemeRole.TextPrimary, 0.10f, 2f);
+        Ring(rt, "Rim", Size - 3f, ThemeRole.TextPrimary, 0.16f, 2f);
+
+        // Dots go above the rings and below the reader's own mark.
+        RectTransform dots = UIFactory.Rect("Dots", rt);
+        UIFactory.Stretch(dots);
+        radar.dotParent = dots;
+
+        RectTransform me = UIFactory.Rect("Me", rt);
+        UIFactory.Corner(me, new Vector2(0.5f, 0.5f), new Vector2(16f, 16f), Vector2.zero);
+        UIFactory.Plain(me, Color.white, UIShape.Circle).raycastTarget = false;
+
+        return radar;
     }
 
-    /// <summary>
-    /// One side tab: the nearest marker off to that side, and a chevron saying
-    /// which way to turn for it.
-    ///
-    /// Inset from the edge rather than flush against it. Flush meant half of the
-    /// corner radius was off screen, so a rounded card read as a square slab
-    /// wedged into the side of the display - which is what it looked like.
-    /// </summary>
-    static CameraEdgePills.Pill EdgePill(RectTransform parent, string name, bool onLeft)
+    /// <summary>A circle outline drawn as geometry, crisp at any size.</summary>
+    static RingGraphic Ring(Transform parent, string name, float size, ThemeRole role,
+                            float alpha, float thickness)
     {
         RectTransform rt = UIFactory.Rect(name, parent);
-        UIFactory.Corner(rt, new Vector2(onLeft ? 0f : 1f, 0.5f),
-                         new Vector2(340f, 112f), new Vector2(onLeft ? 24f : -24f, 0f));
+        UIFactory.Corner(rt, new Vector2(0.5f, 0.5f), new Vector2(size, size), Vector2.zero);
 
-        CameraEdgePills.Pill pill = new CameraEdgePills.Pill();
-        pill.root = rt.gameObject;
-        pill.button = UIFactory.Button(rt, ThemeRole.Surface, 1f, UIShape.Rounded);
-        Outline(rt);
+        rt.gameObject.AddComponent<CanvasRenderer>();
 
-        RectTransform row = UIFactory.Rect("Row", rt);
-        UIFactory.Stretch(row);
-        row.offsetMin = new Vector2(20f, 0f);
-        row.offsetMax = new Vector2(-20f, 0f);
-        HorizontalLayoutGroup layout = UIFactory.HorizontalStack(row, 12f);
-        layout.reverseArrangement = !onLeft;
+        RingGraphic ring = rt.gameObject.AddComponent<RingGraphic>();
+        ring.thickness = thickness;
+        ring.raycastTarget = false;
 
-        // First in the row, so the reversal puts it on the outer edge of either
-        // pill. Without it the card says a marker is over there without saying
-        // which way there is.
-        Icon(row, AppIcon.ChevronRight, 34f, ThemeRole.TextMuted,
-             out RectTransform chevron);
+        Color tint = ThemeManager.Get(role);
+        tint.a = alpha;
+        ring.color = tint;
 
-        if (onLeft)
-            chevron.localRotation = Quaternion.Euler(0f, 0f, 180f);
-
-        pill.ring = Disc(row, 36f, ThemeRole.Line, UIShape.Ring, out RectTransform ringRect);
-        pill.dot = Disc(ringRect, 22f, ThemeRole.Accent, UIShape.Circle, out RectTransform _);
-
-        RectTransform text = UIFactory.Rect("Text", row);
-        UIFactory.Size(text.gameObject, 100f);
-        UIFactory.Flexible(text.gameObject);
-        UIFactory.VerticalStack(text, 0f, false);
-
-        TextAlignmentOptions align = onLeft ? TextAlignmentOptions.Left : TextAlignmentOptions.Right;
-
-        pill.label = UIFactory.Text("Name", text, Secondary, ThemeRole.TextPrimary, align,
-                                    null, FontStyles.Bold);
-        UIFactory.Size(pill.label.gameObject, 44f);
-        pill.label.overflowMode = TextOverflowModes.Ellipsis;
-
-        pill.distance = UIFactory.Text("Distance", text, Caption, ThemeRole.TextMuted, align);
-        UIFactory.Size(pill.distance.gameObject, 38f);
-
-        rt.gameObject.SetActive(false);
-        return pill;
+        return ring;
     }
 
     static VpsIndicatorController BuildVpsIndicator(RectTransform parent,
@@ -1222,16 +1248,40 @@ public static class AppUIBuilder
         UIFactory.Stretch(rt);
 
         // Same height as the nearby pill beside it, and on the same line.
+        // A chip, not a bare dot. A coloured circle on its own is a colour; the
+        // word beside it is what makes it a status, and it is the only calibration
+        // state most readers will ever see.
         RectTransform dotButton = UIFactory.Rect("DotButton", rt);
-        UIFactory.Corner(dotButton, new Vector2(1f, 1f), new Vector2(112f, 112f),
-                         new Vector2(-Margin, -Margin));
-        Button button = UIFactory.Button(dotButton, ThemeRole.Surface, 1f, UIShape.Circle);
+        dotButton.anchorMin = new Vector2(0f, 1f);
+        dotButton.anchorMax = new Vector2(0f, 1f);
+        dotButton.pivot = new Vector2(0f, 1f);
+        dotButton.sizeDelta = new Vector2(0f, 112f);
+        dotButton.anchoredPosition = new Vector2(Margin, -Margin);
+
+        Button button = UIFactory.Button(dotButton, ThemeRole.Surface, 1f, UIShape.Pill);
+
+        HorizontalLayoutGroup chipLayout = UIFactory.HorizontalStack(dotButton, 14f);
+        chipLayout.padding = new RectOffset(30, 34, 0, 0);
+        chipLayout.childAlignment = TextAnchor.MiddleLeft;
+
+        // Sized to its own words, so "Not calibrated" and its longer Bulgarian
+        // counterpart both fit without a fixed width guessed for one of them.
+        ContentSizeFitter chipFit = dotButton.gameObject.AddComponent<ContentSizeFitter>();
+        chipFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        chipFit.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
 
         RectTransform dot = UIFactory.Rect("Dot", dotButton);
-        UIFactory.Corner(dot, new Vector2(0.5f, 0.5f), new Vector2(44f, 44f), Vector2.zero);
+        LayoutElement dotSize = UIFactory.Size(dot.gameObject, 26f, 26f);
+        dotSize.flexibleWidth = 0f;
         Image dotImage = UIFactory.Plain(dot, ThemeManager.Get(ThemeRole.StatusNone),
                                          UIShape.Circle);
         dotImage.raycastTarget = false;
+
+        TextMeshProUGUI dotLabel = UIFactory.Text("Label", dotButton, Secondary,
+                                                  ThemeRole.TextPrimary,
+                                                  TextAlignmentOptions.Left);
+        UIFactory.Size(dotLabel.gameObject, 112f);
+        dotLabel.text = AppStrings.Get("vps.none.title");
 
         // The bubble sits under the button rather than taking the screen - the
         // reader is holding the phone up at a street while reading it.
@@ -1239,8 +1289,8 @@ public static class AppUIBuilder
         bubble.anchorMin = new Vector2(0f, 1f);
         bubble.anchorMax = new Vector2(1f, 1f);
         bubble.pivot = new Vector2(0.5f, 1f);
-        bubble.sizeDelta = new Vector2(-(200f + Margin), 0f);
-        bubble.anchoredPosition = new Vector2((200f - Margin) * 0.5f, -(Margin + 112f + 16f));
+        bubble.sizeDelta = new Vector2(-Margin * 2f, 0f);
+        bubble.anchoredPosition = new Vector2(0f, -(Margin + 112f + 16f));
         UIFactory.Card(bubble, 32f, 12f, true);
 
         RectTransform head = UIFactory.Rect("Head", bubble);
@@ -1280,6 +1330,7 @@ public static class AppUIBuilder
         controller.locationService = location;
         controller.dotButton = button;
         controller.dotImage = dotImage;
+        controller.dotLabel = dotLabel;
         controller.bubbleRoot = bubble.gameObject;
         controller.bubbleDot = bubbleDot;
         controller.bubbleTitle = title;

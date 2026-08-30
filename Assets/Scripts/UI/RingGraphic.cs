@@ -13,7 +13,12 @@ using UnityEngine.UI;
 /// The edge is feathered across one pixel by hand, because UI geometry gets no
 /// antialiasing of its own and a hard-edged circle crawls with jagged steps as it
 /// grows.
+///
+/// The RequireComponent is not decoration. Graphic declares one for CanvasRenderer,
+/// but a subclass does not reliably inherit it through AddComponent, and without a
+/// CanvasRenderer this throws on every frame it tries to draw.
 /// </summary>
+[RequireComponent(typeof(CanvasRenderer))]
 public class RingGraphic : MaskableGraphic
 {
     [Tooltip("Stroke width in canvas units. Constant, whatever the radius.")]

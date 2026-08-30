@@ -126,6 +126,14 @@ public static class UIFactory
         themed.role = role;
         themed.preserveAlpha = alpha < 1f;
 
+        // Applied again, on purpose. ThemedElement runs in edit mode, so its
+        // OnEnable fires inside AddComponent above - before either line here has
+        // run - and paints the graphic with the default role, which is Surface.
+        // Everything built by this factory came out the colour of a card until
+        // something happened to call Apply a second time. On device that is the
+        // scene load; in the editor it was nothing at all.
+        themed.Apply();
+
         return image;
     }
 
@@ -163,6 +171,7 @@ public static class UIFactory
 
         ThemedElement themed = rt.gameObject.AddComponent<ThemedElement>();
         themed.role = role;
+        themed.Apply(); // see the note in Fill
 
         if (!string.IsNullOrEmpty(localizationKey))
         {

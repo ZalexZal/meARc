@@ -13,6 +13,11 @@ public class VpsIndicatorController : MonoBehaviour
     public Button dotButton;
     public Image dotImage;
 
+    [Tooltip("The word beside the dot. A coloured circle on its own is a colour, " +
+             "not a status - it needs reading twice and fails entirely for anyone " +
+             "who cannot separate the greens from the ambers.")]
+    public TextMeshProUGUI dotLabel;
+
     [Header("Bubble")]
     [Tooltip("Transparent catcher below the bubble, so tapping anywhere else " +
              "dismisses it.")]
@@ -104,13 +109,18 @@ public class VpsIndicatorController : MonoBehaviour
         if (dotImage != null)
             dotImage.color = colour;
 
+        string key = KeyFor(_status);
+
         if (bubbleRoot == null || !bubbleRoot.activeSelf)
             return;
 
         if (bubbleDot != null)
             bubbleDot.color = colour;
 
-        string key = KeyFor(_status);
+        // Written whether or not the bubble is open: this is the chip on the
+        // camera screen, and it is the only calibration state most readers see.
+        if (dotLabel != null)
+            dotLabel.text = AppStrings.Get(key + ".title");
 
         if (bubbleTitle != null)
             bubbleTitle.text = AppStrings.Get(key + ".title");

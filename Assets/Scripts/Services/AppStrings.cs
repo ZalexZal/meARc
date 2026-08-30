@@ -109,6 +109,8 @@ public static class AppStrings
 
         { "marker.hide", "Hide this marker" },
         { "camera.noMarkers", "No markers nearby" },
+        { "camera.inView", "In view" },
+        { "camera.nearest", "Nearest" },
 
         { "state.loading.title", "Loading markers" },
         { "state.loading.body", "Fetching what is around you." },
@@ -217,6 +219,8 @@ public static class AppStrings
 
         { "marker.hide", "Скрий този маркер" },
         { "camera.noMarkers", "Няма маркери наблизо" },
+        { "camera.inView", "Пред вас" },
+        { "camera.nearest", "Най-близо" },
 
         { "state.loading.title", "Зареждане на маркери" },
         { "state.loading.body", "Изтегляне на това, което е около вас." },

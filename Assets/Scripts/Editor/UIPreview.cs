@@ -58,6 +58,7 @@ public static class UIPreview
 
         StandIn(canvas.transform);
         MockPins(canvas.transform);
+        MockRadar(canvas.transform);
 
         Rig rig = Rig.Create(canvas);
 
@@ -84,6 +85,28 @@ public static class UIPreview
 
         Dump(canvas.transform, 0);
         BigGraphics(canvas);
+
+        Transform nav = canvas.transform.Find("BottomNav");
+        if (nav != null)
+        {
+            Graphic[] inNav = nav.GetComponentsInChildren<Graphic>(true);
+            for (int i = 0; i < inNav.Length; i++)
+            {
+                Graphic g = inNav[i];
+                Color c = g.color;
+                CanvasGroup grp = g.GetComponentInParent<CanvasGroup>();
+
+                Debug.Log("[Nav] " + g.transform.parent.name + "/" + g.name +
+                          "  " + g.GetType().Name +
+                          "  rgba(" + (int)(c.r * 255) + "," + (int)(c.g * 255) + "," +
+                          (int)(c.b * 255) + "," + c.a.ToString("0.00") + ")" +
+                          (g.enabled ? "" : " DISABLED") +
+                          (g.gameObject.activeInHierarchy ? "" : " INACTIVE") +
+                          (g.canvas == null ? " NO-CANVAS" : "") +
+                          (grp != null ? " group=" + grp.alpha.ToString("0.00") : "") +
+                          (g.canvasRenderer != null && g.canvasRenderer.cull ? " CULLED" : ""));
+            }
+        }
 
         try
         {
@@ -308,6 +331,10 @@ public static class UIPreview
             raised.Add(found.gameObject);
         }
 
+        Highlight(canvas.transform,
+            name.Contains("camera") ? "CameraTabButton" :
+            name.Contains("settings") ? "SettingsTabButton" : "MapTabButton");
+
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)canvas.transform);
         Canvas.ForceUpdateCanvases();
@@ -357,10 +384,9 @@ public static class UIPreview
         Set(root, "MapPanel/Safe/Panel/Nearest/Row/Text/Name", "Безистен");
         Set(root, "MapPanel/Safe/Panel/Nearest/Row/Distance", "180 m");
 
-        Set(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Name", "Часовниковата кула");
+        Set(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Text/Name", "Часовниковата кула");
         Set(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Distance", "62 m");
         Hide(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Empty");
-        Set(root, "CameraPanel/LiveARView/Safe/NearbyButton/Count", "4 nearby");
 
         Set(root, "InfoSheet/Safe/Sheet/Body/Head/TitleText", "Безистен");
         Set(root, "InfoSheet/Safe/Sheet/Body/Distance/Value", "180 m");
@@ -454,6 +480,120 @@ public static class UIPreview
         Show(content, "UserDot");
         Show(content, "RingNear");
         Show(content, "RingFar");
+    }
+
+    /// <summary>
+    /// Three dots on the radar. CameraRadar places the real ones from a live
+    /// compass, which a scene that is not playing does not have.
+    /// </summary>
+    static void MockRadar(Transform root)
+    {
+        Transform dots = root.Find(
+            "CameraPanel/LiveARView/Safe/Panel/RadarRow/Radar/Dots");
+
+        if (dots == null)
+        {
+            Debug.LogWarning("[Preview] No radar to put mock dots in.");
+            return;
+        }
+
+        Color[] colours =
+        {
+            new Color32(0x45, 0xC4, 0xB0, 0xFF),
+            new Color32(0x00, 0x33, 0xFF, 0xFF),
+            new Color32(0x72, 0x00, 0x7A, 0xFF)
+        };
+
+        // Bearing relative to where the phone points, and how far out.
+        float[] angles = { 18f, 128f, -74f };
+        float[] reach = { 58f, 124f, 92f };
+
+        for (int i = 0; i < 3; i++)
+        {
+            GameObject go = new GameObject("MockDot" + i, typeof(RectTransform));
+            go.layer = dots.gameObject.layer;
+            go.transform.SetParent(dots, false);
+
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(26f, 26f);
+
+            float radians = angles[i] * Mathf.Deg2Rad;
+            rt.anchoredPosition = new Vector2(Mathf.Sin(radians) * reach[i],
+                                              Mathf.Cos(radians) * reach[i]);
+
+            Image ring = go.AddComponent<Image>();
+            ring.sprite = UISprites.Circle;
+            ring.color = MarkerPalette.RingFor(colours[i]);
+            ring.raycastTarget = false;
+
+            GameObject inner = new GameObject("Fill", typeof(RectTransform));
+            inner.layer = go.layer;
+            inner.transform.SetParent(rt, false);
+
+            RectTransform innerRect = (RectTransform)inner.transform;
+            innerRect.anchorMin = new Vector2(0.5f, 0.5f);
+            innerRect.anchorMax = new Vector2(0.5f, 0.5f);
+            innerRect.pivot = new Vector2(0.5f, 0.5f);
+            innerRect.sizeDelta = new Vector2(19f, 19f);
+
+            Image fill = inner.AddComponent<Image>();
+            fill.sprite = UISprites.Circle;
+            fill.color = colours[i];
+            fill.raycastTarget = false;
+        }
+    }
+
+    /// <summary>
+    /// Lights the tab this screenshot is of. TabNavigationController does it at
+    /// runtime, and nothing in a still scene calls it.
+    /// </summary>
+    static void Highlight(Transform root, string tab)
+    {
+        string[] all = { "MapTabButton", "CameraTabButton", "SettingsTabButton" };
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            Transform button = root.Find("BottomNav/Row/" + all[i]);
+            if (button == null)
+                continue;
+
+            bool active = all[i] == tab;
+            Color colour = ThemeManager.Get(active ? ThemeRole.Accent : ThemeRole.TextMuted);
+
+            Transform indicator = button.Find("Indicator");
+            if (indicator != null)
+            {
+                Image pill = indicator.GetComponent<Image>();
+                if (pill != null)
+                {
+                    Color fill = ThemeManager.Get(ThemeRole.Accent);
+                    fill.a = active ? 0.16f : 0f;
+                    pill.color = fill;
+                }
+            }
+
+            Transform label = button.Find("Label");
+            if (label != null)
+            {
+                TMP_Text text = label.GetComponent<TMP_Text>();
+                if (text != null)
+                {
+                    text.color = colour;
+                    text.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
+                }
+            }
+
+            Transform icon = button.Find("Icon/Icon");
+            if (icon != null)
+            {
+                Graphic g = icon.GetComponent<Graphic>();
+                if (g != null)
+                    g.color = colour;
+            }
+        }
     }
 
     static void Show(Transform parent, string name)
