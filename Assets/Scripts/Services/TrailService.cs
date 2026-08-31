@@ -31,6 +31,10 @@ public class TrailService : MonoBehaviour
         public string id;
         public string name;
         public string role;
+
+        [Tooltip("guide | freefall | ctf | educational. Blank when the row predates " +
+                 "the column, which the UI treats as guide.")]
+        public string mode;
     }
 
     public List<Trail> Mine { get; private set; } = new List<Trail>();
@@ -111,7 +115,7 @@ public class TrailService : MonoBehaviour
         LastError = null;
 
         string url = config.Endpoint(
-            "/rest/v1/world_members?select=role,worlds(id,name)");
+            "/rest/v1/world_members?select=role,worlds(id,name,mode)");
 
         using (UnityWebRequest request = SupabaseAuth.Get(url))
         {
@@ -174,7 +178,8 @@ public class TrailService : MonoBehaviour
             {
                 id = rows[i].worlds.id,
                 name = rows[i].worlds.name,
-                role = rows[i].role
+                role = rows[i].role,
+                mode = rows[i].worlds.mode
             });
         }
     }
@@ -238,5 +243,5 @@ public class TrailService : MonoBehaviour
 
     [Serializable] class MembershipList { public MembershipRow[] items; }
     [Serializable] class MembershipRow { public string role; public WorldRow worlds; }
-    [Serializable] class WorldRow { public string id; public string name; }
+    [Serializable] class WorldRow { public string id; public string name; public string mode; }
 }

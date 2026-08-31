@@ -412,6 +412,15 @@ public class RemoteMarkerSource : MonoBehaviour
         marker.externalLinkURL = en != null ? en.link : null;
         marker.externalLinkURLBg = bg != null ? bg.link : null;
 
+        // media and task come across whole, because unlike the localised text they
+        // are the same shape in every language. A task that arrives malformed is
+        // dropped rather than half-shown: IsUsable is what the sheet asks.
+        marker.media = row.content != null ? row.content.media : null;
+        marker.task = row.content != null && row.content.task != null &&
+                      row.content.task.IsUsable
+            ? row.content.task
+            : null;
+
         // A marker with text in only one language should still be visible in the
         // other, rather than rendering as a blank row.
         if (string.IsNullOrWhiteSpace(marker.buildingName))
@@ -470,6 +479,12 @@ public class RemoteMarkerSource : MonoBehaviour
     {
         public LocalisedContent en;
         public LocalisedContent bg;
+
+        // Deliberately not localised into en/bg blocks: a video is one file
+        // whatever language the reader has chosen, and the question carries its own
+        // per-language prompt inside itself.
+        public MarkerMedia[] media;
+        public MarkerTask task;
     }
 
     [System.Serializable]

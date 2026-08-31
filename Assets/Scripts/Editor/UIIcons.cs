@@ -18,7 +18,15 @@ public enum AppIcon
     Search,
     List,
     Warning,
-    Check
+    Check,
+
+    // Everything a marker's pieces need.
+    Play,
+    Pause,
+    Video,
+    Audio,
+    Question,
+    Lock
 }
 
 /// <summary>
@@ -146,6 +154,15 @@ public static class UIIcons
     static float Cross(Vector2 a, Vector2 b)
     {
         return a.x * b.y - a.y * b.x;
+    }
+
+    /// <summary>
+    /// Keeps only the part of a shape above a line. Turns a ring into an arc,
+    /// which is what a question mark and a padlock are both mostly made of.
+    /// </summary>
+    static float KeepAbove(Vector2 p, float shape, float y)
+    {
+        return Subtract(shape, p.y - y);
     }
 
     static float Union(float a, float b)
@@ -308,6 +325,77 @@ public static class UIIcons
                     float dot = Circle(p, 12f, 6.6f, 1.15f);
 
                     return Subtract(body, Union(bar, dot));
+                };
+
+            case AppIcon.Play:
+                return p => Triangle(p,
+                    new Vector2(7.6f, 4.6f), new Vector2(7.6f, 19.4f), new Vector2(19f, 12f));
+
+            case AppIcon.Pause:
+                return p => Union(
+                    RoundRect(p, 9f, 12f, 1.75f, 7.2f, 1.1f),
+                    RoundRect(p, 15f, 12f, 1.75f, 7.2f, 1.1f));
+
+            case AppIcon.Video:
+                return p =>
+                {
+                    // A frame with a play mark in it, rather than a camcorder. A
+                    // camcorder body and lens is two blobs at 44 pixels; this stays
+                    // legible because the triangle survives being small.
+                    float frame = Subtract(
+                        RoundRect(p, 12f, 12f, 9.4f, 6.8f, 2.6f),
+                        RoundRect(p, 12f, 12f, 9.4f - Stroke, 6.8f - Stroke, 1.8f));
+
+                    float play = Triangle(p,
+                        new Vector2(10.2f, 8.3f), new Vector2(10.2f, 15.7f),
+                        new Vector2(16.2f, 12f));
+
+                    return Union(frame, play);
+                };
+
+            case AppIcon.Audio:
+                return p =>
+                {
+                    // A level meter. Headphones say "the device"; bars say "there
+                    // is a recording here", which is the thing being offered.
+                    float bars = Union(Union(Union(Union(
+                        RoundRect(p, 4.6f, 12f, 1.05f, 2.4f, 1.05f),
+                        RoundRect(p, 8.3f, 12f, 1.05f, 4.8f, 1.05f)),
+                        RoundRect(p, 12f, 12f, 1.05f, 7.2f, 1.05f)),
+                        RoundRect(p, 15.7f, 12f, 1.05f, 4.2f, 1.05f)),
+                        RoundRect(p, 19.4f, 12f, 1.05f, 2.9f, 1.05f));
+
+                    return bars;
+                };
+
+            case AppIcon.Question:
+                return p =>
+                {
+                    // Built the way the glyph is: an arc over the top, a stroke
+                    // down into the centre, a gap, a dot. KeepAbove is what turns
+                    // a whole ring into the arc.
+                    // The arc is cut below its own centre, so both ends turn down
+                    // the way the printed glyph does. Cut on the centreline it
+                    // reads as a croquet hoop.
+                    float arc = KeepAbove(p, Ring(p, 12f, 15f, 3.6f, Stroke), 14.2f);
+
+                    float descender = Union(
+                        Segment(p, 15.6f, 14.6f, 15.2f, 12.9f, Stroke),
+                        Segment(p, 15.2f, 12.9f, 12f, 10.9f, Stroke));
+
+                    float stem = Segment(p, 12f, 10.9f, 12f, 8.6f, Stroke);
+                    float dot = Circle(p, 12f, 5.2f, 1.35f);
+
+                    return Union(Union(arc, descender), Union(stem, dot));
+                };
+
+            case AppIcon.Lock:
+                return p =>
+                {
+                    float shackle = KeepAbove(p, Ring(p, 12f, 14.2f, 3.9f, Stroke), 14.2f);
+                    float body = RoundRect(p, 12f, 9.4f, 6.4f, 4.8f, 1.9f);
+
+                    return Union(shackle, body);
                 };
 
             default: // Check

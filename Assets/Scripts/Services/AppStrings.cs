@@ -183,7 +183,95 @@ public static class AppStrings
         { "live.warning", "Marker positions may be inaccurate" },
 
         { "unit.metres", "{0} m" },
-        { "unit.kilometres", "{0} km" }
+        { "unit.kilometres", "{0} km" },
+
+        // ------------------------------------------------------- the way in
+
+        { "app.name", "AR Trails" },
+
+        { "welcome.title", "Markers left in real places." },
+        { "welcome.body", "Walk to them and see what somebody else left behind." },
+        { "welcome.start", "Get started" },
+        { "welcome.haveCode", "I have a code" },
+
+        { "terms.title", "Before we start" },
+        { "terms.accept", "I accept" },
+        { "terms.1.title", "Where you are" },
+        { "terms.1.body", "The app uses your location to show markers near you and to place them in the camera view. Your position stays on your phone and is sent to our server only as a \"what is near this point\" question. We do not keep a record of where you have been." },
+        { "terms.2.title", "What you leave" },
+        { "terms.2.body", "Markers you create are visible to everyone who can open that trail. Do not put a marker on private property, on someone’s home, or anywhere it would cause a nuisance to the people who actually live there." },
+        { "terms.3.title", "What other people leave" },
+        { "terms.3.body", "Anyone can place a marker. We do not check them before they appear. If one bothers you, Hide this marker removes it from your map immediately, and no one needs to agree with you first." },
+        { "terms.4.title", "Watch where you are going" },
+        { "terms.4.body", "This is not a navigation app. It shows a straight line to a marker, not a route, and it does not know about roads, traffic or anything else in the way. Look up." },
+        { "terms.5.title", "Your account" },
+        { "terms.5.body", "You can use the app without signing up. It still creates an anonymous identity so it can remember which trails you have joined. Uninstalling the app ends that identity and everything attached to it." },
+        { "terms.6.title", "Getting rid of it" },
+        { "terms.6.body", "Deleting your account deletes your trails and every marker in them. There is no undo." },
+        { "terms.footer", "Accepting records the date and the version against your account." },
+
+        { "trails.title", "My trails" },
+        { "trails.join", "Join with a code" },
+        { "trails.loading", "Looking for your trails" },
+        { "trails.failed", "Couldn’t reach the server. Anything joined earlier still works." },
+        { "trails.empty", "No trails yet" },
+        { "trails.emptyBody", "Ask whoever made a trail for its code, and enter it here." },
+        { "trails.markers", "{0} markers" },
+        { "trails.role.viewer", "Viewer" },
+        { "trails.role.editor", "Editor" },
+        { "trails.role.owner", "Owner" },
+
+        { "code.title", "Enter a code" },
+        { "code.body", "Six characters, from whoever made the trail." },
+        { "code.join", "Join" },
+        { "code.cancel", "Cancel" },
+        { "code.joining", "Joining…" },
+        { "code.unknown", "No trail with that code." },
+        { "code.failed", "Couldn’t reach the server. Try again." },
+        { "code.needsAccount", "Signing you in…" },
+
+        { "mode.guide", "Guided" },
+        { "mode.freefall", "Freefall" },
+        { "mode.ctf", "Capture the flag" },
+        { "mode.educational", "Questions" },
+
+        // ------------------------------------------------- inside a marker
+
+        { "piece.one", "1 piece" },
+        { "piece.count", "{0} pieces" },
+        { "piece.watch", "Watch" },
+        { "piece.listen", "Listen" },
+        { "piece.read", "Read" },
+        { "piece.answer", "Answer" },
+        { "piece.done", "Done" },
+        { "piece.back", "Back" },
+
+        { "media.play", "Play" },
+        { "media.pause", "Pause" },
+        { "media.loading", "Loading…" },
+        { "media.failed", "Couldn’t play that." },
+        { "media.needsConnection", "This needs a connection. The text above works offline." },
+        { "media.dataWarning", "About {0} over mobile data." },
+        { "media.dataPlay", "Play anyway" },
+
+        { "task.check", "Check" },
+        { "task.checking", "Checking…" },
+        { "task.openHint", "Type your answer…" },
+        { "task.offline", "Couldn’t check that. Try again." },
+        { "task.correct", "Correct." },
+        { "task.points", "points" },
+        { "task.awarded", "+{0} points" },
+        { "task.solved", "Solved" },
+        { "task.wrong", "Wrong answer." },
+        { "task.retry", "Try again" },
+        { "task.lockCap", "Creator rule: wait" },
+        { "task.lockMsg", "Locked. Try again in {0}" },
+        { "task.dedCap", "Creator rule: lose points" },
+        { "task.dedMsg", "Wrong answer. −{0} points." },
+        { "task.skipCap", "Creator rule: one attempt" },
+        { "task.skipMsg", "This marker is finished." },
+        { "task.skipBody", "The creator allowed one attempt." },
+        { "task.backToMap", "Back to map" },
     };
 
     // -------------------------------------------------------------- Bulgarian
@@ -293,7 +381,95 @@ public static class AppStrings
         { "live.warning", "Позициите на маркерите може да са неточни" },
 
         { "unit.metres", "{0} м" },
-        { "unit.kilometres", "{0} км" }
+        { "unit.kilometres", "{0} км" },
+
+        // ------------------------------------------------------- the way in
+
+        { "app.name", "AR Маршрути" },
+
+        { "welcome.title", "Маркери, оставени на истински места." },
+        { "welcome.body", "Вървете до тях и вижте какво е оставил някой друг." },
+        { "welcome.start", "Започни" },
+        { "welcome.haveCode", "Имам код" },
+
+        { "terms.title", "Преди да започнем" },
+        { "terms.accept", "Приемам" },
+        { "terms.1.title", "Къде се намирате" },
+        { "terms.1.body", "Приложението използва местоположението ви, за да показва маркери близо до вас и да ги поставя през камерата. Позицията ви остава на телефона и се изпраща до сървъра само като въпрос „какво има близо до тази точка“. Не пазим история къде сте били." },
+        { "terms.2.title", "Какво оставяте" },
+        { "terms.2.body", "Маркерите, които създавате, са видими за всички, които имат достъп до този маршрут. Не поставяйте маркер върху частен имот, върху нечий дом или някъде, където би пречил на хората, които живеят там." },
+        { "terms.3.title", "Какво оставят другите" },
+        { "terms.3.body", "Всеки може да постави маркер. Не ги проверяваме, преди да се появят. Ако някой ви пречи, „Скрий този маркер“ го маха от вашата карта веднага и никой не трябва да се съгласява с вас." },
+        { "terms.4.title", "Гледайте къде вървите" },
+        { "terms.4.body", "Това не е навигация. Показва права линия до маркера, а не маршрут, и не знае нищо за улици, движение или каквото и да е по пътя. Вдигнете поглед." },
+        { "terms.5.title", "Профилът ви" },
+        { "terms.5.body", "Може да използвате приложението без регистрация. То пак създава анонимна самоличност, за да помни към кои маршрути сте се присъединили. Изтриването на приложението прекратява тази самоличност и всичко към нея." },
+        { "terms.6.title", "Как да се откажете" },
+        { "terms.6.body", "Изтриването на профила изтрива вашите маршрути и всички маркери в тях. Няма връщане назад." },
+        { "terms.footer", "Приемането записва датата и версията към профила ви." },
+
+        { "trails.title", "Моите маршрути" },
+        { "trails.join", "Присъедини се с код" },
+        { "trails.loading", "Търсим вашите маршрути" },
+        { "trails.failed", "Сървърът не отговаря. Всичко присъединено по-рано пак работи." },
+        { "trails.empty", "Още няма маршрути" },
+        { "trails.emptyBody", "Поискайте кода от създателя на маршрута и го въведете тук." },
+        { "trails.markers", "{0} маркера" },
+        { "trails.role.viewer", "Гост" },
+        { "trails.role.editor", "Редактор" },
+        { "trails.role.owner", "Собственик" },
+
+        { "code.title", "Въведи код" },
+        { "code.body", "Шест знака, от създателя на маршрута." },
+        { "code.join", "Присъедини се" },
+        { "code.cancel", "Отказ" },
+        { "code.joining", "Присъединяване…" },
+        { "code.unknown", "Няма маршрут с този код." },
+        { "code.failed", "Сървърът не отговаря. Опитайте пак." },
+        { "code.needsAccount", "Влизане…" },
+
+        { "mode.guide", "С водач" },
+        { "mode.freefall", "Свободен" },
+        { "mode.ctf", "Надпревара" },
+        { "mode.educational", "Въпроси" },
+
+        // ------------------------------------------------- inside a marker
+
+        { "piece.one", "1 част" },
+        { "piece.count", "{0} части" },
+        { "piece.watch", "Гледай" },
+        { "piece.listen", "Слушай" },
+        { "piece.read", "Прочети" },
+        { "piece.answer", "Отговори" },
+        { "piece.done", "Готово" },
+        { "piece.back", "Назад" },
+
+        { "media.play", "Пусни" },
+        { "media.pause", "Пауза" },
+        { "media.loading", "Зареждане…" },
+        { "media.failed", "Не можа да се възпроизведе." },
+        { "media.needsConnection", "Това изисква интернет. Текстът по-горе работи и без него." },
+        { "media.dataWarning", "Около {0} по мобилни данни." },
+        { "media.dataPlay", "Все пак пусни" },
+
+        { "task.check", "Провери" },
+        { "task.checking", "Проверяване…" },
+        { "task.openHint", "Напиши отговора си…" },
+        { "task.offline", "Не можа да се провери. Опитай пак." },
+        { "task.correct", "Вярно." },
+        { "task.points", "точки" },
+        { "task.awarded", "+{0} точки" },
+        { "task.solved", "Решено" },
+        { "task.wrong", "Грешен отговор." },
+        { "task.retry", "Опитай пак" },
+        { "task.lockCap", "Правило на създателя: изчакване" },
+        { "task.lockMsg", "Заключено. Опитай отново след {0}" },
+        { "task.dedCap", "Правило: минус точки" },
+        { "task.dedMsg", "Грешен отговор. −{0} точки." },
+        { "task.skipCap", "Правило: без втори опит" },
+        { "task.skipMsg", "Този маркер е приключен." },
+        { "task.skipBody", "Създателят е избрал един опит." },
+        { "task.backToMap", "Към картата" },
     };
 
     /// <summary>

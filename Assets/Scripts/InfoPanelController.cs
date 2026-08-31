@@ -39,6 +39,11 @@ public class InfoPanelController : MonoBehaviour
     public TextMeshProUGUI distanceText;
     public BearingArrow bearingArrow;
 
+    [Header("Pieces")]
+    [Tooltip("The video, audio and question a marker can hold. Null on a build " +
+             "without them; the sheet then behaves exactly as it did before.")]
+    public MarkerPieceController pieces;
+
     [Header("Actions")]
     public Button guideButton;
     public TextMeshProUGUI guideLabel;
@@ -152,6 +157,11 @@ public class InfoPanelController : MonoBehaviour
         currentBuilding = data;
 
         RenderBuilding(data);
+
+        // After RenderBuilding, because the pieces list reads the marker's task and
+        // media and both are language-aware.
+        if (pieces != null)
+            pieces.Bind(data);
         RefreshLabels();
 
         // Counts the moment the reader sees it, whether they arrived from an AR
@@ -277,6 +287,11 @@ public class InfoPanelController : MonoBehaviour
 
     public void ClosePanel()
     {
+        // Before the sheet slides away, so nothing is still playing to an empty
+        // screen for the quarter of a second the animation takes.
+        if (pieces != null)
+            pieces.Close();
+
         currentBuilding = null;
 
         if (scrim != null)

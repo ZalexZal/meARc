@@ -123,13 +123,6 @@ public static class UIFactory
         image.color = ThemeManager.Get(role);
         ApplyShape(image, shape);
 
-        if (alpha < 1f)
-        {
-            Color c = image.color;
-            c.a = alpha;
-            image.color = c;
-        }
-
         ThemedElement themed = rt.gameObject.AddComponent<ThemedElement>();
         themed.role = role;
         themed.preserveAlpha = alpha < 1f;
@@ -141,6 +134,20 @@ public static class UIFactory
         // something happened to call Apply a second time. On device that is the
         // scene load; in the editor it was nothing at all.
         themed.Apply();
+
+        // And the alpha goes on last, after that repaint rather than before it.
+        //
+        // preserveAlpha keeps whatever alpha the graphic already has. Setting it
+        // first, as this used to, meant Apply preserved the 1.0 that OnEnable had
+        // just written over it - so every translucent surface in the app was
+        // opaque, and a 16% accent chip drew as a solid block with its own label
+        // invisible on top of it.
+        if (alpha < 1f)
+        {
+            Color c = image.color;
+            c.a = alpha;
+            image.color = c;
+        }
 
         return image;
     }

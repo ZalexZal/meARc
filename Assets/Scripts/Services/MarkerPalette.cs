@@ -50,6 +50,35 @@ public static class MarkerPalette
     }
 
     /// <summary>
+    /// A stable colour for something that has an identity but no chosen colour -
+    /// a trail in the list, so far.
+    ///
+    /// Derived from the id, so the same trail is the same colour on every device
+    /// and after every reinstall, with nothing stored anywhere. Saturation and
+    /// value are fixed and only the hue moves, which keeps every row at roughly the
+    /// same weight beside its neighbours instead of one of them shouting.
+    /// </summary>
+    public static Color ForKey(string key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return new Color(0.27f, 0.77f, 0.69f); // the app's own teal
+
+        unchecked
+        {
+            // FNV-1a rather than string.GetHashCode, which is allowed to differ
+            // between runs and platforms - the colour would flicker.
+            uint hash = 2166136261u;
+            for (int i = 0; i < key.Length; i++)
+            {
+                hash ^= key[i];
+                hash *= 16777619u;
+            }
+
+            return Color.HSVToRGB((hash % 360u) / 360f, 0.55f, 0.82f);
+        }
+    }
+
+    /// <summary>
     /// Text that can be read on top of this colour. A marker colour is arbitrary,
     /// so neither black nor white is always right.
     /// </summary>

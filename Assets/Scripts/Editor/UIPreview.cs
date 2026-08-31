@@ -59,6 +59,7 @@ public static class UIPreview
         StandIn(canvas.transform);
         MockPins(canvas.transform);
         MockRadar(canvas.transform);
+        Pieces.Build(canvas.transform);
 
         Rig rig = Rig.Create(canvas);
 
@@ -85,6 +86,7 @@ public static class UIPreview
 
         Dump(canvas.transform, 0);
         BigGraphics(canvas);
+        DeadControls(canvas);
 
         Transform nav = canvas.transform.Find("BottomNav");
         if (nav != null)
@@ -121,10 +123,57 @@ public static class UIPreview
             Shoot(canvas, rig, "07-toast", "MapPanel", "ProximityToast/Safe/CardHolder");
             Shoot(canvas, rig, "08-state-card", "MapPanel", "MapPanel/Safe/StateCard");
 
+            // --- the way in ---
+            Pieces.TrailsState(canvas.transform, "Rows");
+            Shoot(canvas, rig, "11-welcome", "Doors/Welcome");
+            Shoot(canvas, rig, "12-terms", "Doors/Terms");
+            Shoot(canvas, rig, "13-trails", "MapPanel", "Doors/Backdrop", "Doors/Trails");
+            Shoot(canvas, rig, "14-code", "MapPanel", "Doors/Backdrop", "Doors/Code");
+
+            // The two states of the list that are not a list. The third, waiting,
+            // is the empty one with different words.
+            Pieces.TrailsState(canvas.transform, "Empty");
+            Shoot(canvas, rig, "15-trails-empty", "MapPanel", "Doors/Backdrop", "Doors/Trails");
+            Pieces.TrailsState(canvas.transform, "Rows");
+
+            // --- inside a marker ---
+            const string SheetPath = "InfoSheet/Safe/Sheet";
+
+            Pieces.Page(canvas.transform, Pieces.Which.Overview);
+            Shoot(canvas, rig, "16-sheet-pieces", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Page(canvas.transform, Pieces.Which.Video);
+            Shoot(canvas, rig, "17-video", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Page(canvas.transform, Pieces.Which.Audio);
+            Shoot(canvas, rig, "18-audio", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Page(canvas.transform, Pieces.Which.Question);
+            Shoot(canvas, rig, "19-question", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            // The four endings a creator can choose between, and the one they
+            // cannot: the server not answering at all.
+            Pieces.Verdict(canvas.transform, Pieces.Ending.Retry);
+            Shoot(canvas, rig, "20-wrong-retry", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Verdict(canvas.transform, Pieces.Ending.Lock);
+            Shoot(canvas, rig, "21-wrong-lock", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Verdict(canvas.transform, Pieces.Ending.Deduct);
+            Shoot(canvas, rig, "22-wrong-deduct", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Verdict(canvas.transform, Pieces.Ending.Skip);
+            Shoot(canvas, rig, "23-wrong-skip", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+            Pieces.Verdict(canvas.transform, Pieces.Ending.Right);
+            Shoot(canvas, rig, "24-correct", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
             // Light mode, where the contrast decisions are easiest to get wrong.
             SetTheme(false);
             Shoot(canvas, rig, "09-settings-light", "SettingsPanel");
             Shoot(canvas, rig, "10-map-light", "MapPanel");
+            Shoot(canvas, rig, "25-terms-light", "Doors/Terms");
+            Shoot(canvas, rig, "26-trails-light", "MapPanel", "Doors/Backdrop", "Doors/Trails");
             SetTheme(true);
         }
         finally
@@ -194,6 +243,91 @@ public static class UIPreview
                       (g.gameObject.activeInHierarchy ? "  ON" : "  off") +
                       (g.enabled ? "" : "  disabled"));
         }
+    }
+
+
+    /// <summary>
+    /// Names every control that cannot possibly do anything.
+    ///
+    /// Two ways a button is alive: a persistent listener written by the builder, or
+    /// a reference held by some component that will wire it in Awake. Anything with
+    /// neither is a control the reader can press with nothing at the other end -
+    /// which is exactly what "are there buttons that do nothing" means, and is not
+    /// visible in a screenshot.
+    /// </summary>
+    static void DeadControls(Canvas canvas)
+    {
+        Selectable[] controls = canvas.GetComponentsInChildren<Selectable>(true);
+        MonoBehaviour[] components =
+            Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include,
+                                                    FindObjectsSortMode.None);
+
+        // Everything any component in the scene points at. One pass, because doing
+        // it per control is quadratic and this runs over a few thousand fields.
+        var referenced = new HashSet<Object>();
+
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (components[i] == null)
+                continue;
+
+            SerializedObject serialized = new SerializedObject(components[i]);
+            SerializedProperty property = serialized.GetIterator();
+
+            while (property.NextVisible(true))
+            {
+                if (property.propertyType == SerializedPropertyType.ObjectReference &&
+                    property.objectReferenceValue != null)
+                {
+                    referenced.Add(property.objectReferenceValue);
+                }
+            }
+        }
+
+        int dead = 0;
+
+        for (int i = 0; i < controls.Length; i++)
+        {
+            Selectable control = controls[i];
+
+            Button button = control as Button;
+            Toggle toggle = control as Toggle;
+            TMP_InputField field = control as TMP_InputField;
+
+            bool wired = field != null;   // a field's work is its own text
+
+            if (button != null && button.onClick.GetPersistentEventCount() > 0)
+                wired = true;
+
+            if (toggle != null && toggle.onValueChanged.GetPersistentEventCount() > 0)
+                wired = true;
+
+            // Held by something that will wire it when the app runs.
+            if (!wired && (referenced.Contains(control) ||
+                           referenced.Contains(control.gameObject)))
+            {
+                wired = true;
+            }
+
+            // A drag handle is a control whose whole job is the gesture on it.
+            if (!wired && control.GetComponent<SheetDragHandle>() != null)
+                wired = true;
+
+            if (wired)
+                continue;
+
+            dead++;
+
+            string path = control.name;
+            for (Transform t = control.transform.parent; t != null; t = t.parent)
+                path = t.name + "/" + path;
+
+            Debug.LogWarning("[Dead] " + path + " (" + control.GetType().Name +
+                             ") has no listener and nothing refers to it.");
+        }
+
+        Debug.Log("[Dead] " + dead + " of " + controls.Length +
+                  " controls have nothing at the other end.");
     }
 
     // ------------------------------------------------------------------ capture
@@ -291,6 +425,10 @@ public static class UIPreview
     /// given by path so an overlay can be raised over a tab without the tab
     /// controller, which is not running.
     /// </summary>
+    /// <summary>Where a sheet was parked before a shot moved it, so it goes back.</summary>
+    static readonly Dictionary<RectTransform, Vector2> _parked =
+        new Dictionary<RectTransform, Vector2>();
+
     static void Shoot(Canvas canvas, Rig rig, string name, params string[] visible)
     {
         var wanted = new HashSet<string>(visible);
@@ -300,9 +438,10 @@ public static class UIPreview
         {
             Transform child = canvas.transform.GetChild(i);
 
-            // The nav bar is on every screen. Everything else is on only when the
-            // shot asks for it, by name or as the root of a requested path.
-            bool on = child.name == "BottomNav" || wanted.Contains(child.name);
+            // The nav bar is on every screen except a way-in screen, which covers
+            // it - DoorFlow switches it off at runtime for the same reason.
+            bool on = (child.name == "BottomNav" && !IsDoorShot(visible)) ||
+                      wanted.Contains(child.name);
 
             for (int p = 0; p < visible.Length && !on; p++)
                 on = visible[p].StartsWith(child.name + "/");
@@ -322,6 +461,19 @@ public static class UIPreview
             {
                 Debug.LogWarning("[Preview] No object at \"" + visible[i] + "\".");
                 continue;
+            }
+
+            // A bottom sheet is hidden by being parked below the screen, not by
+            // being disabled - so enabling one photographs an empty map. This is
+            // what 05-marker-sheet was: a scrim, and a sheet sitting 890 units
+            // under the bottom edge, for every run of this harness so far.
+            SheetAnimator sheet = found.GetComponent<SheetAnimator>();
+            if (sheet != null)
+            {
+                RectTransform sheetRect = (RectTransform)found;
+                _parked[sheetRect] = sheetRect.anchoredPosition;
+                sheetRect.anchoredPosition = new Vector2(sheetRect.anchoredPosition.x,
+                                                         sheet.openY);
             }
 
             if (found.gameObject.activeSelf)
@@ -357,7 +509,23 @@ public static class UIPreview
         for (int i = 0; i < raised.Count; i++)
             raised[i].SetActive(false);
 
+        foreach (KeyValuePair<RectTransform, Vector2> pair in _parked)
+            pair.Key.anchoredPosition = pair.Value;
+
+        _parked.Clear();
+
         Debug.Log("[Preview] " + name);
+    }
+
+    static bool IsDoorShot(string[] visible)
+    {
+        for (int i = 0; i < visible.Length; i++)
+        {
+            if (visible[i].StartsWith("Doors/"))
+                return true;
+        }
+
+        return false;
     }
 
     static void SetTheme(bool dark)
@@ -388,13 +556,18 @@ public static class UIPreview
         Set(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Distance", "62 m");
         Hide(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Empty");
 
-        Set(root, "InfoSheet/Safe/Sheet/Body/Head/TitleText", "Безистен");
-        Set(root, "InfoSheet/Safe/Sheet/Body/Distance/Value", "180 m");
-        Set(root, "InfoSheet/Safe/Sheet/Body/MetaText", "15 век  ·  Неизвестен  ·  Търговски");
-        Set(root, "InfoSheet/Safe/Sheet/Body/DescriptionText",
+        const string Sheet = "InfoSheet/Safe/Sheet/Overview/Body/Scroll/Viewport/Content/";
+
+        Set(root, Sheet + "Head/TitleText", "Безистен");
+        Set(root, Sheet + "Distance/Value", "180 m");
+        Set(root, Sheet + "MetaText", "15 век  ·  Неизвестен  ·  Търговски");
+        Set(root, Sheet + "DescriptionText",
             "Ямболският безистен е един от малкото запазени покрити пазари на " +
             "Балканския полуостров. Построен е през XV век и дълго време е бил " +
             "търговското сърце на града.");
+
+        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Name", "Ямбол — център");
+        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Mode/Label", "Свободен");
 
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +
                   "PrivacyCard/Row/Count", "2 hidden");
@@ -548,6 +721,327 @@ public static class UIPreview
             fill.sprite = UISprites.Circle;
             fill.color = colours[i];
             fill.raycastTarget = false;
+        }
+    }
+
+
+    /// <summary>
+    /// A marker with something in it, and the switchboard for photographing every
+    /// state its sheet can be in.
+    ///
+    /// None of this runs the real thing. Nothing in the scene is playing, so there
+    /// is no MarkerTaskService to hold progress and no VideoPlayer to prepare a
+    /// file - what these do is put the views into the state the server would have
+    /// put them in, which is what a picture can check. The logic that decides
+    /// between those states is checked by the compiler and by reading it; the
+    /// drawing is the part that cannot be checked any other way.
+    /// </summary>
+    static class Pieces
+    {
+        public enum Which { Overview, Video, Audio, Question }
+
+        public enum Ending { Retry, Lock, Deduct, Skip, Right }
+
+        static MarkerPieceController _controller;
+        static BuildingData _marker;
+
+        public static void Build(Transform root)
+        {
+            Transform sheet = root.Find("InfoSheet/Safe/Sheet");
+            if (sheet == null)
+            {
+                Debug.LogWarning("[Preview] No marker sheet to fill.");
+                return;
+            }
+
+            _controller = sheet.GetComponent<MarkerPieceController>();
+            if (_controller == null)
+            {
+                Debug.LogWarning("[Preview] The sheet has no piece controller.");
+                return;
+            }
+
+            _marker = ScriptableObject.CreateInstance<BuildingData>();
+            _marker.buildingId = "preview-marker";
+            _marker.buildingName = "The Bezisten";
+            _marker.buildingNameBg = "Безистен";
+
+            _marker.media = new[]
+            {
+                new MarkerMedia
+                {
+                    kind = "video",
+                    path = "worlds/preview/m/1/inside.mp4",
+                    seconds = 134,
+                    bytes = 26L * 1024L * 1024L,
+                    title = new LocalisedText
+                    {
+                        en = "Inside the Bezisten",
+                        bg = "Безистенът отвътре"
+                    }
+                },
+                new MarkerMedia
+                {
+                    kind = "audio",
+                    path = "worlds/preview/m/1/keeper.m4a",
+                    seconds = 220,
+                    bytes = 2L * 1024L * 1024L,
+                    title = new LocalisedText
+                    {
+                        en = "The keeper's account",
+                        bg = "Разказът на пазача"
+                    }
+                }
+            };
+
+            _marker.task = new MarkerTask
+            {
+                kind = "choice",
+                points = 10,
+                on_wrong = "retry",
+                lock_seconds = 300,
+                deduct = 5,
+                prompt = new LocalisedText
+                {
+                    en = "Which century was the Bezisten built in?",
+                    bg = "През кой век е построен Безистенът?"
+                },
+                options = new[]
+                {
+                    new LocalisedText { en = "14th century", bg = "XIV век" },
+                    new LocalisedText { en = "15th century", bg = "XV век" },
+                    new LocalisedText { en = "16th century", bg = "XVI век" },
+                    new LocalisedText { en = "17th century", bg = "XVII век" }
+                }
+            };
+
+            _controller.Bind(_marker);
+        }
+
+        /// <summary>Which half of the sheet is showing, and what is on the page.</summary>
+        public static void Page(Transform root, Which which)
+        {
+            if (_controller == null)
+                return;
+
+            _controller.Bind(_marker);   // back to the overview, list redrawn
+
+            if (which == Which.Overview)
+                return;
+
+            Show(_controller.overview, false);
+            Show(_controller.page, true);
+
+            bool question = which == Which.Question;
+            Show(_controller.media != null ? _controller.media.gameObject : null, !question);
+            Show(_controller.question != null ? _controller.question.gameObject : null, question);
+
+            if (question)
+            {
+                if (_controller.pageTitle != null)
+                    _controller.pageTitle.text = AppStrings.Get("piece.answer");
+
+                _controller.question.Show(_marker);
+                return;
+            }
+
+            MediaPlayerView media = _controller.media;
+            MarkerMedia piece = which == Which.Video ? _marker.media[0] : _marker.media[1];
+
+            if (_controller.pageTitle != null)
+            {
+                _controller.pageTitle.text = AppStrings.Get(
+                    piece.Kind == MarkerMediaKind.Audio ? "piece.listen" : "piece.watch");
+            }
+
+            // Not media.Show: that reaches for a VideoPlayer that Awake never made,
+            // because nothing in this scene is playing. The chrome is set by hand.
+            Show(media.screenHolder, which == Which.Video);
+            Show(media.noticeHolder, false);
+            Show(media.dataHolder, false);
+
+            if (media.titleLabel != null)
+                media.titleLabel.text = piece.Title;
+
+            if (media.timeLabel != null)
+                media.timeLabel.text = "0:37 / " + piece.Duration;
+
+            if (media.progressFill != null)
+            {
+                media.progressFill.anchorMax =
+                    new Vector2(37f / Mathf.Max(1f, piece.seconds), 1f);
+            }
+        }
+
+        /// <summary>
+        /// One of the endings, drawn as the server would have left it.
+        /// </summary>
+        public static void Verdict(Transform root, Ending ending)
+        {
+            Page(root, Which.Question);
+
+            MarkerQuestionView view = _controller != null ? _controller.question : null;
+            if (view == null)
+                return;
+
+            bool right = ending == Ending.Right;
+
+            // The reader picked the second option. Only that one is judged - marking
+            // the others would be marking the right answer, which is the thing this
+            // whole design exists to avoid.
+            AnswerOptionView[] options =
+                view.optionsParent.GetComponentsInChildren<AnswerOptionView>(true);
+
+            // Retry and Deduct leave the untried options answerable; Lock and Skip
+            // do not. Same split the view itself makes.
+            bool carriesOn = ending == Ending.Retry || ending == Ending.Deduct;
+
+            for (int i = 0; i < options.Length; i++)
+            {
+                options[i].Set(i == 1
+                    ? (right ? AnswerOptionView.State.Right : AnswerOptionView.State.Wrong)
+                    : (carriesOn ? AnswerOptionView.State.Idle
+                                 : AnswerOptionView.State.Muted));
+            }
+
+            Show(view.ruleHolder, ending == Ending.Lock || ending == Ending.Deduct ||
+                                  ending == Ending.Skip);
+
+            if (view.ruleLabel != null)
+            {
+                view.ruleLabel.text = AppStrings.Get(
+                    ending == Ending.Lock ? "task.lockCap" :
+                    ending == Ending.Deduct ? "task.dedCap" : "task.skipCap");
+            }
+
+            Show(view.lockHolder, ending == Ending.Lock);
+            if (ending == Ending.Lock && view.lockLabel != null)
+                view.lockLabel.text = string.Format(AppStrings.Get("task.lockMsg"), "4:32");
+
+            Show(view.scoreHolder, ending == Ending.Deduct);
+            if (ending == Ending.Deduct && view.scoreLabel != null)
+                view.scoreLabel.text = "20 " + AppStrings.Get("task.points");
+
+            Show(view.finishedHolder, ending == Ending.Skip);
+            if (ending == Ending.Skip)
+            {
+                if (view.finishedTitle != null)
+                    view.finishedTitle.text = AppStrings.Get("task.skipMsg");
+
+                if (view.finishedBody != null)
+                    view.finishedBody.text = AppStrings.Get("task.skipBody");
+
+                if (view.finishedButtonLabel != null)
+                    view.finishedButtonLabel.text = AppStrings.Get("task.backToMap");
+            }
+
+            Bubble(view, ending);
+
+            // Where the app puts it after a verdict. Without this the picture is of
+            // the top of a page whose reply is below the fold.
+            if (view.scroll != null)
+                view.scroll.verticalNormalizedPosition = 0f;
+        }
+
+        static void Bubble(MarkerQuestionView view, Ending ending)
+        {
+            if (ending == Ending.Skip)
+            {
+                Show(view.bubbleHolder, false);
+                return;
+            }
+
+            Show(view.bubbleHolder, true);
+
+            string text =
+                ending == Ending.Right
+                    ? AppStrings.Get("task.correct") + "  " +
+                      string.Format(AppStrings.Get("task.awarded"), 10)
+                : ending == Ending.Deduct
+                    ? string.Format(AppStrings.Get("task.dedMsg"), 5)
+                : ending == Ending.Lock
+                    ? AppStrings.Get("task.wrong")
+                    : "Not quite. Look at the date on the plaque by the entrance.";
+
+            if (view.bubbleLabel != null)
+                view.bubbleLabel.text = text;
+
+            Color colour = ThemeManager.Get(ending == Ending.Right
+                ? ThemeRole.StatusGood
+                : ThemeRole.StatusPoor);
+
+            if (view.bubbleEdge != null)
+                view.bubbleEdge.color = colour;
+
+            if (view.bubbleFill != null)
+            {
+                Color wash = colour;
+                wash.a = 0.14f;
+                view.bubbleFill.color = wash;
+            }
+        }
+
+        /// <summary>
+        /// Two trails in the list, or the screen a first run actually sees.
+        /// </summary>
+        public static void TrailsState(Transform root, string state)
+        {
+            Transform door = root.Find("Doors/Trails");
+            if (door == null)
+                return;
+
+            TrailsDoor trails = door.GetComponent<TrailsDoor>();
+            Transform content = door.Find("Inner/Body/Scroll/Viewport/Content");
+
+            if (trails == null || content == null)
+            {
+                // Inner sits under the safe-area pad, so try the fuller path too.
+                content = door.Find("Safe/Inner/Body/Scroll/Viewport/Content");
+
+                if (trails == null || content == null)
+                {
+                    Debug.LogWarning("[Preview] No trails list to fill.");
+                    return;
+                }
+            }
+
+            bool rows = state == "Rows";
+
+            Show(trails.emptyState, !rows);
+            Show(trails.waitingState, false);
+            Show(trails.failedState, false);
+
+            TrailRowView[] existing = content.GetComponentsInChildren<TrailRowView>(true);
+
+            if (existing.Length == 0 && rows)
+            {
+                string[] names = { "Ямбол — център", "ПМГ — училищен маршрут" };
+                string[] roles = { "viewer", "editor" };
+                string[] modes = { "freefall", "ctf" };
+
+                for (int i = 0; i < names.Length; i++)
+                {
+                    TrailRowView row = Object.Instantiate(trails.rowPrefab, content);
+                    row.Bind(new TrailService.Trail
+                    {
+                        id = "preview-" + i,
+                        name = names[i],
+                        role = roles[i],
+                        mode = modes[i]
+                    }, i == 0);
+                }
+
+                return;
+            }
+
+            for (int i = 0; i < existing.Length; i++)
+                existing[i].gameObject.SetActive(rows);
+        }
+
+        static void Show(GameObject go, bool on)
+        {
+            if (go != null)
+                go.SetActive(on);
         }
     }
 

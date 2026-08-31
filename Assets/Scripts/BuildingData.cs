@@ -71,6 +71,49 @@ public class BuildingData : ScriptableObject
              "#C2483A. Blank means use the Category's colour.")]
     public string markerColourHex;
 
+    [Header("Content")]
+    [Tooltip("Uploaded video and audio, in the order the creator arranged them. A " +
+             "marker with several is a small sequence rather than a page.")]
+    public MarkerMedia[] media;
+
+    [Tooltip("The question on this marker, if it has one. Never carries the answer - " +
+             "see MarkerContent.cs.")]
+    public MarkerTask task;
+
+    /// <summary>Media the app can actually play, in order. Never null.</summary>
+    public System.Collections.Generic.List<MarkerMedia> UsableMedia
+    {
+        get
+        {
+            var usable = new System.Collections.Generic.List<MarkerMedia>();
+
+            if (media == null)
+                return usable;
+
+            for (int i = 0; i < media.Length; i++)
+            {
+                if (media[i] != null && media[i].IsUsable)
+                    usable.Add(media[i]);
+            }
+
+            return usable;
+        }
+    }
+
+    public bool HasTask
+    {
+        get { return task != null && task.IsUsable; }
+    }
+
+    /// <summary>
+    /// How many things there are to do here, counting the question as one. Drives
+    /// the "3 pieces" chip, and a marker with nothing but text reads zero.
+    /// </summary>
+    public int PieceCount
+    {
+        get { return UsableMedia.Count + (HasTask ? 1 : 0); }
+    }
+
     [Header("External Link")]
     public string externalLinkURL;
 
