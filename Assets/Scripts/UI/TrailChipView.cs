@@ -54,12 +54,13 @@ public class TrailChipView : MonoBehaviour
         TrailService service = TrailService.Instance;
         TrailService.Trail trail = service != null ? service.Selected : null;
 
+        bool hasName = trail != null && !string.IsNullOrWhiteSpace(trail.name);
+
+        // With no trail open this is an invitation, not a heading. It used to read
+        // "Map" - the word the tab bar says two inches below it, and one that tells
+        // a reader holding no trail nothing about the single thing left to do.
         if (nameLabel != null)
-        {
-            nameLabel.text = trail != null && !string.IsNullOrWhiteSpace(trail.name)
-                ? trail.name
-                : AppStrings.Get("tab.map");
-        }
+            nameLabel.text = hasName ? trail.name : AppStrings.Get("trails.choose");
 
         // Guide is the default and needs no label. A chip on every trail would be a
         // chip that means nothing.
@@ -80,9 +81,14 @@ public class TrailChipView : MonoBehaviour
             modeLabel.text = named.StartsWith("mode.") ? mode : named;
         }
 
-        // Nothing to swap to when the reader holds one trail, so the chevron - the
-        // only thing saying this is pressable - comes off with it.
-        bool switchable = service != null && service.Mine.Count > 1;
+        // Pressable when there is somewhere to go: more than one trail to swap
+        // between, or no trail at all - in which case pressing this is how the
+        // reader gets one.
+        //
+        // The second half is not a nicety. Dismissing the trail list leaves a
+        // reader with no trail, and with only the first half this chip was the
+        // greyed-out remains of the only way back to it.
+        bool switchable = service != null && (service.Mine.Count > 1 || !hasName);
 
         if (chevron != null)
             chevron.SetActive(switchable);

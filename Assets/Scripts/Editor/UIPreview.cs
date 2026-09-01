@@ -128,6 +128,7 @@ public static class UIPreview
             Shoot(canvas, rig, "11-welcome", "Doors/Welcome");
             Shoot(canvas, rig, "12-terms", "Doors/Terms");
             Shoot(canvas, rig, "13-trails", "MapPanel", "Doors/Backdrop", "Doors/Trails");
+            Pieces.CodeState(canvas.transform, "", null);
             Shoot(canvas, rig, "14-code", "MapPanel", "Doors/Backdrop", "Doors/Code");
 
             // The two states of the list that are not a list. The third, waiting,
@@ -135,6 +136,15 @@ public static class UIPreview
             Pieces.TrailsState(canvas.transform, "Empty");
             Shoot(canvas, rig, "15-trails-empty", "MapPanel", "Doors/Backdrop", "Doors/Trails");
             Pieces.TrailsState(canvas.transform, "Rows");
+
+            // Half a code in, and a code the server refused. Between them they show
+            // a filled box beside an empty one, where the caret sits, and what the
+            // card looks like once it has to say something went wrong.
+            Pieces.CodeState(canvas.transform, "T97", null);
+            Shoot(canvas, rig, "27-code-typing", "MapPanel", "Doors/Backdrop", "Doors/Code");
+
+            Pieces.CodeState(canvas.transform, "T97S25", "code.unknown");
+            Shoot(canvas, rig, "28-code-wrong", "MapPanel", "Doors/Backdrop", "Doors/Code");
 
             // --- inside a marker ---
             const string SheetPath = "InfoSheet/Safe/Sheet";
@@ -174,6 +184,13 @@ public static class UIPreview
             Shoot(canvas, rig, "10-map-light", "MapPanel");
             Shoot(canvas, rig, "25-terms-light", "Doors/Terms");
             Shoot(canvas, rig, "26-trails-light", "MapPanel", "Doors/Backdrop", "Doors/Trails");
+
+            Pieces.CodeState(canvas.transform, "T97", null);
+            Shoot(canvas, rig, "29-code-light", "MapPanel", "Doors/Backdrop", "Doors/Code");
+
+            Pieces.TrailsState(canvas.transform, "Empty");
+            Shoot(canvas, rig, "30-trails-empty-light", "MapPanel", "Doors/Backdrop", "Doors/Trails");
+            Pieces.TrailsState(canvas.transform, "Rows");
             SetTheme(true);
         }
         finally
@@ -483,6 +500,17 @@ public static class UIPreview
             raised.Add(found.gameObject);
         }
 
+        // The map's bar, scale, attribution and dock go down behind a door, exactly
+        // as DoorFlow takes them down before the blur is captured. Without this the
+        // harness photographs a composition the app never draws - and it did: every
+        // picture of these two screens had the map's dock sitting legibly under the
+        // card, so half the controls on screen were ones the reader cannot press.
+        Transform mapChrome = canvas.transform.Find("MapPanel/Safe");
+        bool chromeWas = mapChrome != null && mapChrome.gameObject.activeSelf;
+
+        if (mapChrome != null && IsDoorShot(visible))
+            mapChrome.gameObject.SetActive(false);
+
         Highlight(canvas.transform,
             name.Contains("camera") ? "CameraTabButton" :
             name.Contains("settings") ? "SettingsTabButton" : "MapTabButton");
@@ -490,6 +518,19 @@ public static class UIPreview
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)canvas.transform);
         Canvas.ForceUpdateCanvases();
+
+        // Now that the door is actually up. The trail card measures its own list
+        // and shrinks to it, and a layout group on a switched-off object reports
+        // nothing - so doing this any earlier measures an empty screen and gives
+        // the card a list of no height at all. DoorFlow reveals the panel before
+        // it calls Refresh for the same reason.
+        TrailsDoor sizing = canvas.GetComponentInChildren<TrailsDoor>(false);
+        if (sizing != null)
+        {
+            sizing.SizeList();
+            LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)canvas.transform);
+            Canvas.ForceUpdateCanvases();
+        }
 
         rig.camera.backgroundColor = ThemeManager.Get(ThemeRole.Background);
         rig.camera.Render();
@@ -505,6 +546,9 @@ public static class UIPreview
 
         File.WriteAllBytes(Path.Combine(OutputFolder, name + ".png"), shot.EncodeToPNG());
         Object.DestroyImmediate(shot);
+
+        if (mapChrome != null)
+            mapChrome.gameObject.SetActive(chromeWas);
 
         for (int i = 0; i < raised.Count; i++)
             raised[i].SetActive(false);
@@ -991,21 +1035,23 @@ public static class UIPreview
                 return;
 
             TrailsDoor trails = door.GetComponent<TrailsDoor>();
-            Transform content = door.Find("Inner/Body/Scroll/Viewport/Content");
+            Transform content = Dig(door, "Card/Body/Scroll/Viewport/Content");
 
             if (trails == null || content == null)
             {
-                // Inner sits under the safe-area pad, so try the fuller path too.
-                content = door.Find("Safe/Inner/Body/Scroll/Viewport/Content");
-
-                if (trails == null || content == null)
-                {
-                    Debug.LogWarning("[Preview] No trails list to fill.");
-                    return;
-                }
+                Debug.LogWarning("[Preview] No trails list to fill.");
+                return;
             }
 
             bool rows = state == "Rows";
+
+            // The card says something different with nothing in it, and the door
+            // sets that from the service - which is not running here.
+            if (trails.subtitle != null)
+            {
+                trails.subtitle.text = AppStrings.Get("trails.subtitle");
+                trails.subtitle.gameObject.SetActive(rows);
+            }
 
             Show(trails.emptyState, !rows);
             Show(trails.waitingState, false);
@@ -1036,6 +1082,82 @@ public static class UIPreview
 
             for (int i = 0; i < existing.Length; i++)
                 existing[i].gameObject.SetActive(rows);
+        }
+
+        /// <summary>
+        /// Puts characters in the boxes, and optionally the line that comes back
+        /// when the server says no.
+        ///
+        /// The boxes have only ever been photographed empty, which is the one state
+        /// that cannot show whether a typed character lands in the right box, what
+        /// a filled box looks like next to an empty one, or where the caret is.
+        /// </summary>
+        public static void CodeState(Transform root, string typed, string messageKey)
+        {
+            Transform door = root.Find("Doors/Code");
+            if (door == null)
+                return;
+
+            CodeDoor code = door.GetComponent<CodeDoor>();
+            if (code == null || code.boxes == null || code.boxes.cells == null)
+            {
+                Debug.LogWarning("[Preview] No code boxes to fill.");
+                return;
+            }
+
+            CodeBoxes boxes = code.boxes;
+
+            // Straight at the cells rather than through the field: the input field
+            // does nothing outside play mode, and what is being photographed is how
+            // the boxes draw, not how TMP stores a string.
+            for (int i = 0; i < boxes.cells.Length; i++)
+            {
+                CodeBoxes.Cell cell = boxes.cells[i];
+                if (cell == null)
+                    continue;
+
+                bool filled = i < typed.Length;
+                bool here = i == typed.Length;
+
+                if (cell.letter != null)
+                    cell.letter.text = filled ? typed[i].ToString() : string.Empty;
+
+                if (cell.fill != null)
+                {
+                    cell.fill.color = ThemeManager.Get(filled ? ThemeRole.Line
+                                                              : ThemeRole.SurfaceAlt);
+                }
+
+                if (cell.outline != null)
+                {
+                    cell.outline.color = ThemeManager.Get(here ? ThemeRole.Accent
+                                                                : ThemeRole.Line);
+                }
+
+                if (cell.caret != null)
+                    cell.caret.gameObject.SetActive(here);
+            }
+
+            if (code.message != null)
+            {
+                bool say = !string.IsNullOrEmpty(messageKey);
+                code.message.text = say ? AppStrings.Get(messageKey) : string.Empty;
+                code.message.gameObject.SetActive(say);
+            }
+        }
+
+        /// <summary>
+        /// Finds a child by path, trying the safe-area wrapper as well. Whether
+        /// SafeContent inserts a level depends on the device, and a hard-coded path
+        /// that silently misses is a preview of nothing.
+        /// </summary>
+        static Transform Dig(Transform door, string tail)
+        {
+            Transform found = door.Find("Inner/" + tail);
+            if (found != null)
+                return found;
+
+            return door.Find("Safe/Inner/" + tail);
         }
 
         static void Show(GameObject go, bool on)

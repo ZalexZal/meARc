@@ -15,8 +15,36 @@ public static class UISprites
 {
     const string Folder = "Assets/UI";
 
-    /// <summary>Soft-cornered rectangle for cards, fields and buttons.</summary>
+    /// <summary>Soft-cornered rectangle for fields and buttons.</summary>
     public static Sprite Rounded { get { return GetOrCreate("UIRounded28", 96, 28); } }
+
+    /// <summary>
+    /// The larger radius, for the modal cards.
+    ///
+    /// A corner radius does not read as a fixed number of pixels, it reads as a
+    /// proportion of the thing it is on. Twenty-eight is right on a button a
+    /// hundred and thirty tall and looks like a mistake on a card nine hundred
+    /// wide - close enough to square to look like an unstyled rectangle, and far
+    /// enough from it to look like it was meant to be round and failed.
+    /// </summary>
+    public static Sprite Card { get { return GetOrCreate("UIRounded52", 160, 52); } }
+
+    /// <summary>The border of a card, at the card radius.</summary>
+    public static Sprite CardOutline
+    {
+        get { return GetOrCreateOutline("UICardOutline", 160, 52f, 3f); }
+    }
+
+    /// <summary>
+    /// What a card casts on the map behind it.
+    ///
+    /// A surface with an edge and no shadow sits in the same plane as its
+    /// background - the eye reads it as a region of the picture rather than as an
+    /// object above it. Over a blurred photograph that is the whole difference
+    /// between a modal and a rectangle somebody paved over the middle of the
+    /// screen.
+    /// </summary>
+    public static Sprite Shadow { get { return GetOrCreateShadow("UIShadow", 200, 52f, 40f); } }
 
     /// <summary>Fully round ends, for pills, switch tracks and segmented controls.</summary>
     public static Sprite Pill { get { return GetOrCreate("UIPill", 64, 32); } }
@@ -58,6 +86,18 @@ public static class UISprites
         get { return GetOrCreateOutline("UIRoundedOutline", 96, 28f, 3f); }
     }
 
+    /// <summary>
+    /// Opaque along the bottom edge, gone by the top. Painted in a surface colour
+    /// and laid over the bottom of a scrolling region, it turns a hard mask edge
+    /// into text going under something.
+    /// </summary>
+    public static Sprite FadeUp { get { return GetOrCreateFade("UIFadeUp", 64); } }
+
+    static Sprite GetOrCreateFade(string name, int size)
+    {
+        return Save(name, RenderFade(size), 0);
+    }
+
     static Sprite GetOrCreateRing(string name, int size, float thickness)
     {
         return Save(name, RenderRing(size, thickness), 0);
@@ -66,6 +106,17 @@ public static class UISprites
     static Sprite GetOrCreateOutline(string name, int size, float radius, float thickness)
     {
         return Save(name, RenderOutline(size, radius, thickness), Mathf.CeilToInt(radius));
+    }
+
+    /// <summary>
+    /// The 9-slice border has to take in the whole falloff as well as the corner,
+    /// or stretching the sprite to a card would stretch the blur along with it and
+    /// the shadow would be soft at the corners and hard along the sides.
+    /// </summary>
+    static Sprite GetOrCreateShadow(string name, int size, float radius, float spread)
+    {
+        return Save(name, RenderShadow(size, radius, spread),
+                    Mathf.CeilToInt(radius + spread));
     }
 
     static Sprite GetOrCreateBeam(string name, int size)
@@ -207,6 +258,78 @@ public static class UISprites
                 float alpha = Mathf.Clamp01(thickness * 0.5f - Mathf.Abs(distance) + 0.5f);
                 texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
             }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
+    /// <summary>
+    /// A rounded rectangle that fades outwards. Solid inside the shape, gone
+    /// <paramref name="spread"/> pixels beyond it, on a curve rather than a ramp -
+    /// a linear falloff has a visible edge where it reaches zero, which is exactly
+    /// the artefact a shadow is there to avoid.
+    /// </summary>
+    static Texture2D RenderShadow(int size, float radius, float spread)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+
+        float half = size * 0.5f;
+        float inner = half - spread - radius;
+
+        // Both the radius and the falloff are cut out of each side of the texture,
+        // so a texture smaller than twice their sum has no solid middle left and
+        // the sprite comes out as a blurred blob rather than a shadow. Worth
+        // saying out loud rather than drawing quietly wrong.
+        if (inner < 0f)
+        {
+            Debug.LogWarning("[UISprites] Shadow texture " + size + " is too small for " +
+                             "radius " + radius + " and spread " + spread + ".");
+            inner = 0f;
+        }
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float qx = Mathf.Abs(x + 0.5f - half) - inner;
+                float qy = Mathf.Abs(y + 0.5f - half) - inner;
+
+                float outside = new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude;
+                float distance = Mathf.Min(Mathf.Max(qx, qy), 0f) + outside - radius;
+
+                float fade = 1f - Mathf.Clamp01(distance / spread);
+
+                // Squared, so it leaves the shape quickly and approaches nothing
+                // slowly. That is the shape of a real penumbra and, more to the
+                // point, it has no visible end.
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, fade * fade));
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
+    /// <summary>
+    /// A vertical ramp, four pixels wide because the sprite is stretched sideways
+    /// and only the vertical axis carries anything.
+    ///
+    /// Squared, like the shadow: a straight ramp has a visible top edge where it
+    /// reaches zero, and an edge is the thing this exists to remove.
+    /// </summary>
+    static Texture2D RenderFade(int size)
+    {
+        Texture2D texture = new Texture2D(4, size, TextureFormat.RGBA32, false);
+
+        for (int y = 0; y < size; y++)
+        {
+            // Texture space runs upwards, so y = 0 is the opaque bottom edge.
+            float up = (y + 0.5f) / size;
+            float alpha = (1f - up) * (1f - up);
+
+            for (int x = 0; x < 4; x++)
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
         }
 
         texture.Apply();

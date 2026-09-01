@@ -32,8 +32,14 @@ public class TrailsDoor : MonoBehaviour
     [Header("Controls")]
     public Button joinButton;
 
-    [Tooltip("Only there when a trail is already open behind this screen.")]
-    public GameObject closeButton;
+    [Tooltip("The card's own subtitle. Hidden when the list is not a list, " +
+             "because the state note underneath already says what is going on, " +
+             "and saying it twice reads as a layout accident.")]
+    public TextMeshProUGUI subtitle;
+
+    [Tooltip("Sizes the list to what is in it, up to a limit. A fixed height " +
+             "leaves a quarter of the card empty under two trails.")]
+    public LayoutElement listSize;
 
     readonly List<TrailRowView> _rows = new List<TrailRowView>();
 
@@ -46,12 +52,6 @@ public class TrailsDoor : MonoBehaviour
     void OnDisable()
     {
         AppStrings.OnLanguageChanged -= Refresh;
-    }
-
-    public void SetCanClose(bool canClose)
-    {
-        if (closeButton != null)
-            closeButton.SetActive(canClose);
     }
 
     public void Refresh()
@@ -78,7 +78,41 @@ public class TrailsDoor : MonoBehaviour
         if (failedLabel != null)
             failedLabel.text = AppStrings.Get("trails.failed");
 
+        // Only over an actual list. "Pick one to walk it" above the words "No
+        // trails yet" is the app describing a list the reader cannot see, and the
+        // state note underneath is already a heading and a sentence of its own.
+        if (subtitle != null)
+        {
+            subtitle.text = AppStrings.Get("trails.subtitle");
+            subtitle.gameObject.SetActive(mine.Count > 0);
+        }
+
         Fill(mine, service != null ? service.SelectedId : null);
+        SizeList();
+    }
+
+    /// <summary>
+    /// Gives the list exactly the height of what is in it, up to the point where
+    /// it starts to scroll instead of growing - so the card hugs two trails, hugs
+    /// a two-line note, and can never grow taller than the screen it rests on.
+    ///
+    /// Public because the preview harness sets the list's state directly rather
+    /// than through Refresh, and without a way to call this it photographs the
+    /// height the holder was built with instead of the height the app gives it.
+    /// </summary>
+    public void SizeList()
+    {
+        if (listSize == null || listParent == null)
+            return;
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(listParent);
+
+        float wanted = Mathf.Min(LayoutUtility.GetPreferredHeight(listParent), 560f);
+
+        // Both, or the minimum wins. UIFactory.Size sets minHeight alongside
+        // preferredHeight, and a layout group takes the larger of the two.
+        listSize.minHeight = wanted;
+        listSize.preferredHeight = wanted;
     }
 
     void Fill(List<TrailService.Trail> mine, string selectedId)

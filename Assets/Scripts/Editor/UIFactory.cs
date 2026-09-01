@@ -6,6 +6,10 @@ public enum UIShape
 {
     Rect,
     Rounded,
+
+    /// <summary>The larger radius the modal cards are drawn with.</summary>
+    Card,
+
     Pill,
     Circle,
 
@@ -80,6 +84,11 @@ public static class UIFactory
         {
             case UIShape.Rounded:
                 image.sprite = UISprites.Rounded;
+                image.type = Image.Type.Sliced;
+                break;
+
+            case UIShape.Card:
+                image.sprite = UISprites.Card;
                 image.type = Image.Type.Sliced;
                 break;
 

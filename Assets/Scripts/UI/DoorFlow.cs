@@ -44,6 +44,11 @@ public class DoorFlow : MonoBehaviour
              "tab bar people tap straight past.")]
     public GameObject navBar;
 
+    [Tooltip("The map's own controls - its top bar, scale, attribution and dock. " +
+             "Hidden before the shutter, so what the blur catches is a map rather " +
+             "than a screenshot of the app.")]
+    public GameObject[] hideWhileOpen = new GameObject[0];
+
     [Header("Screens that fill themselves in")]
     public TrailsDoor trails;
     public CodeDoor code;
@@ -64,6 +69,17 @@ public class DoorFlow : MonoBehaviour
 
     /// <summary>Set by "I have a code" on the welcome screen, spent after the terms.</summary>
     bool _wantsCode;
+
+    /// <summary>
+    /// The reader has said "not now" to picking a trail, and is to be left alone
+    /// until they ask again.
+    ///
+    /// Without this the app soft-locks, and it did: Evaluate opened the trail list
+    /// whenever no trail was selected, Close called Evaluate, and the only way to
+    /// select a trail was a join code the server cannot yet redeem. Two screens,
+    /// each of which only led to the other, and a hidden nav bar behind both.
+    /// </summary>
+    bool _dismissed;
 
     void Awake()
     {
@@ -127,6 +143,16 @@ public class DoorFlow : MonoBehaviour
             return;
         }
 
+        // Asked once, then left alone. The map is worth having without a trail - it
+        // still shows the reader where they are - and the trail chip at the top of
+        // it is how they come back. Re-offering the list on every membership
+        // refresh is how this became a screen with no way out.
+        if (_dismissed)
+        {
+            Show(Door.None);
+            return;
+        }
+
         TrailService service = TrailService.Instance;
         bool hasTrail = service != null && !string.IsNullOrEmpty(service.SelectedId);
 
@@ -177,6 +203,7 @@ public class DoorFlow : MonoBehaviour
     /// <summary>Trails: "Join with a code", and the empty state's button.</summary>
     public void OpenCode()
     {
+        _dismissed = false;
         Show(Door.Code);
     }
 
@@ -190,25 +217,22 @@ public class DoorFlow : MonoBehaviour
     public void OpenTrails()
     {
         _reopened = true;
+        _dismissed = false;
         Show(Door.Trails);
     }
 
     /// <summary>
-    /// Leaves whichever door is up, if there is anything to go back to. A reader
-    /// who has not chosen a trail has nothing behind this screen, so the control
-    /// that calls this is hidden in that case rather than doing nothing.
+    /// Leaves whichever door is up.
+    ///
+    /// Always allowed, and it used to depend on already having a trail - which is
+    /// the one state in which the reader most needs a way out, because it is the
+    /// state they cannot leave by choosing something. There is always a map behind
+    /// this, so there is always somewhere to go.
     /// </summary>
     public void Close()
     {
         _reopened = false;
-
-        TrailService service = TrailService.Instance;
-        if (service == null || string.IsNullOrEmpty(service.SelectedId))
-        {
-            Evaluate();
-            return;
-        }
-
+        _dismissed = true;
         Show(Door.None);
     }
 
@@ -216,6 +240,7 @@ public class DoorFlow : MonoBehaviour
     public void Entered()
     {
         _reopened = false;
+        _dismissed = false;
         Show(Door.None);
     }
 
@@ -239,6 +264,17 @@ public class DoorFlow : MonoBehaviour
 
         if (navBar != null)
             navBar.SetActive(door == Door.None);
+
+        // Before the shutter, not after. The map's own bar, scale, attribution and
+        // dock are the difference between a blurred map - which is what a reader
+        // should see behind a card - and a blurred screenshot of the app, in which
+        // every control is still legible enough to look pressable and none of them
+        // are. That was most of what made these two screens look broken.
+        for (int i = 0; i < hideWhileOpen.Length; i++)
+        {
+            if (hideWhileOpen[i] != null)
+                hideWhileOpen[i].SetActive(door == Door.None);
+        }
 
         if (OnDoorChanged != null)
             OnDoorChanged(door);
@@ -285,10 +321,7 @@ public class DoorFlow : MonoBehaviour
             case Door.Trails:
                 Reveal(trailsPanel);
                 if (trails != null)
-                {
-                    trails.SetCanClose(CanClose);
                     trails.Refresh();
-                }
                 break;
 
             case Door.Code:
@@ -296,16 +329,6 @@ public class DoorFlow : MonoBehaviour
                 if (code != null)
                     code.Begin();
                 break;
-        }
-    }
-
-    /// <summary>Whether there is an app behind the door to go back to.</summary>
-    bool CanClose
-    {
-        get
-        {
-            TrailService service = TrailService.Instance;
-            return service != null && !string.IsNullOrEmpty(service.SelectedId);
         }
     }
 

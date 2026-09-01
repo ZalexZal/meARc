@@ -35,7 +35,6 @@ public class MapTabController : MonoBehaviour
     [Header("Chrome")]
     public GuidanceBanner guidance;
     public StateCardView stateCard;
-    public TextMeshProUGUI titleText;
 
     [Tooltip("Appears only once the reader has panned or zoomed away, so it is not " +
              "a permanent button for a thing that is already true.")]
@@ -191,8 +190,11 @@ public class MapTabController : MonoBehaviour
 
     void Refresh()
     {
-        if (titleText != null)
-            titleText.text = AppStrings.Get("tab.map");
+        // The trail's name is deliberately not set here. TrailChipView owns that
+        // label and knows which trail is open; this line used to overwrite it with
+        // "Map" on every refresh, so the name the top bar exists to show would
+        // appear once and then be replaced by the word the tab bar already says
+        // two inches below it.
 
         if (browseLabel != null)
             browseLabel.text = AppStrings.Get("map.browse");

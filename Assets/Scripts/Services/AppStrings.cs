@@ -211,6 +211,10 @@ public static class AppStrings
         { "terms.footer", "Accepting records the date and the version against your account." },
 
         { "trails.title", "My trails" },
+        { "trails.eyebrow", "YOUR TRAILS" },
+        { "trails.subtitle", "Pick one to walk it." },
+        { "trails.choose", "Choose a trail" },
+        { "trails.notNow", "Not now" },
         { "trails.join", "Join with a code" },
         { "trails.loading", "Looking for your trails" },
         { "trails.failed", "Couldn’t reach the server. Anything joined earlier still works." },
@@ -222,6 +226,7 @@ public static class AppStrings
         { "trails.role.owner", "Owner" },
 
         { "code.title", "Enter a code" },
+        { "code.eyebrow", "JOIN A TRAIL" },
         { "code.body", "Six characters, from whoever made the trail." },
         { "code.join", "Join" },
         { "code.cancel", "Cancel" },
@@ -409,6 +414,10 @@ public static class AppStrings
         { "terms.footer", "Приемането записва датата и версията към профила ви." },
 
         { "trails.title", "Моите маршрути" },
+        { "trails.eyebrow", "ВАШИТЕ МАРШРУТИ" },
+        { "trails.subtitle", "Изберете един, за да го извървите." },
+        { "trails.choose", "Изберете маршрут" },
+        { "trails.notNow", "Не сега" },
         { "trails.join", "Присъедини се с код" },
         { "trails.loading", "Търсим вашите маршрути" },
         { "trails.failed", "Сървърът не отговаря. Всичко присъединено по-рано пак работи." },
@@ -420,6 +429,7 @@ public static class AppStrings
         { "trails.role.owner", "Собственик" },
 
         { "code.title", "Въведи код" },
+        { "code.eyebrow", "ПРИСЪЕДИНАВАНЕ" },
         { "code.body", "Шест знака, от създателя на маршрута." },
         { "code.join", "Присъедини се" },
         { "code.cancel", "Отказ" },

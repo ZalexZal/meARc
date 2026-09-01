@@ -1,6 +1,7 @@
-using System.Text;
+using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -15,20 +16,43 @@ using UnityEngine.UI;
 /// outside that alphabet is refused as it is typed rather than accepted and
 /// rejected later by the server, which would send the reader looking for a typo
 /// they did not make.
+///
+/// The filtering happens in onValidateInput and nowhere else. That is not a style
+/// preference. The first version cleaned the string inside onValueChanged and
+/// wrote it back with SetTextWithoutNotify, and that scrambled every code after
+/// about the fourth character: TMP_InputField.LateUpdate compares its own m_Text
+/// against the Android keyboard's buffer and, whenever the two differ, rebuilds
+/// m_Text from the keyboard and moves the caret to wherever the native field's
+/// selection is. Writing a corrected string back from onValueChanged makes them
+/// differ on purpose - the keyboard holds "abcd", we hold "ABCD" - so the two
+/// overwrite each other once a frame while the caret drifts out from under the
+/// reader. onValidateInput is called from inside that same rebuild, and from
+/// Append for a hardware key, so the character is corrected before it is ever
+/// stored, TMP writes the result back to the keyboard itself, and there is only
+/// ever one authority on what the text is.
 /// </summary>
 public class CodeBoxes : MonoBehaviour
 {
     public const string Alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
     public const int Length = 6;
 
+    /// <summary>One box: the surface, its edge, the letter, and the caret.</summary>
+    [System.Serializable]
+    public class Cell
+    {
+        public Image fill;
+        public Image outline;
+        public TextMeshProUGUI letter;
+
+        [Tooltip("The blinking bar. Only ever shown in the box being typed into.")]
+        public RectTransform caret;
+    }
+
     [Tooltip("The real input. Invisible - its own text is transparent.")]
     public TMP_InputField field;
 
-    [Tooltip("One per character, left to right.")]
-    public TextMeshProUGUI[] labels;
-
-    [Tooltip("The box behind each character, lit as the reader reaches it.")]
-    public Image[] boxes;
+    [Tooltip("Left to right, six of them.")]
+    public Cell[] cells;
 
     [Tooltip("Called once six valid characters are in. The reader should not have " +
              "to hunt for a button after typing the last one.")]
@@ -38,38 +62,71 @@ public class CodeBoxes : MonoBehaviour
     // add a listener throws.
     public UnityEngine.Events.UnityEvent onComplete = new UnityEngine.Events.UnityEvent();
 
-    Color _idle;
-    Color _active;
-    Color _filled;
+    Color _line;
+    Color _accent;
+    Color _surfaceAlt;
+    Color _text;
+
+    Coroutine _focusing;
+    float _blink;
 
     void Awake()
     {
-        _idle = ThemeManager.Get(ThemeRole.Line);
-        _active = ThemeManager.Get(ThemeRole.Accent);
-        _filled = ThemeManager.Get(ThemeRole.TextSecondary);
+        CacheColours();
 
-        if (field != null)
-        {
-            field.characterLimit = Length;
-            field.onValueChanged.AddListener(HandleChanged);
-        }
+        if (field == null)
+            return;
+
+        // contentType first: its setter reapplies the line type, keyboard type and
+        // validation that go with the preset, so anything set before it is undone.
+        field.contentType = TMP_InputField.ContentType.Custom;
+        field.lineType = TMP_InputField.LineType.SingleLine;
+        field.inputType = TMP_InputField.InputType.Standard;
+        field.keyboardType = TouchScreenKeyboardType.ASCIICapable;
+        field.characterValidation = TMP_InputField.CharacterValidation.None;
+        field.characterLimit = Length;
+        field.richText = false;
+        field.restoreOriginalTextOnEscape = false;
+
+        // We draw the boxes. Without this Android floats its own edit field over
+        // the keyboard and the reader ends up looking at two of them.
+        field.shouldHideMobileInput = true;
+
+        field.onValidateInput = ValidateChar;
+        field.onValueChanged.AddListener(HandleChanged);
     }
 
     void OnEnable()
     {
         ThemeManager.OnThemeChanged += Recolour;
-        Recolour();
+        CacheColours();
+        _blink = 0f;
         Render();
     }
 
     void OnDisable()
     {
         ThemeManager.OnThemeChanged -= Recolour;
+        _focusing = null;
+    }
+
+    void Update()
+    {
+        if (cells == null)
+            return;
+
+        // Half a second lit, half dark. Only the box being typed into has a caret,
+        // so this is one object going on and off rather than a repaint.
+        float was = _blink;
+        _blink += Time.unscaledDeltaTime;
+
+        if (Mathf.FloorToInt(was * 2f) != Mathf.FloorToInt(_blink * 2f))
+            RenderCarets();
     }
 
     public string Code
     {
-        get { return field != null ? field.text : string.Empty; }
+        get { return field != null && field.text != null ? field.text : string.Empty; }
     }
 
     public bool IsComplete
@@ -77,8 +134,17 @@ public class CodeBoxes : MonoBehaviour
         get { return Code.Length == Length; }
     }
 
+    /// <summary>True while the reader is actually typing into this.</summary>
+    public bool HasFocus
+    {
+        get { return field != null && field.isFocused; }
+    }
+
     public void Clear()
     {
+        // Safe here, unlike inside onValueChanged: this is a deliberate reset when
+        // the screen opens, and SetText syncs the soft keyboard's own buffer with
+        // it rather than leaving the two to argue about it every frame.
         if (field != null)
             field.SetTextWithoutNotify(string.Empty);
 
@@ -88,71 +154,147 @@ public class CodeBoxes : MonoBehaviour
     /// <summary>Puts the keyboard up without the reader having to find the field.</summary>
     public void Focus()
     {
-        if (field == null)
+        if (field == null || !isActiveAndEnabled || !Application.isPlaying)
             return;
 
-        field.Select();
-        field.ActivateInputField();
+        if (_focusing != null)
+            StopCoroutine(_focusing);
+
+        _focusing = StartCoroutine(FocusSoon());
     }
 
-    void HandleChanged(string typed)
+    /// <summary>
+    /// One frame late, on purpose. The panel holding this was enabled in the same
+    /// call that asks for focus, and a Select on an object the EventSystem has not
+    /// seen yet is quietly dropped - which is a code screen with no keyboard.
+    /// </summary>
+    IEnumerator FocusSoon()
     {
-        string cleaned = Clean(typed);
+        yield return null;
 
-        // SetTextWithoutNotify, or filtering a character would re-enter this method
-        // and the field would fight itself over the caret position.
-        if (cleaned != typed && field != null)
-            field.SetTextWithoutNotify(cleaned);
+        if (field != null && isActiveAndEnabled)
+        {
+            if (EventSystem.current != null)
+                EventSystem.current.SetSelectedGameObject(field.gameObject);
 
+            field.ActivateInputField();
+
+            int end = field.text != null ? field.text.Length : 0;
+            field.caretPosition = end;
+            field.selectionAnchorPosition = end;
+            field.selectionFocusPosition = end;
+        }
+
+        _blink = 0f;
+        Render();
+        _focusing = null;
+    }
+
+    /// <summary>
+    /// Called by TMP before a character is stored, on both the hardware-key path
+    /// and the soft-keyboard rebuild. Returning the null character refuses it.
+    /// </summary>
+    char ValidateChar(string soFar, int index, char typed)
+    {
+        if (soFar != null && soFar.Length >= Length)
+            return '\0';
+
+        char c = char.ToUpperInvariant(typed);
+        return Alphabet.IndexOf(c) >= 0 ? c : '\0';
+    }
+
+    /// <summary>
+    /// Redraws, and nothing else. Writing to the field from here is what broke it.
+    /// </summary>
+    void HandleChanged(string current)
+    {
+        _blink = 0f;
         Render();
 
-        if (cleaned.Length == Length && onComplete != null)
+        if (current != null && current.Length == Length && onComplete != null)
             onComplete.Invoke();
     }
 
-    static string Clean(string typed)
+    void CacheColours()
     {
-        if (string.IsNullOrEmpty(typed))
-            return string.Empty;
-
-        StringBuilder kept = new StringBuilder(Length);
-
-        for (int i = 0; i < typed.Length && kept.Length < Length; i++)
-        {
-            char c = char.ToUpperInvariant(typed[i]);
-
-            if (Alphabet.IndexOf(c) >= 0)
-                kept.Append(c);
-        }
-
-        return kept.ToString();
+        _line = ThemeManager.Get(ThemeRole.Line);
+        _accent = ThemeManager.Get(ThemeRole.Accent);
+        _surfaceAlt = ThemeManager.Get(ThemeRole.SurfaceAlt);
+        _text = ThemeManager.Get(ThemeRole.TextPrimary);
     }
 
     void Recolour()
     {
-        _idle = ThemeManager.Get(ThemeRole.Line);
-        _active = ThemeManager.Get(ThemeRole.Accent);
-        _filled = ThemeManager.Get(ThemeRole.TextSecondary);
+        CacheColours();
         Render();
     }
 
     public void Render()
     {
+        if (cells == null)
+            return;
+
         string code = Code;
+        int at = code.Length;
 
-        for (int i = 0; i < Length; i++)
+        for (int i = 0; i < cells.Length; i++)
         {
-            if (labels != null && i < labels.Length && labels[i] != null)
-                labels[i].text = i < code.Length ? code[i].ToString() : string.Empty;
-
-            if (boxes == null || i >= boxes.Length || boxes[i] == null)
+            Cell cell = cells[i];
+            if (cell == null)
                 continue;
 
-            // Three states, so the reader can see where they are: filled, the one
-            // being typed into, and not yet reached.
-            boxes[i].color = i < code.Length ? _filled
-                           : i == code.Length ? _active
-                           : _idle;
+            bool filled = i < at;
+
+            // The box being typed into, whether or not the keyboard is up. A reader
+            // who tapped away still needs to see where they got to.
+            bool here = i == at;
+
+            if (cell.letter != null)
+            {
+                cell.letter.text = filled ? code[i].ToString() : string.Empty;
+                cell.letter.color = _text;
+            }
+
+            // A filled box steps up to the line colour and an empty one stays at
+            // the recessed one, so progress through the six reads at arm's length
+            // rather than only close enough to make out the letters.
+            //
+            // Not Surface for the filled state, which is what it was: Surface is
+            // the colour of the card these are sitting on, so a box disappeared
+            // the moment it had a letter in it and the letters floated on nothing.
+            if (cell.fill != null)
+                cell.fill.color = filled ? _line : _surfaceAlt;
+
+            if (cell.outline != null)
+                cell.outline.color = here ? _accent : _line;
+        }
+
+        RenderCarets();
+    }
+
+    void RenderCarets()
+    {
+        if (cells == null)
+            return;
+
+        int at = Code.Length;
+        bool typing = HasFocus;
+        bool lit = Mathf.FloorToInt(_blink * 2f) % 2 == 0;
+
+        for (int i = 0; i < cells.Length; i++)
+        {
+            Cell cell = cells[i];
+            if (cell == null || cell.caret == null)
+                continue;
+
+            bool show = typing && i == at && lit;
+
+            if (cell.caret.gameObject.activeSelf != show)
+                cell.caret.gameObject.SetActive(show);
+
+            Image bar = cell.caret.GetComponent<Image>();
+            if (bar != null)
+                bar.color = _accent;
         }
     }
 }

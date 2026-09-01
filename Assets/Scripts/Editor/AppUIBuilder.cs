@@ -212,7 +212,14 @@ public static class AppUIBuilder
         // Last of all, so the way in draws over every screen it stands in front of -
         // the nav bar included, which it also switches off. A modal with a live tab
         // bar behind it is a tab bar people tap straight past.
-        BuildDoors(root, navRow.parent.gameObject, trailRowPrefab);
+        // The map's own controls go down with the nav bar while a door is up, so
+        // what the blur photographs is a map rather than a screenshot of the app.
+        // Safe holds the top bar, the scale, the attribution and the dock; the map
+        // itself is a sibling of it and stays.
+        Transform mapChrome = mapPanel.Find("Safe");
+
+        BuildDoors(root, navRow.parent.gameObject, trailRowPrefab,
+                   mapChrome != null ? mapChrome.gameObject : null);
 
         AddFade(mapPanel.gameObject);
         AddFade(browsePanel.gameObject);
@@ -507,10 +514,32 @@ public static class AppUIBuilder
         // them, which is the difference between a sheet and a page.
         RectTransform body = UIFactory.Rect("Body", overview);
         UIFactory.Stretch(body);
-        body.offsetMin = new Vector2(Margin, Margin + FooterHeight + 18f);
+        // Twenty-six, and a fade over the last of it. The mask cuts wherever the
+        // text happens to wrap, so no gap makes the last line land whole - eighteen
+        // put it against the button and forty-six sliced it through the middle of
+        // the letters. What fixes it is the strip below, not the distance.
+        body.offsetMin = new Vector2(Margin, Margin + FooterHeight + 26f);
         body.offsetMax = new Vector2(-Margin, -HeadRoom);
 
         RectTransform content = UIFactory.ScrollList("Scroll", body, 18f);
+
+        // Room at the end of the scroll, so the last line is not flush against the
+        // mask when the reader has scrolled all the way down.
+        VerticalLayoutGroup overviewStack = content.GetComponent<VerticalLayoutGroup>();
+        if (overviewStack != null)
+            overviewStack.padding = new RectOffset(0, 0, 0, 40);
+
+        // The fade itself: the sheet's own surface, opaque where the scroll ends
+        // and gone sixty pixels up. Created after the scroll and before the footer,
+        // so it draws over the text and under the buttons.
+        RectTransform hem = UIFactory.Rect("Hem", overview);
+        UIFactory.BottomStretch(hem, 60f, Margin + FooterHeight + 26f);
+        hem.sizeDelta = new Vector2(-Margin * 2f, 60f);
+
+        Image hemFade = UIFactory.Fill(hem, ThemeRole.Surface);
+        hemFade.sprite = UISprites.FadeUp;
+        hemFade.type = Image.Type.Simple;
+        hemFade.raycastTarget = false;
 
         // Identity: the marker's own colour beside its name, so this sheet and the
         // thing standing in the street are recognisably the same object.
@@ -847,7 +876,7 @@ public static class AppUIBuilder
         // inches below it. Once a reader can hold more than one trail, the name of
         // the one they are standing in is the thing the screen cannot otherwise
         // tell them - and it doubles as the way to swap.
-        controller.titleText = BuildTrailChip(top, out RectTransform chipRect);
+        BuildTrailChip(top, out RectTransform chipRect);
         UIFactory.Corner(chipRect, new Vector2(0f, 0.5f),
                          new Vector2(600f, 84f), new Vector2(Margin - 18f, -14f));
 
@@ -3045,7 +3074,8 @@ public static class AppUIBuilder
     /// over the nav bar - which DoorFlow also switches off. A modal with a live tab
     /// bar behind it is a tab bar people tap straight past.
     /// </summary>
-    static DoorFlow BuildDoors(Transform root, GameObject navBar, TrailRowView trailRowPrefab)
+    static DoorFlow BuildDoors(Transform root, GameObject navBar,
+                               TrailRowView trailRowPrefab, GameObject mapChrome)
     {
         RectTransform holder = UIFactory.Rect("Doors", root);
         Undo.RegisterCreatedObjectUndo(holder.gameObject, "Build App UI");
@@ -3053,6 +3083,9 @@ public static class AppUIBuilder
 
         DoorFlow flow = holder.gameObject.AddComponent<DoorFlow>();
         flow.navBar = navBar;
+        flow.hideWhileOpen = mapChrome != null
+            ? new GameObject[] { mapChrome }
+            : new GameObject[0];
         flow.backdrop = BuildBackdrop(holder);
 
         flow.welcomePanel = BuildWelcome(holder, flow);
@@ -3120,6 +3153,8 @@ public static class AppUIBuilder
                          Vector2.zero);
         brand.characterSpacing = 12f;
 
+        WelcomeMarkers(inner);
+
         // Bottom-aligned. The reader's thumb is at the bottom of the phone and the
         // words are the last thing they read before pressing something.
         // Half the screen, not a third. A plain screen with two sentences at the
@@ -3166,6 +3201,59 @@ public static class AppUIBuilder
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
+    }
+
+    /// <summary>
+    /// Three markers in the empty half of the welcome screen.
+    ///
+    /// Not decoration for its own sake: the headline says markers are left in real
+    /// places, and this is what one looks like in this app - the same ring and disc
+    /// the map draws, which is what the reader is looking at a few seconds later.
+    /// Scattered rather than lined up, and at three sizes, because a row of three
+    /// equal circles is a loading indicator.
+    ///
+    /// Faint on purpose. It is the ground the words sit on, and anything bright
+    /// enough to compete with a headline in an eighty-eight point face would be
+    /// the first thing read on a screen whose whole job is one sentence.
+    /// </summary>
+    static void WelcomeMarkers(RectTransform inner)
+    {
+        RectTransform field = UIFactory.Rect("Markers", inner);
+        field.anchorMin = new Vector2(0f, 1f);
+        field.anchorMax = new Vector2(1f, 1f);
+        field.pivot = new Vector2(0.5f, 1f);
+        field.sizeDelta = new Vector2(0f, 900f);
+        field.anchoredPosition = new Vector2(0f, -120f);
+
+        // x and y as fractions of the field, then the diameter.
+        float[,] spots =
+        {
+            { 0.24f, 0.30f, 190f },
+            { 0.68f, 0.54f, 128f },
+            { 0.44f, 0.82f,  92f }
+        };
+
+        for (int i = 0; i < spots.GetLength(0); i++)
+        {
+            float size = spots[i, 2];
+
+            RectTransform pin = UIFactory.Rect("Marker" + i, field);
+            pin.anchorMin = new Vector2(spots[i, 0], 1f - spots[i, 1]);
+            pin.anchorMax = pin.anchorMin;
+            pin.pivot = new Vector2(0.5f, 0.5f);
+            pin.sizeDelta = new Vector2(size, size);
+            pin.anchoredPosition = Vector2.zero;
+
+            // The ring is a real hole rather than a disc in the background colour,
+            // so this reads the same way the map's pins do.
+            Image ring = UIFactory.Fill(pin, ThemeRole.Accent, 0.22f, UIShape.Ring);
+            ring.raycastTarget = false;
+
+            RectTransform core = UIFactory.Rect("Dot", pin);
+            UIFactory.Corner(core, new Vector2(0.5f, 0.5f),
+                             new Vector2(size * 0.42f, size * 0.42f), Vector2.zero);
+            UIFactory.Fill(core, ThemeRole.Accent, 0.16f, UIShape.Circle).raycastTarget = false;
+        }
     }
 
     /// <summary>
@@ -3231,7 +3319,14 @@ public static class AppUIBuilder
     }
 
     /// <summary>
-    /// My trails: one card per trail, over the blurred map.
+    /// My trails: a card resting on the bottom of the blurred map.
+    ///
+    /// It used to be a full-bleed band stapled to the top of the screen with the
+    /// rows floating loose underneath, and it read as three unrelated layers -
+    /// most of all because the map's own dock stayed legible below them, so half
+    /// the controls on screen were ones the reader could not press. A card sitting
+    /// on the bottom edge has somewhere to be, covers the dock, and leaves the
+    /// blurred map showing above it, which is the part worth showing.
     ///
     /// The list has four states and only one of them is a list. A first run on a
     /// bus with one bar of signal sees the other three, so each says something
@@ -3240,37 +3335,30 @@ public static class AppUIBuilder
     static GameObject BuildTrailsDoor(Transform parent, DoorFlow flow,
                                       TrailRowView rowPrefab, out TrailsDoor door)
     {
-        RectTransform panel = Door(parent, "Trails", plain: false, inner: out RectTransform inner,
-                                   header: true);
+        RectTransform panel = Door(parent, "Trails", plain: false, inner: out RectTransform inner);
 
         door = panel.gameObject.AddComponent<TrailsDoor>();
         door.rowPrefab = rowPrefab;
 
-        TextMeshProUGUI title = UIFactory.Text("Title", inner, Display, ThemeRole.TextPrimary,
-                                               TextAlignmentOptions.Left, "trails.title",
-                                               FontStyles.Bold);
-        UIFactory.Corner(title.rectTransform, new Vector2(0f, 1f), new Vector2(700f, 90f),
-                         Vector2.zero);
+        RectTransform card = Card(inner, "Card", 26f);
 
-        // Only there when there is an app behind this screen to go back to.
-        RectTransform close = UIFactory.Rect("Close", inner);
-        UIFactory.Corner(close, new Vector2(1f, 1f), new Vector2(Tap, Tap), new Vector2(0f, 8f));
-        Button closeButton = UIFactory.Button(close, ThemeRole.Surface, 1f, UIShape.Circle);
-        Outline(close);
-        Wire(closeButton.onClick, flow.Close, "Leave trails");
-        Icon(close, AppIcon.Close, 42f, ThemeRole.TextSecondary);
-        door.closeButton = close.gameObject;
+        // --- the heading ---
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.VerticalStack(head, 6f, false);
 
-        RectTransform listHolder = UIFactory.Rect("Body", inner);
-        UIFactory.Stretch(listHolder);
-        listHolder.offsetMin = new Vector2(0f, Tap + 30f);
+        Eyebrow(head, "trails.eyebrow");
 
-        // Below the header band, not tucked under its edge. The empty state starts
-        // at the top of this list, and at -120 its heading was printed across the
-        // band's own hairline with the map's attribution showing through beneath.
-        listHolder.offsetMax = new Vector2(0f, -220f);
+        UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "trails.title", FontStyles.Bold);
 
-        RectTransform content = UIFactory.ScrollList("Scroll", listHolder, 14f);
+        door.subtitle = UIFactory.Text("Subtitle", head, Secondary, ThemeRole.TextSecondary,
+                                       TextAlignmentOptions.TopLeft, "trails.subtitle");
+
+        // --- the list ---
+        RectTransform listHolder = UIFactory.Rect("Body", card);
+        door.listSize = UIFactory.Size(listHolder.gameObject, 320f);
+
+        RectTransform content = UIFactory.ScrollList("Scroll", listHolder, 12f);
         door.listParent = content;
 
         door.waitingState = StateNote(content, "Waiting", "trails.loading", null);
@@ -3278,132 +3366,148 @@ public static class AppUIBuilder
         door.failedState = StateNote(content, "Failed", "trails.failed", null,
                                      out door.failedLabel);
 
-        RectTransform join = UIFactory.Rect("Join", inner);
-        UIFactory.BottomStretch(join, Tap);
-        Button joinButton = UIFactory.Button(join, ThemeRole.Surface, 1f, UIShape.Rounded);
-        Outline(join);
-        Wire(joinButton.onClick, flow.OpenCode, "Open code entry");
-        door.joinButton = joinButton;
+        // --- what to do about it ---
+        RectTransform actions = UIFactory.Rect("Actions", card);
+        UIFactory.VerticalStack(actions, 10f, false);
 
-        TextMeshProUGUI joinLabel = UIFactory.Text("Label", join, Secondary,
-                                                   ThemeRole.TextPrimary,
-                                                   TextAlignmentOptions.Center, "trails.join",
-                                                   FontStyles.Bold);
-        UIFactory.Stretch(joinLabel.rectTransform);
+        door.joinButton = PrimaryAction(actions, "Join", "trails.join", flow.OpenCode,
+                                        "Open code entry");
+
+        // The way out. Not a nicety: without it a reader with no trails had the
+        // trail list and the code screen and nothing else, each leading only to
+        // the other, with the nav bar hidden behind both.
+        QuietAction(actions, "NotNow", "trails.notNow", flow.Close, "Leave trails");
+
+        CardClose(card, flow.Close, "Close trails");
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
     }
 
-    /// <summary>Enter a code: six boxes over one invisible field, on a card.</summary>
+    /// <summary>
+    /// Enter a code: six boxes on a card, over the blurred map.
+    ///
+    /// The boxes are grouped three and three. A six-character code read off a
+    /// whiteboard or out of a message is held in the head in two halves, and six
+    /// evenly spaced boxes ask the reader to keep count instead.
+    /// </summary>
     static GameObject BuildCodeDoor(Transform parent, DoorFlow flow, out CodeDoor door)
     {
         RectTransform panel = Door(parent, "Code", plain: false, inner: out RectTransform inner);
 
         door = panel.gameObject.AddComponent<CodeDoor>();
 
-        RectTransform card = UIFactory.Rect("Card", inner);
-        UIFactory.Corner(card, new Vector2(0.5f, 0.5f), new Vector2(984f, 690f),
-                         new Vector2(0f, 60f));
-        UIFactory.Fill(card, ThemeRole.Surface, 1f, UIShape.Rounded).raycastTarget = true;
-        Outline(card);
+        RectTransform card = Card(inner, "Card", 26f);
 
-        RectTransform stack = UIFactory.Rect("Stack", card);
-        UIFactory.Stretch(stack);
-        stack.offsetMin = new Vector2(40f, 34f);
-        stack.offsetMax = new Vector2(-40f, -40f);
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.VerticalStack(head, 6f, false);
 
-        TextMeshProUGUI title = UIFactory.Text("Title", stack, Title, ThemeRole.TextPrimary,
-                                               TextAlignmentOptions.TopLeft, "code.title",
-                                               FontStyles.Bold);
-        UIFactory.TopStretch(title.rectTransform, 66f);
+        Eyebrow(head, "code.eyebrow");
 
-        TextMeshProUGUI body = UIFactory.Text("Body", stack, Secondary, ThemeRole.TextSecondary,
-                                              TextAlignmentOptions.TopLeft, "code.body");
-        UIFactory.TopStretch(body.rectTransform, 60f, 70f);
+        UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "code.title", FontStyles.Bold);
+
+        UIFactory.Text("Body", head, Secondary, ThemeRole.TextSecondary,
+                       TextAlignmentOptions.TopLeft, "code.body");
 
         // --- the boxes, and the field underneath them ---
-        RectTransform boxRow = UIFactory.Rect("Boxes", stack);
-        UIFactory.TopStretch(boxRow, 150f, 156f);
+        RectTransform boxRow = UIFactory.Rect("Boxes", card);
+        UIFactory.Size(boxRow.gameObject, BoxHeight);
 
         CodeBoxes boxes = boxRow.gameObject.AddComponent<CodeBoxes>();
         door.boxes = boxes;
 
         // The real input, stretched across the whole row and drawn nowhere. Its own
-        // text is transparent; the boxes above are a picture of what is in it.
+        // text is transparent; the boxes above are a picture of what is in it. It
+        // stays the full width of the row so a tap anywhere near the boxes lands on
+        // it and puts the keyboard up.
         boxes.field = UIFactory.InputField("Field", boxRow, null,
                                            out TextMeshProUGUI hiddenPlaceholder);
         RectTransform fieldRect = boxes.field.GetComponent<RectTransform>();
         UIFactory.Stretch(fieldRect);
-        Transparent(boxes.field.GetComponent<Image>());
         Transparent(boxes.field.textComponent);
         Transparent(hiddenPlaceholder);
         boxes.field.caretColor = new Color(0f, 0f, 0f, 0f);
         boxes.field.customCaretColor = true;
 
-        boxes.labels = new TextMeshProUGUI[CodeBoxes.Length];
-        boxes.boxes = new Image[CodeBoxes.Length];
+        // The field's own graphic is drawn nowhere and still catches the tap, which
+        // is what puts the keyboard up when the reader presses a box.
+        Image catcher = boxes.field.GetComponent<Image>();
+        if (catcher != null)
+        {
+            Transparent(catcher);
+            catcher.raycastTarget = true;
+        }
 
-        const float BoxWidth = 138f;
-        const float BoxGap = 14f;
-        float rowWidth = CodeBoxes.Length * BoxWidth + (CodeBoxes.Length - 1) * BoxGap;
+        boxes.cells = new CodeBoxes.Cell[CodeBoxes.Length];
+
+        float span = CodeBoxes.Length * BoxWidth + (CodeBoxes.Length - 1) * BoxGap + BoxSplit;
+        float first = -span * 0.5f + BoxWidth * 0.5f;
 
         for (int i = 0; i < CodeBoxes.Length; i++)
         {
+            float x = first + i * (BoxWidth + BoxGap) +
+                      (i >= CodeBoxes.Length / 2 ? BoxSplit : 0f);
+
             RectTransform box = UIFactory.Rect("Box" + i, boxRow);
-            UIFactory.Corner(box, new Vector2(0.5f, 0.5f), new Vector2(BoxWidth, 150f),
-                             new Vector2(-rowWidth * 0.5f + BoxWidth * 0.5f +
-                                         i * (BoxWidth + BoxGap), 0f));
+            UIFactory.Corner(box, new Vector2(0.5f, 0.5f), new Vector2(BoxWidth, BoxHeight),
+                             new Vector2(x, 0f));
 
-            UIFactory.Fill(box, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded).raycastTarget = false;
+            CodeBoxes.Cell cell = new CodeBoxes.Cell();
 
-            // The lit edge is what tells the reader which box they are typing into.
+            // Coloured by CodeBoxes rather than by the theme, because these change
+            // with what the reader has typed as well as with the palette.
+            cell.fill = UIFactory.Plain(box, ThemeManager.Get(ThemeRole.SurfaceAlt),
+                                        UIShape.Rounded);
+            cell.fill.raycastTarget = false;
+
             RectTransform edge = UIFactory.Rect("Edge", box);
-            UIFactory.BottomStretch(edge, 6f, 12f);
-            edge.sizeDelta = new Vector2(-36f, 6f);
-            // The first box starts lit, so a scene that has not played looks the
-            // way the app will the moment it does.
-            Image line = UIFactory.Plain(
-                edge, ThemeManager.Get(i == 0 ? ThemeRole.Accent : ThemeRole.Line),
-                UIShape.Pill);
-            line.raycastTarget = false;
-            boxes.boxes[i] = line;
+            UIFactory.Stretch(edge);
+            cell.outline = UIFactory.Plain(
+                edge, ThemeManager.Get(i == 0 ? ThemeRole.Accent : ThemeRole.Line));
+            cell.outline.sprite = UISprites.RoundedOutline;
+            cell.outline.type = Image.Type.Sliced;
+            cell.outline.pixelsPerUnitMultiplier = 1f;
+            cell.outline.raycastTarget = false;
 
-            TextMeshProUGUI letter = UIFactory.Text("Letter", box, 58f, ThemeRole.TextPrimary,
+            // A bar down the middle of the empty box, blinking. The first version
+            // ran a short line along the inside of the bottom edge, which at this
+            // size reads as a rendering artefact rather than as a caret.
+            RectTransform caret = UIFactory.Rect("Caret", box);
+            UIFactory.Corner(caret, new Vector2(0.5f, 0.5f), new Vector2(4f, 62f),
+                             Vector2.zero);
+            UIFactory.Plain(caret, ThemeManager.Get(ThemeRole.Accent),
+                            UIShape.Pill).raycastTarget = false;
+            caret.gameObject.SetActive(false);
+            cell.caret = caret;
+
+            TextMeshProUGUI letter = UIFactory.Text("Letter", box, 64f, ThemeRole.TextPrimary,
                                                     TextAlignmentOptions.Center, null,
                                                     FontStyles.Bold);
             UIFactory.Stretch(letter.rectTransform);
             letter.text = string.Empty;
-            boxes.labels[i] = letter;
+            letter.raycastTarget = false;
+            cell.letter = letter;
+
+            boxes.cells[i] = cell;
         }
 
         // --- what came back ---
-        door.message = UIFactory.Text("Message", stack, Caption, ThemeRole.StatusPoor,
+        door.message = UIFactory.Text("Message", card, Secondary, ThemeRole.StatusPoor,
                                       TextAlignmentOptions.TopLeft);
-        UIFactory.TopStretch(door.message.rectTransform, 50f, 318f);
         door.message.gameObject.SetActive(false);
 
-        RectTransform join = UIFactory.Rect("Join", stack);
-        UIFactory.TopStretch(join, Tap, 378f);
-        door.joinButton = UIFactory.Button(join, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(join.gameObject);
-        Wire(door.joinButton.onClick, door.Join, "Join with code");
+        RectTransform actions = UIFactory.Rect("Actions", card);
+        UIFactory.VerticalStack(actions, 10f, false);
 
-        door.joinLabel = UIFactory.Text("Label", join, Body, ThemeRole.OnAccent,
-                                        TextAlignmentOptions.Center, "code.join",
-                                        FontStyles.Bold);
-        UIFactory.Stretch(door.joinLabel.rectTransform);
-        Unthemed(door.joinLabel.gameObject);
+        door.joinButton = PrimaryAction(actions, "Join", "code.join", door.Join,
+                                        "Join with code");
+        door.joinLabel = door.joinButton.GetComponentInChildren<TextMeshProUGUI>();
 
-        RectTransform cancel = UIFactory.Rect("Cancel", stack);
-        UIFactory.BottomStretch(cancel, Tap);
-        door.cancelButton = UIFactory.Button(cancel, ThemeRole.Surface, 0f);
-        Wire(door.cancelButton.onClick, door.Cancel, "Cancel code entry");
+        door.cancelButton = QuietAction(actions, "Cancel", "code.cancel", door.Cancel,
+                                        "Cancel code entry");
 
-        TextMeshProUGUI cancelLabel = UIFactory.Text("Label", cancel, Secondary,
-                                                     ThemeRole.TextSecondary,
-                                                     TextAlignmentOptions.Center, "code.cancel");
-        UIFactory.Stretch(cancelLabel.rectTransform);
+        CardClose(card, door.Cancel, "Close code entry");
 
         // Six characters in means there is nothing left to decide.
         UnityEventTools.AddVoidPersistentListener(boxes.onComplete, door.Join);
@@ -3419,7 +3523,7 @@ public static class AppUIBuilder
     /// a card one is transparent and lets the blurred map through.
     /// </summary>
     static RectTransform Door(Transform parent, string name, bool plain,
-                              out RectTransform inner, bool header = false)
+                              out RectTransform inner)
     {
         RectTransform panel = UIFactory.Rect(name, parent);
         UIFactory.Stretch(panel);
@@ -3436,24 +3540,12 @@ public static class AppUIBuilder
             catcher.color = new Color(0f, 0f, 0f, 0f);
         }
 
-        // A solid band behind the title, full bleed to the top edge of the glass.
-        //
-        // Without it the door's own heading is printed across whatever the map had
-        // in that corner - which was "My trails" over the trail chip and "No trails
-        // yet" over the scale bar. Tall enough that a notch pushing the title down
-        // still leaves it on the band.
-        if (header)
-        {
-            RectTransform band = UIFactory.Rect("Header", panel);
-            UIFactory.TopStretch(band, 250f);
-            UIFactory.Fill(band, ThemeRole.Background).raycastTarget = false;
-
-            RectTransform edge = UIFactory.Rect("Line", band);
-            UIFactory.BottomStretch(edge, 1f);
-            UIFactory.Fill(edge, ThemeRole.Line, 0.5f).raycastTarget = false;
-
-            band.SetAsFirstSibling();
-        }
+        // No header band any more. It existed because a bare title floating on the
+        // blurred map was printed across whatever the map had in that corner, and
+        // it fixed that by pasting an opaque full-bleed rectangle over the top
+        // quarter of the screen - which is the thing that made these screens look
+        // stapled together. A card carries its own surface, so the title has one
+        // without anything being bolted to the edge of the glass.
 
         AddFade(panel.gameObject, 22f);
 
@@ -3465,6 +3557,181 @@ public static class AppUIBuilder
         inner.offsetMax = new Vector2(-Margin, -Margin);
 
         return panel;
+    }
+
+    // ------------------------------------------------------------------- cards
+
+    /// <summary>Corner radius aside, everything a card is made of.</summary>
+    const float CardPad = 40f;
+    const float CardTop = 40f;
+    const float CardBottom = 34f;
+
+    /// <summary>How far the shadow reaches past the card, and how far it falls.</summary>
+    const float ShadowSpread = 40f;
+    const float ShadowDrop = 14f;
+
+    const float BoxWidth = 132f;
+    const float BoxHeight = 160f;
+    const float BoxGap = 16f;
+
+    /// <summary>The wider gap in the middle, which splits six boxes into two threes.</summary>
+    const float BoxSplit = 32f;
+
+    /// <summary>
+    /// A card resting on the bottom of the screen, with a shadow under it and an
+    /// edge around it.
+    ///
+    /// It sizes itself to whatever is put in it: the stack and the fitter are on
+    /// the card, and the three graphics that make it look like a surface are
+    /// marked ignoreLayout so the layout does not try to stack those as well.
+    ///
+    /// The card GameObject carries no graphic of its own. Its own Image would draw
+    /// before every child, which would put the shadow on top of the card it is
+    /// supposed to be under, so the surface is a child like the rest and the
+    /// drawing order is the child order: shadow, face, edge, then the content.
+    /// </summary>
+    static RectTransform Card(Transform parent, string name, float spacing)
+    {
+        RectTransform card = UIFactory.Rect(name, parent);
+        card.anchorMin = new Vector2(0f, 0f);
+        card.anchorMax = new Vector2(1f, 0f);
+        card.pivot = new Vector2(0.5f, 0f);
+        card.offsetMin = Vector2.zero;
+        card.offsetMax = Vector2.zero;
+
+        RectTransform shade = UIFactory.Rect("Shadow", card);
+        UIFactory.Stretch(shade);
+        shade.offsetMin = new Vector2(-ShadowSpread, -ShadowSpread - ShadowDrop);
+        shade.offsetMax = new Vector2(ShadowSpread, ShadowSpread - ShadowDrop);
+
+        // Black in both themes, and not a theme role. A shadow is the absence of
+        // light rather than a colour, and a light-theme shadow tinted towards the
+        // background is just a grey ring.
+        Image cast = UIFactory.Plain(shade, new Color(0f, 0f, 0f, 0.42f));
+        cast.sprite = UISprites.Shadow;
+        cast.type = Image.Type.Sliced;
+        cast.pixelsPerUnitMultiplier = 1f;
+        cast.raycastTarget = false;
+        Ignore(shade);
+
+        RectTransform face = UIFactory.Rect("Face", card);
+        UIFactory.Stretch(face);
+
+        // A raycast target, so a tap that lands on the card does not fall through
+        // to the map behind a screen the reader has not finished with.
+        UIFactory.Fill(face, ThemeRole.Surface, 1f, UIShape.Card).raycastTarget = true;
+        Ignore(face);
+
+        RectTransform edge = UIFactory.Rect("Outline", card);
+        UIFactory.Stretch(edge);
+        Image line = UIFactory.Fill(edge, ThemeRole.Line);
+        line.sprite = UISprites.CardOutline;
+        line.type = Image.Type.Sliced;
+        line.pixelsPerUnitMultiplier = 1f;
+        line.raycastTarget = false;
+        Ignore(edge);
+
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(card, spacing);
+        stack.padding = new RectOffset((int)CardPad, (int)CardPad,
+                                       (int)CardTop, (int)CardBottom);
+
+        return card;
+    }
+
+    /// <summary>
+    /// Keeps a graphic out of its parent's layout. The card's surface, edge and
+    /// shadow are all stretched to the card and are not items in its stack.
+    /// </summary>
+    static void Ignore(RectTransform rt)
+    {
+        LayoutElement element = rt.gameObject.GetComponent<LayoutElement>();
+        if (element == null)
+            element = rt.gameObject.AddComponent<LayoutElement>();
+
+        element.ignoreLayout = true;
+    }
+
+    /// <summary>
+    /// The small capitalised line above a card's title.
+    ///
+    /// It says what kind of thing the card is, which a title alone does not: "My
+    /// trails" is a heading, and a heading on a surface floating over a map could
+    /// be a section of the map. Set in the accent so the card has one coloured
+    /// thing in it that is not a button.
+    /// </summary>
+    static TextMeshProUGUI Eyebrow(Transform parent, string key)
+    {
+        TextMeshProUGUI label = UIFactory.Text("Eyebrow", parent, 28f, ThemeRole.Accent,
+                                               TextAlignmentOptions.TopLeft, key,
+                                               FontStyles.Bold);
+        label.characterSpacing = 10f;
+        return label;
+    }
+
+    /// <summary>The one filled button on a card.</summary>
+    static Button PrimaryAction(Transform parent, string name, string key,
+                                UnityEngine.Events.UnityAction call, string what)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        UIFactory.Size(rt.gameObject, Tap);
+
+        Button button = UIFactory.Button(rt, ThemeRole.Accent, 1f, UIShape.Rounded);
+        Unthemed(rt.gameObject);
+        Wire(button.onClick, call, what);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", rt, Body, ThemeRole.OnAccent,
+                                               TextAlignmentOptions.Center, key,
+                                               FontStyles.Bold);
+        UIFactory.Stretch(label.rectTransform);
+        Unthemed(label.gameObject);
+
+        return button;
+    }
+
+    /// <summary>
+    /// The one under it: a label and a tap target, with no box drawn around it.
+    ///
+    /// A second outlined button next to the first reads as a second choice of
+    /// equal weight, and these never are - this is the way out of the card, not
+    /// the other thing to do with it.
+    /// </summary>
+    static Button QuietAction(Transform parent, string name, string key,
+                              UnityEngine.Events.UnityAction call, string what)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        UIFactory.Size(rt.gameObject, 96f);
+
+        Button button = UIFactory.Button(rt, ThemeRole.Surface, 0f);
+        Wire(button.onClick, call, what);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", rt, Secondary, ThemeRole.TextSecondary,
+                                               TextAlignmentOptions.Center, key,
+                                               FontStyles.Bold);
+        UIFactory.Stretch(label.rectTransform);
+
+        return button;
+    }
+
+    /// <summary>
+    /// The close control in a card's top corner.
+    ///
+    /// Always there. It used to appear only when a trail was already open, which
+    /// is the one state in which the reader does not need it - and its absence in
+    /// the other state is what left them with no way off the screen at all.
+    /// </summary>
+    static Button CardClose(RectTransform card, UnityEngine.Events.UnityAction call,
+                            string what)
+    {
+        RectTransform rt = UIFactory.Rect("Close", card);
+        UIFactory.Corner(rt, new Vector2(1f, 1f), new Vector2(84f, 84f),
+                         new Vector2(-24f, -24f));
+        Ignore(rt);
+
+        Button button = UIFactory.Button(rt, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
+        Wire(button.onClick, call, what);
+        Icon(rt, AppIcon.Close, 38f, ThemeRole.TextSecondary);
+
+        return button;
     }
 
     /// <summary>
@@ -3480,8 +3747,10 @@ public static class AppUIBuilder
                                 out TextMeshProUGUI titleLabel)
     {
         RectTransform rt = UIFactory.Rect(name, parent);
-        VerticalLayoutGroup stack = UIFactory.VerticalStack(rt, 12f, false);
-        stack.padding = new RectOffset(0, 0, 40, 40);
+        // No padding of its own. Inside a card the stack around it already spaces
+        // it, and forty more at the top left the note floating well below the
+        // subtitle it was standing in for.
+        UIFactory.VerticalStack(rt, 8f, false);
 
         titleLabel = UIFactory.Text("Title", rt, Body, ThemeRole.TextSecondary,
                                     TextAlignmentOptions.TopLeft, titleKey, FontStyles.Bold);
