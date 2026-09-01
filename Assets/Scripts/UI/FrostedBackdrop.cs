@@ -84,6 +84,25 @@ public class FrostedBackdrop : MonoBehaviour
     {
         _capturing = true;
 
+        // Out of our own photograph.
+        //
+        // The caller switches this object on before asking for the capture, so
+        // without this the scrim is already over the map when the shutter fires.
+        // The blur then contains it and the scrim is drawn over the blur a second
+        // time; two coats of 0.80 leave four percent of the map, which is a black
+        // rectangle where the map was meant to show through.
+        //
+        // Only the scrim is saved and restored. Blur sets image.enabled itself on
+        // every path it can take - true with a texture, false without one - so
+        // restoring that would only fight it.
+        bool scrimWas = scrim != null && scrim.enabled;
+
+        if (scrim != null)
+            scrim.enabled = false;
+
+        if (image != null)
+            image.enabled = false;
+
         // The framebuffer only holds a finished frame at the end of one.
         yield return new WaitForEndOfFrame();
 
@@ -100,6 +119,9 @@ public class FrostedBackdrop : MonoBehaviour
             if (image != null)
                 image.enabled = false;
         }
+
+        if (scrim != null)
+            scrim.enabled = scrimWas;
 
         _capturing = false;
         Done(then);

@@ -1340,6 +1340,11 @@ public static class AppUIBuilder
     /// Tapping it opens the nearby list, which is where the names are. The disc
     /// answers "what is around me" at a glance and hands off the rest, rather than
     /// trying to label three dots the size of a full stop.
+    ///
+    /// North stays at the top and an arrow in the middle turns with the phone. The
+    /// arrow replaced a cone drawn as the camera's field of view: on a disc three
+    /// hundred units across that cone covered a third of the plot, so the markers
+    /// it was meant to sit behind had to be read through it.
     /// </summary>
     static CameraRadar BuildRadar(RectTransform parent, UserLocationService location,
                                   CameraTabController controller)
@@ -1366,26 +1371,6 @@ public static class AppUIBuilder
         radar.maxRangeMetres = 500d;
         radar.circleSprite = UISprites.Circle;
 
-        // The wedge, pointing up from the middle. Half a phone camera's field of
-        // view either side of straight ahead.
-        // The cone, pivoting on the reader. Its point sits at the centre and it
-        // opens outward, fading as it goes - the shape Google Maps and Waze both
-        // use, and the only thing on the disc that turns with the phone.
-        //
-        // Sized so its far corners stay inside the rim: at a 62 degree spread the
-        // corners sit 1.17 radii from the point, so the height is held below that.
-        RectTransform facing = UIFactory.Rect("Facing", rt);
-        facing.anchorMin = new Vector2(0.5f, 0.5f);
-        facing.anchorMax = new Vector2(0.5f, 0.5f);
-        facing.pivot = new Vector2(0.5f, 0f);
-        facing.sizeDelta = new Vector2(Radius * 1.02f, Radius * 0.85f);
-        facing.anchoredPosition = Vector2.zero;
-
-        Color beamTint = ThemeManager.Get(ThemeRole.Accent);
-        beamTint.a = 0.55f;
-        UIFactory.Plain(facing, beamTint, UIShape.Beam).raycastTarget = false;
-        radar.facing = facing;
-
         Ring(rt, "InnerRing", Size * 0.52f, ThemeRole.TextPrimary, 0.10f, 2f);
         Ring(rt, "Rim", Size - 3f, ThemeRole.TextPrimary, 0.16f, 2f);
 
@@ -1402,8 +1387,29 @@ public static class AppUIBuilder
         radar.dotParent = dots;
 
         RectTransform me = UIFactory.Rect("Me", rt);
-        UIFactory.Corner(me, new Vector2(0.5f, 0.5f), new Vector2(16f, 16f), Vector2.zero);
+        UIFactory.Corner(me, new Vector2(0.5f, 0.5f), new Vector2(18f, 18f), Vector2.zero);
         UIFactory.Plain(me, Color.white, UIShape.Circle).raycastTarget = false;
+
+        // An arrow, not a cone.
+        //
+        // The cone was drawn as the camera's field of view, and on a disc this size
+        // it covered a third of everything - so the markers it was meant to sit
+        // behind were read through it. An arrow says the one thing that is actually
+        // useful, which is which way the reader is facing, and says it the way
+        // every map app the reader already uses says it.
+        //
+        // Built last so it draws over the dot underneath, and centred with its
+        // pivot in the middle so rotating it spins it in place.
+        RectTransform facing = UIFactory.Rect("Facing", rt);
+        facing.anchorMin = new Vector2(0.5f, 0.5f);
+        facing.anchorMax = new Vector2(0.5f, 0.5f);
+        facing.pivot = new Vector2(0.5f, 0.5f);
+        facing.sizeDelta = new Vector2(38f, 44f);
+        facing.anchoredPosition = Vector2.zero;
+
+        UIFactory.Plain(facing, ThemeManager.Get(ThemeRole.Accent),
+                        UIShape.Triangle).raycastTarget = false;
+        radar.facing = facing;
 
         return radar;
     }
@@ -3398,6 +3404,12 @@ public static class AppUIBuilder
         door = panel.gameObject.AddComponent<CodeDoor>();
 
         RectTransform card = Card(inner, "Card", 26f);
+
+        // The one card in the app that is typed into, so the one that has to get
+        // out of the keyboard's way. Without this the keyboard covers the six
+        // boxes - the exact thing the reader is watching while they fill them in.
+        KeyboardAvoider avoider = card.gameObject.AddComponent<KeyboardAvoider>();
+        avoider.target = card;
 
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.VerticalStack(head, 6f, false);

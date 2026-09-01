@@ -48,7 +48,10 @@ public class MapTileLayer : MonoBehaviour
 
     [Tooltip("Textures held in memory. Beyond this the least recently used are " +
              "dropped - they stay on disk, so getting them back is not a download.")]
-    public int maxCachedTextures = 96;
+    // Comfortably more than one screenful. At 96 a single tall view could want
+    // more tiles than the cache holds, so every pan evicted textures that were
+    // still on screen and immediately asked for them again.
+    public int maxCachedTextures = 220;
 
     [Tooltip("OSM has no tiles past this, and asking wastes a request.")]
     public int maxZoom = 19;
@@ -57,6 +60,15 @@ public class MapTileLayer : MonoBehaviour
 
     const int TilePixels = 256;
     const double EarthCircumference = 40075016.686d;
+
+    /// <summary>
+    /// The most tiles one view may ask for before the zoom is stepped out.
+    ///
+    /// A tall phone at the worst rounding of ZoomFor needs about seventy-seven, so
+    /// this is that with room to spare rather than a number chosen to feel safe.
+    /// It is a guard against a pathological view, not a rendering budget.
+    /// </summary>
+    const int MaxTilesOnScreen = 140;
 
     class Tile
     {
@@ -161,7 +173,38 @@ public class MapTileLayer : MonoBehaviour
         if (!map.TryGetViewCentre(out double centreLat, out double centreLon))
             return;
 
+        Rect view = map.ViewRect;
+
+        // The view corners in tile coordinates. Latitude runs the other way from y,
+        // so the top of the screen is the smaller tile row.
+        map.Unproject(new Vector2(view.xMin, view.yMax), out double northLat, out double westLon);
+        map.Unproject(new Vector2(view.xMax, view.yMin), out double southLat, out double eastLon);
+
         int zoom = ZoomFor(centreLat);
+        int n, minX, maxX, minY, maxY;
+
+        // Step out until the grid fits.
+        //
+        // This used to return when the count went over its cap, which drew nothing
+        // and left the previous zoom's tiles stranded on screen. Each step down
+        // quarters the number of tiles, so this ends - at worst at minZoom, where
+        // the whole world is a handful of them. Coarser than asked for beats empty.
+        while (true)
+        {
+            n = 1 << zoom;
+
+            minX = Mathf.FloorToInt((float)LonToTileX(westLon, n));
+            maxX = Mathf.FloorToInt((float)LonToTileX(eastLon, n));
+            minY = Mathf.FloorToInt((float)LatToTileY(northLat, n));
+            maxY = Mathf.FloorToInt((float)LatToTileY(southLat, n));
+
+            long count = (long)(maxX - minX + 1) * (maxY - minY + 1);
+
+            if (count <= MaxTilesOnScreen || zoom <= minZoom)
+                break;
+
+            zoom--;
+        }
 
         // A zoom change replaces every tile, so the old set goes at once rather
         // than fading out one at a time as they scroll off.
@@ -174,23 +217,6 @@ public class MapTileLayer : MonoBehaviour
 
             _live.Clear();
         }
-
-        Rect view = map.ViewRect;
-        int n = 1 << zoom;
-
-        // The view corners in tile coordinates. Latitude runs the other way from y,
-        // so the top of the screen is the smaller tile row.
-        map.Unproject(new Vector2(view.xMin, view.yMax), out double northLat, out double westLon);
-        map.Unproject(new Vector2(view.xMax, view.yMin), out double southLat, out double eastLon);
-
-        int minX = Mathf.FloorToInt((float)LonToTileX(westLon, n));
-        int maxX = Mathf.FloorToInt((float)LonToTileX(eastLon, n));
-        int minY = Mathf.FloorToInt((float)LatToTileY(northLat, n));
-        int maxY = Mathf.FloorToInt((float)LatToTileY(southLat, n));
-
-        // A pathological zoom-out would otherwise ask for thousands of tiles.
-        if ((maxX - minX + 1) * (maxY - minY + 1) > 64)
-            return;
 
         _wanted.Clear();
 
