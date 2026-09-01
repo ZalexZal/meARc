@@ -1206,6 +1206,62 @@ public static class AppUIBuilder
         controller.infoPanel = info;
         controller.liveARView = live.gameObject;
         controller.arSession = Object.FindFirstObjectByType<ARSession>(FindObjectsInactive.Include);
+
+        ARCoreExtensions extensionsObject =
+            Object.FindFirstObjectByType<ARCoreExtensions>(FindObjectsInactive.Include);
+
+        controller.arExtensions = extensionsObject != null ? extensionsObject.gameObject : null;
+
+        if (controller.arExtensions == null)
+        {
+            _notes.Add("No ARCore Extensions object found, so it cannot be deferred.");
+        }
+        else
+        {
+            // Saved switched off.
+            //
+            // ARCore Extensions running when a runtime permission dialog appears
+            // kills the process: a SIGSEGV at address zero on the Unity main
+            // thread, inside Unity's own Java message handling. Found by disabling
+            // one root object at a time in a real build - this one alone was
+            // enough to survive the dialog, and the whole Canvas was not.
+            //
+            // Done here rather than in a script, because the script that used to
+            // do it lives on the Camera tab, which is inactive at launch, so its
+            // Awake never ran. A scene that is already correct needs nobody to
+            // remember to correct it.
+            controller.arExtensions.SetActive(false);
+            EditorUtility.SetDirty(controller.arExtensions);
+        }
+
+        // The session goes with it, so nothing claims the camera before the reader
+        // has asked for a camera.
+        if (controller.arSession != null)
+        {
+            controller.arSession.gameObject.SetActive(false);
+            EditorUtility.SetDirty(controller.arSession.gameObject);
+        }
+
+        // And the Geospatial components that live somewhere else.
+        //
+        // ARStreetscapeGeometryManager sits on XR Origin, not on the ARCore
+        // Extensions object, so switching that object off left this one running -
+        // throwing a NullReferenceException every frame from launch, on a screen
+        // with no camera on it, and taking the process down on a background thread
+        // the moment the app was resumed.
+        var deferred = new System.Collections.Generic.List<Behaviour>();
+
+        ARStreetscapeGeometryManager streetscape =
+            Object.FindFirstObjectByType<ARStreetscapeGeometryManager>(FindObjectsInactive.Include);
+
+        if (streetscape != null)
+        {
+            streetscape.enabled = false;
+            EditorUtility.SetDirty(streetscape);
+            deferred.Add(streetscape);
+        }
+
+        controller.arDeferred = deferred.ToArray();
         controller.cameraBackground =
             Object.FindFirstObjectByType<ARCameraBackground>(FindObjectsInactive.Include);
 

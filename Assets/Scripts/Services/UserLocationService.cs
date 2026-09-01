@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using Google.XR.ARCoreExtensions;
 using UnityEngine;
+using UnityEngine.XR.ARFoundation;
+
 using UnityEngine.XR.ARSubsystems;
 
 public enum VpsStatus
@@ -270,10 +272,42 @@ public class UserLocationService : MonoBehaviour
         return true;
     }
 
+    /// <summary>Named here so the string is not repeated at the call site.</summary>
+    const string FineLocation = "android.permission.ACCESS_FINE_LOCATION";
+
     IEnumerator StartGps()
     {
-        // ARCore already asks for location permission when Geospatial mode turns on,
-        // so this normally inherits it rather than prompting a second time.
+        // A few frames of daylight first.
+        //
+        // Unity used to request every declared permission during startup, and the
+        // app could not survive the dialog: it arrived while the window was still
+        // settling, the activity paused and never resumed. That request is off now
+        // (see AndroidPermissionsManifest), so this is the one that asks - and it
+        // waits until there is a drawn, running app behind the dialog.
+        yield return null;
+        yield return null;
+        yield return new WaitForSecondsRealtime(0.5f);
+
+        // Through AndroidPermissions, which does not register a native callback.
+        // Unity's callback delivery is what crashes: answering any dialog killed
+        // the app with a SIGSEGV at address zero inside Unity's own result
+        // handling, whoever asked and whenever.
+        bool granted = AndroidPermissions.Has(FineLocation);
+
+        if (!granted)
+        {
+            yield return AndroidPermissions.Ask(FineLocation, answer => granted = answer);
+        }
+
+        // Refused. The map says where it does not know rather than pretending, and
+        // everything that does not need a position still works.
+        if (!granted)
+        {
+            Debug.LogWarning("[Location] No location permission; running without a position.");
+            yield break;
+        }
+
+
         if (!Input.location.isEnabledByUser)
             yield break;
 
@@ -293,6 +327,27 @@ public class UserLocationService : MonoBehaviour
 
     IEnumerator CheckCoverage(double latitude, double longitude)
     {
+        // Not without a session.
+        //
+        // CheckVpsAvailabilityAsync calls into ARCore's native library on a
+        // background thread. With no session there is nothing on the other side of
+        // that call and the process dies - a SIGSEGV at address zero, on a thread
+        // whose stack contains no Unity frames at all, which no try/catch can see
+        // because a segfault is not an exception.
+        //
+        // This runs the moment HasValidPose turns true, which on a fresh install is
+        // the moment the location permission is granted. That is why this read as
+        // "answering a permission dialog closes the app" for so long: the dialog
+        // and the first fix are the same instant.
+        if (ARSession.state != ARSessionState.SessionInitializing &&
+            ARSession.state != ARSessionState.SessionTracking)
+        {
+            // Ask again later. The camera tab starts AR, and coverage is only worth
+            // knowing once there is something to use it for.
+            _coverageChecked = false;
+            yield break;
+        }
+
         VpsAvailabilityPromise promise =
             AREarthManager.CheckVpsAvailabilityAsync(latitude, longitude);
 

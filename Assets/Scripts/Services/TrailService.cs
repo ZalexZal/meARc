@@ -175,8 +175,21 @@ public class TrailService : MonoBehaviour
 
         LastError = null;
 
+        // Asking for our own rows explicitly.
+        //
+        // Row-level security is what makes this safe and it is not what makes it
+        // correct: an owner is allowed to read the whole roster of a trail they
+        // own, so without this filter the list would show one row per member and
+        // draw the same trail several times over. The policy decides what may be
+        // returned; the query decides what is being asked for, and those are two
+        // different questions.
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        string mine = auth != null && !string.IsNullOrEmpty(auth.UserId)
+            ? "&user_id=eq." + UnityWebRequest.EscapeURL(auth.UserId)
+            : string.Empty;
+
         string url = config.Endpoint(
-            "/rest/v1/world_members?select=role,worlds(id,name,mode)");
+            "/rest/v1/world_members?select=role,worlds(id,name,mode)" + mine);
 
         using (UnityWebRequest request = SupabaseAuth.Get(url))
         {

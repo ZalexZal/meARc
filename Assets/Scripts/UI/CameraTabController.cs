@@ -4,9 +4,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-using UnityEngine.Android;
-#endif
 
 /// <summary>
 /// Owns the Camera tab: what sits over the live feed, and which marker the chrome
@@ -23,13 +20,18 @@ using UnityEngine.Android;
 /// turning it off would stop Geospatial localization and localization is what the
 /// reader is waiting for.
 ///
-/// The delayed start is not a preference. ARCore claims the camera the moment the
-/// session is enabled, and the session used to be enabled in the scene from
-/// launch - so a fresh install put a camera permission dialog in front of somebody
-/// who had not seen the app yet, and the activity was finished inside that flow.
-/// The app closed on first launch and worked on the second, because by then the
-/// permission was granted and nothing prompted. A map app has no business opening
-/// the camera before it has drawn a map.
+/// The delayed start is not a preference, and it took a long time to understand.
+/// The app closed itself on a fresh install and worked on the second launch, and
+/// the reason was not the session at all: it was ARCore Extensions, which ran
+/// from launch and cannot survive a runtime permission dialog. Any dialog, asked
+/// by anyone, at any point - the process dies with a SIGSEGV at address zero on
+/// the Unity main thread, inside Unity's own Java message handling. An otherwise
+/// identical build with an empty scene survives the same dialog, and so does one
+/// with an AR session in it; disabling this one object is what stops it.
+///
+/// Both are deferred here, so nothing AR-related is running while a permission
+/// can still be asked for. It is also right on its own terms: a map app has no
+/// business opening the camera before it has drawn a map.
 /// </summary>
 public class CameraTabController : MonoBehaviour
 {
@@ -45,6 +47,16 @@ public class CameraTabController : MonoBehaviour
     [Tooltip("Off until the reader opens this tab for the first time, and left " +
              "running from then on - see the note on this class.")]
     public ARSession arSession;
+
+    [Tooltip("The ARCore Extensions object, which is what Geospatial runs on. Off " +
+             "at launch for the same reason as the session, and for a sharper one: " +
+             "it is what crashed on a permission dialog.")]
+    public GameObject arExtensions;
+
+    [Tooltip("Geospatial components that live on other objects - XR Origin, mostly - " +
+             "and throw every frame if they run without a session. Switched off in " +
+             "the saved scene and switched on with the session.")]
+    public Behaviour[] arDeferred = new Behaviour[0];
 
     [Tooltip("Switched off while the reader is on another tab. The session keeps " +
              "running and keeps localizing; only the blit stops.")]
@@ -112,11 +124,13 @@ public class CameraTabController : MonoBehaviour
         if (infoPanel != null)
             infoPanel.onWillOpen = CloseNearby;
 
-        // Before anything can enable it. Awake runs while the app is still opening
-        // and this tab is not the one on screen, so the session must not be the
-        // thing that decides when the camera is claimed.
-        if (arSession != null)
-            arSession.enabled = false;
+        // Nothing is switched off here.
+        //
+        // This tab is inactive at launch - the app opens on the map - so Awake
+        // does not run until the reader first opens it, which is exactly too late
+        // to be deciding what happens at startup. Both AR objects are saved
+        // switched off by AppUIBuilder instead, where being right does not depend
+        // on anything running.
     }
 
     void OnEnable()
@@ -158,33 +172,60 @@ public class CameraTabController : MonoBehaviour
     /// themselves. That is the whole difference between a permission request and
     /// an ambush.
     /// </summary>
+    const string CameraPermission = "android.permission.CAMERA";
+
     void WakeCamera()
     {
         if (arSession == null || arSession.enabled || _asking)
             return;
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        if (!AndroidPermissions.Has(CameraPermission))
         {
             _asking = true;
+            StartCoroutine(AndroidPermissions.Ask(CameraPermission, granted =>
+            {
+                _asking = false;
 
-            PermissionCallbacks callbacks = new PermissionCallbacks();
-            callbacks.PermissionGranted += _ => { _asking = false; _cameraRefused = false; StartSession(); };
-            callbacks.PermissionDenied += _ => { _asking = false; RefuseCamera(); };
-            callbacks.PermissionDeniedAndDontAskAgain += _ => { _asking = false; RefuseCamera(); };
+                if (granted)
+                {
+                    _cameraRefused = false;
+                    StartSession();
+                }
+                else
+                {
+                    RefuseCamera();
+                }
+            }));
 
-            Permission.RequestUserPermission(Permission.Camera, callbacks);
             return;
         }
-#endif
+
 
         StartSession();
     }
 
     void StartSession()
     {
+        // The whole object, not just the component: it ships switched off, so
+        // enabling the ARSession alone would enable a component on something that
+        // is not running.
         if (arSession != null)
+        {
+            if (!arSession.gameObject.activeSelf)
+                arSession.gameObject.SetActive(true);
+
             arSession.enabled = true;
+        }
+
+        // After the session, which is what it attaches to.
+        if (arExtensions != null && !arExtensions.activeSelf)
+            arExtensions.SetActive(true);
+
+        for (int i = 0; i < arDeferred.Length; i++)
+        {
+            if (arDeferred[i] != null)
+                arDeferred[i].enabled = true;
+        }
 
         SetFeedVisible(isActiveAndEnabled);
     }
