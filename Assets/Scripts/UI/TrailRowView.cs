@@ -18,10 +18,94 @@ public class TrailRowView : MonoBehaviour
     [Tooltip("Marks the trail currently open. Off for every other row.")]
     public GameObject currentMark;
 
+    [Header("Leaving")]
+    public Button leaveButton;
+    public TextMeshProUGUI leaveLabel;
+
+    [Tooltip("Seconds an armed Leave waits before going quiet again.")]
+    public float armedSeconds = 4f;
+
+    /// <summary>Set by the list. Given the trail this row is showing.</summary>
+    public System.Action<TrailService.Trail> onLeave;
+
+    TrailService.Trail _trail;
+    bool _armed;
+    float _armedAt;
+
+    void Awake()
+    {
+        if (leaveButton != null)
+            leaveButton.onClick.AddListener(Tap);
+    }
+
+    void OnDisable()
+    {
+        Disarm();
+    }
+
+    void Update()
+    {
+        // An armed row left alone goes quiet rather than waiting all day for a tap
+        // the reader has stopped intending.
+        if (_armed && Time.unscaledTime - _armedAt > armedSeconds)
+            Disarm();
+    }
+
+    /// <summary>
+    /// First tap arms, second leaves.
+    ///
+    /// This sits a centimetre from the control that opens the trail, and undoing
+    /// it means finding whoever has the code. A dialog would be the other way to
+    /// do it; two taps on the same control is fewer moving parts and says the same
+    /// thing, as long as the label changes - which is the part that makes it a
+    /// question rather than a delay.
+    /// </summary>
+    void Tap()
+    {
+        if (!_armed)
+        {
+            _armed = true;
+            _armedAt = Time.unscaledTime;
+            DrawLeave();
+            return;
+        }
+
+        _armed = false;
+        DrawLeave();
+
+        if (onLeave != null && _trail != null)
+            onLeave(_trail);
+    }
+
+    public void Disarm()
+    {
+        if (!_armed)
+            return;
+
+        _armed = false;
+        DrawLeave();
+    }
+
+    void DrawLeave()
+    {
+        if (leaveLabel == null)
+            return;
+
+        leaveLabel.text = AppStrings.Get(_armed ? "trails.leaveConfirm" : "trails.leave");
+        leaveLabel.color = ThemeManager.Get(_armed ? ThemeRole.StatusPoor : ThemeRole.TextMuted);
+    }
+
     public void Bind(TrailService.Trail trail, bool current)
     {
         if (trail == null)
             return;
+
+        _trail = trail;
+
+        // A row reused for a different trail must not still be holding the last
+        // one's armed Leave.
+        _armed = false;
+        DrawLeave();
 
         if (nameLabel != null)
             nameLabel.text = string.IsNullOrWhiteSpace(trail.name) ? trail.id : trail.name;

@@ -2948,9 +2948,27 @@ public static class AppUIBuilder
                                         TextAlignmentOptions.Left);
         UIFactory.Size(view.metaLabel.gameObject, 42f);
 
-        Image tick = Icon(row, AppIcon.Check, 40f, ThemeRole.Accent, out RectTransform tickRect);
+        Icon(row, AppIcon.Check, 40f, ThemeRole.Accent, out RectTransform tickRect);
         view.currentMark = tickRect.gameObject;
         tickRect.gameObject.SetActive(false);
+
+        // Leaving, at the far end of the row.
+        //
+        // A word rather than an icon. There is no symbol that reliably means "give
+        // up your place on this trail", and the one control here that undoes
+        // something should not be the one the reader has to guess at. It is quiet
+        // until it is armed, and then it is the only red thing on the card.
+        RectTransform leave = UIFactory.Rect("Leave", row);
+        UIFactory.Size(leave.gameObject, 84f, 132f);
+        view.leaveButton = UIFactory.Button(leave, ThemeRole.Surface, 0f, UIShape.Rounded);
+
+        view.leaveLabel = UIFactory.Text("Label", leave, Caption, ThemeRole.TextMuted,
+                                         TextAlignmentOptions.Center, "trails.leave",
+                                         FontStyles.Bold);
+        UIFactory.Stretch(view.leaveLabel.rectTransform);
+
+        // Coloured by the row as it arms, so the theme must not paint over it.
+        Unthemed(view.leaveLabel.gameObject);
 
         GameObject saved = PrefabUtility.SaveAsPrefabAsset(temp, TrailRowPrefabPath);
         Object.DestroyImmediate(temp);

@@ -242,6 +242,31 @@ public class SupabaseAuth : MonoBehaviour
         return request;
     }
 
+    /// <summary>
+    /// A DELETE carrying the reader's own token, for the one thing they are
+    /// allowed to delete: their membership of a trail.
+    /// </summary>
+    public static UnityWebRequest Delete(string url)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        UnityWebRequest request = UnityWebRequest.Delete(url);
+        request.timeout = 20;
+
+        if (config != null)
+            request.SetRequestHeader("apikey", config.anonKey);
+
+        // The anon key is no use here - row-level security matches user_id against
+        // auth.uid(), and the anon key has none. A signed-out caller deletes
+        // nothing, which is correct, so this does not fall back to it.
+        string token = Instance != null && Instance.IsSignedIn ? Instance.AccessToken : null;
+
+        if (!string.IsNullOrEmpty(token))
+            request.SetRequestHeader("Authorization", "Bearer " + token);
+
+        return request;
+    }
+
     static string Trim(string text)
     {
         if (string.IsNullOrEmpty(text))

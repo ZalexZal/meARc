@@ -150,7 +150,26 @@ public class TrailsDoor : MonoBehaviour
                 row.button.onClick.RemoveAllListeners();
                 row.button.onClick.AddListener(() => Open(id));
             }
+
+            row.onLeave = Leave;
         }
+    }
+
+    /// <summary>
+    /// The row has asked twice and been answered twice.
+    ///
+    /// The list refreshes itself from the server rather than removing the row on
+    /// the spot: if the delete did not happen, the trail should still be there,
+    /// and a row that vanishes optimistically is a row that lies.
+    /// </summary>
+    void Leave(TrailService.Trail trail)
+    {
+        TrailService service = TrailService.Instance;
+
+        if (service == null || trail == null)
+            return;
+
+        StartCoroutine(service.Leave(trail.id, _ => Refresh()));
     }
 
     void Open(string worldId)

@@ -100,6 +100,67 @@ public class TrailService : MonoBehaviour
     }
 
     /// <summary>
+    /// Gives up a trail.
+    ///
+    /// Deletes this reader's own membership row and nothing else - the policy that
+    /// allows it matches user_id against auth.uid(), so this cannot remove anybody
+    /// else however the request is shaped. The trail and its markers are untouched;
+    /// what goes is the reader's claim on them, and rejoining is the same code
+    /// again.
+    /// </summary>
+    public IEnumerator Leave(string worldId, Action<bool> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        SupabaseAuth auth = SupabaseAuth.Instance;
+
+        if (config == null || auth == null || !auth.IsSignedIn ||
+            string.IsNullOrEmpty(worldId) || string.IsNullOrEmpty(auth.UserId))
+        {
+            if (done != null) done(false);
+            yield break;
+        }
+
+        string url = config.Endpoint("/rest/v1/world_members" +
+                                     "?world_id=eq." + UnityWebRequest.EscapeURL(worldId) +
+                                     "&user_id=eq." + UnityWebRequest.EscapeURL(auth.UserId));
+
+        bool ok;
+
+        using (UnityWebRequest request = SupabaseAuth.Delete(url))
+        {
+            yield return request.SendWebRequest();
+
+            ok = request.result == UnityWebRequest.Result.Success;
+
+            if (!ok)
+            {
+                LastError = request.error;
+                Debug.LogWarning("[Trails] Could not leave: " + request.error);
+            }
+        }
+
+        if (ok)
+        {
+            // Standing in the trail they just left. Nothing is selected now, and
+            // the map goes back to asking which trail - which is honest, because
+            // there is no longer one to draw.
+            if (SelectedId == worldId)
+            {
+                SelectedId = string.Empty;
+                PlayerPrefs.DeleteKey(SelectedKey);
+                PlayerPrefs.Save();
+            }
+
+            yield return RefreshMine();
+        }
+
+        Raise();
+
+        if (done != null)
+            done(ok);
+    }
+
+    /// <summary>
     /// Reads the trails this reader is a member of.
     ///
     /// The embedded worlds(...) is PostgREST following the foreign key from

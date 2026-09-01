@@ -135,6 +135,9 @@ public static class AppStrings
         { "tab.search", "Search" },
         { "tab.settings", "Settings" },
 
+        { "camera.refused", "No camera access, so there is nothing to look " +
+                            "through. The map still works - you can allow the " +
+                            "camera in Settings if you want the AR view." },
         { "camera.nearbyCount", "{0} nearby" },
         { "nearby.title", "Markers nearby" },
         { "nearby.empty", "No markers within {0} m" },
@@ -215,6 +218,8 @@ public static class AppStrings
         { "trails.subtitle", "Pick one to walk it." },
         { "trails.choose", "Choose a trail" },
         { "trails.notNow", "Not now" },
+        { "trails.leave", "Leave" },
+        { "trails.leaveConfirm", "Confirm" },
         { "trails.join", "Join with a code" },
         { "trails.loading", "Looking for your trails" },
         { "trails.failed", "Couldn’t reach the server. Anything joined earlier still works." },
@@ -338,6 +343,9 @@ public static class AppStrings
         { "tab.search", "Търсене" },
         { "tab.settings", "Настройки" },
 
+        { "camera.refused", "Няма достъп до камерата, затова няма какво " +
+                            "да се види. Картата работи - можете да разрешите " +
+                            "камерата от Настройки." },
         { "camera.nearbyCount", "{0} наблизо" },
         { "nearby.title", "Маркери наблизо" },
         { "nearby.empty", "Няма маркери в радиус от {0} м" },
@@ -418,6 +426,8 @@ public static class AppStrings
         { "trails.subtitle", "Изберете един, за да го извървите." },
         { "trails.choose", "Изберете маршрут" },
         { "trails.notNow", "Не сега" },
+        { "trails.leave", "Напусни" },
+        { "trails.leaveConfirm", "Потвърди" },
         { "trails.join", "Присъедини се с код" },
         { "trails.loading", "Търсим вашите маршрути" },
         { "trails.failed", "Сървърът не отговаря. Всичко присъединено по-рано пак работи." },

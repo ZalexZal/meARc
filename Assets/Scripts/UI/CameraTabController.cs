@@ -1,7 +1,12 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+using UnityEngine.Android;
+#endif
 
 /// <summary>
 /// Owns the Camera tab: what sits over the live feed, and which marker the chrome
@@ -13,9 +18,18 @@ using UnityEngine.XR.ARFoundation;
 /// still told truthfully - by the dot, and by the banner when accuracy is poor -
 /// but it decides what the reader will see, never whether they may look.
 ///
-/// On the AR session: it is deliberately never disabled. Turning the session off
-/// would stop Geospatial localization, and localization is what the reader is
-/// waiting for.
+/// On the AR session: it starts switched off and is brought up the first time the
+/// reader opens this tab. It is never switched off again after that, because
+/// turning it off would stop Geospatial localization and localization is what the
+/// reader is waiting for.
+///
+/// The delayed start is not a preference. ARCore claims the camera the moment the
+/// session is enabled, and the session used to be enabled in the scene from
+/// launch - so a fresh install put a camera permission dialog in front of somebody
+/// who had not seen the app yet, and the activity was finished inside that flow.
+/// The app closed on first launch and worked on the second, because by then the
+/// permission was granted and nothing prompted. A map app has no business opening
+/// the camera before it has drawn a map.
 /// </summary>
 public class CameraTabController : MonoBehaviour
 {
@@ -28,8 +42,8 @@ public class CameraTabController : MonoBehaviour
     public InfoPanelController infoPanel;
     public VpsIndicatorController vpsIndicator;
 
-    [Tooltip("Held only so the session is reachable for debugging. It is never " +
-             "disabled - see the note on this class.")]
+    [Tooltip("Off until the reader opens this tab for the first time, and left " +
+             "running from then on - see the note on this class.")]
     public ARSession arSession;
 
     [Tooltip("Switched off while the reader is on another tab. The session keeps " +
@@ -72,6 +86,12 @@ public class CameraTabController : MonoBehaviour
     BuildingData _selected;
     float _timer;
 
+    /// <summary>True while a permission dialog is up, so it is asked for once.</summary>
+    bool _asking;
+
+    /// <summary>Set when the reader has said no, so the tab explains itself.</summary>
+    bool _cameraRefused;
+
     /// <summary>The marker the dock and the arrow are pointing at.</summary>
     public BuildingData Selected { get { return _selected; } }
 
@@ -91,6 +111,12 @@ public class CameraTabController : MonoBehaviour
 
         if (infoPanel != null)
             infoPanel.onWillOpen = CloseNearby;
+
+        // Before anything can enable it. Awake runs while the app is still opening
+        // and this tab is not the one on screen, so the session must not be the
+        // thing that decides when the camera is claimed.
+        if (arSession != null)
+            arSession.enabled = false;
     }
 
     void OnEnable()
@@ -118,6 +144,59 @@ public class CameraTabController : MonoBehaviour
         if (GuidanceService.IsGuiding)
             _selected = GuidanceService.Target;
 
+        WakeCamera();
+        Refresh();
+    }
+
+    // ------------------------------------------------------------- the camera
+
+    /// <summary>
+    /// Brings the AR session up, asking for the camera first if it has to.
+    ///
+    /// Called from OnEnable rather than from Awake, so the reader is looking at
+    /// the Camera tab when the dialog appears and has just asked for the camera
+    /// themselves. That is the whole difference between a permission request and
+    /// an ambush.
+    /// </summary>
+    void WakeCamera()
+    {
+        if (arSession == null || arSession.enabled || _asking)
+            return;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        {
+            _asking = true;
+
+            PermissionCallbacks callbacks = new PermissionCallbacks();
+            callbacks.PermissionGranted += _ => { _asking = false; _cameraRefused = false; StartSession(); };
+            callbacks.PermissionDenied += _ => { _asking = false; RefuseCamera(); };
+            callbacks.PermissionDeniedAndDontAskAgain += _ => { _asking = false; RefuseCamera(); };
+
+            Permission.RequestUserPermission(Permission.Camera, callbacks);
+            return;
+        }
+#endif
+
+        StartSession();
+    }
+
+    void StartSession()
+    {
+        if (arSession != null)
+            arSession.enabled = true;
+
+        SetFeedVisible(isActiveAndEnabled);
+    }
+
+    /// <summary>
+    /// The reader said no. The map still works, so this says what is missing and
+    /// why rather than leaving a black rectangle with chrome floating on it.
+    /// </summary>
+    void RefuseCamera()
+    {
+        _cameraRefused = true;
+        _warningDismissed = false;
         Refresh();
     }
 
@@ -234,10 +313,18 @@ public class CameraTabController : MonoBehaviour
                     (locationService.Status == VpsStatus.Poor ||
                      locationService.Status == VpsStatus.Unavailable);
 
-        warningBanner.SetActive(poor && !_warningDismissed);
+        // A refused camera outranks poor accuracy. There is no picture at all, so
+        // saying the positioning is rough would be answering a question nobody is
+        // asking - and it is the one thing here the reader can actually fix.
+        bool refused = _cameraRefused;
+
+        warningBanner.SetActive((refused || poor) && !_warningDismissed);
 
         if (warningLabel != null)
-            warningLabel.text = AppStrings.Get("live.warning");
+        {
+            warningLabel.text = AppStrings.Get(refused ? "camera.refused"
+                                                       : "live.warning");
+        }
     }
 
     // ------------------------------------------------------------------- overlays
