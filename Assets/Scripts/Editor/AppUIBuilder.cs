@@ -1477,22 +1477,29 @@ public static class AppUIBuilder
         const float RailWidth = 38f;
 
         RectTransform card = UIFactory.Rect("NextStop", parent);
-        UIFactory.Size(card.gameObject, RowHeight * 3f + 24f);
         UIFactory.Fill(card, ThemeRole.Surface, 0.97f, UIShape.Rounded).raycastTarget = true;
-        Outline(card);
 
-        RectTransform stack = UIFactory.Rect("Rows", card);
-        UIFactory.Stretch(stack);
-        stack.offsetMin = new Vector2(22f, 14f);
-        stack.offsetMax = new Vector2(-22f, -14f);
-        UIFactory.VerticalStack(stack, 0f, false);
+        // The card hugs the rows that are actually showing.
+        //
+        // Fixed at three rows it kept its full height with one row in it, which is
+        // the state a reader sees first - a mostly empty box under the map before
+        // any marker has loaded. The height only changes when a row appears or
+        // disappears, and that happens on finding a stop or loading a trail: moments
+        // where something changing is the point, not while walking.
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(card, 0f);
+        stack.padding = new RectOffset(22, 22, 14, 14);
+
+        Outline(card);
+        Ignore((RectTransform)card.Find("Outline"));
+
+        RectTransform rows = card;
 
         NextStopStrip strip = card.gameObject.AddComponent<NextStopStrip>();
         strip.locationService = location;
         strip.mapTab = map;
 
         // --- previous ---
-        RectTransform prev = Row(stack, "Previous", RowHeight, RailWidth,
+        RectTransform prev = Row(rows, "Previous", RowHeight, RailWidth,
                                  out RectTransform prevRail, out RectTransform prevText);
         strip.previousRow = prev.gameObject;
         strip.previousKnob = Knob(prevRail, true, out RectTransform _);
@@ -1504,7 +1511,7 @@ public static class AppUIBuilder
                                             TextAlignmentOptions.Left);
 
         // --- here ---
-        RectTransform here = Row(stack, "Here", RowHeight, RailWidth,
+        RectTransform here = Row(rows, "Here", RowHeight, RailWidth,
                                  out RectTransform hereRail, out RectTransform hereText);
         Knob(hereRail, true, out RectTransform _);
         strip.hereWire = Wire(hereRail, RowHeight).gameObject;
@@ -1515,7 +1522,7 @@ public static class AppUIBuilder
                                         TextAlignmentOptions.Left);
 
         // --- next: the only row that is a control ---
-        RectTransform next = Row(stack, "Next", RowHeight, RailWidth,
+        RectTransform next = Row(rows, "Next", RowHeight, RailWidth,
                                  out RectTransform nextRail, out RectTransform nextText);
         strip.nextRow = next.gameObject;
 

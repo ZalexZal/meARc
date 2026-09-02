@@ -54,6 +54,24 @@ public class MapPinView : MonoBehaviour
     }
 
     /// <summary>Re-reads colour and name, e.g. after a language or theme change.</summary>
+    void OnEnable()
+    {
+        ThemeManager.OnThemeChanged += Refresh;
+    }
+
+    void OnDisable()
+    {
+        ThemeManager.OnThemeChanged -= Refresh;
+    }
+
+    /// <summary>
+    /// Repaints the pin.
+    ///
+    /// Subscribed to the theme because nothing else repaints these: the plate and
+    /// the label are coloured here rather than by a ThemedElement, so switching to
+    /// the light theme left every pin holding the dark one - a dark plate with dark
+    /// text on it, which is a label nobody can read.
+    /// </summary>
     public void Refresh()
     {
         if (_building == null)
