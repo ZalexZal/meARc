@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
@@ -22,6 +23,207 @@ public static class BuildApk
     const string Scene = "Assets/Scenes/Main.unity";
     const string OutputFolder = "Build";
 
+    /// <summary>
+    /// The assets that have to be in the player because nothing references them.
+    ///
+    /// Opening the project in batch mode rewrites the preloaded list without the
+    /// editor pass that fills it in, and what falls out is what no scene points at:
+    /// the XR loader settings, and the two shaders that paint the camera feed.
+    /// Nothing then fails. The build succeeds, the AR session tracks, the radar
+    /// follows the phone - and the camera draws black, because XR Management never
+    /// found its Android settings and so never started the ARCore loader. The log
+    /// says "No active ARCoreCameraSubsystem is available in this session", four
+    /// steps away from the setting that actually went missing.
+    ///
+    /// Identified by local file id, not by path alone. Both XR settings files hold
+    /// one settings object per build target, and the file's main asset is the
+    /// wrapper around them - preloading that wrapper looks right in the inspector
+    /// and puts nothing usable in the player. These ids are the ones committed in
+    /// ProjectSettings.asset; if one ever stops resolving, this fails the build
+    /// rather than shipping a black screen.
+    /// </summary>
+    struct Preload
+    {
+        public string path;
+        public long localId;
+        public string what;
+
+        public Preload(string path, long localId, string what)
+        {
+            this.path = path;
+            this.localId = localId;
+            this.what = what;
+        }
+    }
+
+    static readonly Preload[] RequiredPreloads =
+    {
+        new Preload("Assets/InputSystem_Actions.inputactions", -944628639613478452L,
+                    "the input actions"),
+        new Preload("Assets/XR/Settings/OpenXR Package Settings.asset", 2495205364760583549L,
+                    "OpenXR's Android settings"),
+        new Preload("Assets/XR/XRGeneralSettingsPerBuildTarget.asset", 4098870614499507440L,
+                    "XR Management's Android settings - the camera feed depends on it"),
+        new Preload("Assets/ExtensionsAssets/Runtime/RuntimeConfig.asset", 11400000L,
+                    "the ARCore Extensions runtime config"),
+    };
+
+    /// <summary>
+    /// The camera background shaders, which live in the package cache under a folder
+    /// name carrying a hash that changes on every package update. Found by name for
+    /// that reason, and by exact name because FindAssets matches on a prefix.
+    /// </summary>
+    static readonly string[] RequiredShaders =
+    {
+        "ARCoreBackground",
+        "ARCoreBackgroundAfterOpaques",
+    };
+
+    /// <summary>
+    /// Puts back anything missing from the preloaded list, keeping what is there.
+    /// </summary>
+    static void RestorePreloadedAssets()
+    {
+        UnityEngine.Object[] existing = PlayerSettings.GetPreloadedAssets();
+        List<UnityEngine.Object> preloaded = new List<UnityEngine.Object>(existing);
+
+        // Nulls are left exactly where they are. A null here does not reliably mean
+        // the asset is gone - it can equally mean the asset database has not resolved
+        // it yet - and an earlier version of this method tidied them away and saved
+        // the result, which deleted the live references to the XR settings and the
+        // camera shaders. A stale null costs nothing at runtime. Removing a real one
+        // costs the camera feed, silently, until somebody builds and looks.
+        int nulls = 0;
+        foreach (UnityEngine.Object asset in preloaded)
+            if (asset == null) nulls++;
+
+        if (nulls > 0)
+            Debug.LogWarning("[Build] " + nulls + " preloaded entr(ies) did not resolve. " +
+                             "Left in place - they are not safe to tidy away here.");
+
+        int added = 0;
+        bool missing = false;
+
+        foreach (Preload required in RequiredPreloads)
+        {
+            UnityEngine.Object asset = FindByLocalId(required.path, required.localId);
+
+            if (asset == null)
+            {
+                Debug.LogError("[Build] Could not find " + required.what + " (" +
+                               required.path + ", id " + required.localId + ").");
+                missing = true;
+                continue;
+            }
+
+            if (preloaded.Contains(asset))
+                continue;
+
+            preloaded.Add(asset);
+            added++;
+        }
+
+        foreach (string name in RequiredShaders)
+        {
+            Shader shader = FindShader(name);
+
+            if (shader == null)
+            {
+                Debug.LogError("[Build] Missing shader " + name +
+                               " - the camera feed will be black.");
+                missing = true;
+                continue;
+            }
+
+            if (preloaded.Contains(shader))
+                continue;
+
+            preloaded.Add(shader);
+            added++;
+        }
+
+        if (missing)
+            throw new Exception("Required preloaded assets are missing. See the errors above.");
+
+        if (added == 0)
+            return;
+
+        if (preloaded.Count < existing.Length)
+            throw new Exception("The preloaded list would shrink from " + existing.Length +
+                                " to " + preloaded.Count + ". Refusing to save it.");
+
+        PlayerSettings.SetPreloadedAssets(preloaded.ToArray());
+        Debug.Log("[Build] Put back " + added + " preloaded asset(s) that batch mode dropped.");
+    }
+
+    /// <summary>
+    /// Prints the preloaded list with the local id of each entry, because the whole
+    /// failure is a reference collapsing to the wrong object inside the right file -
+    /// which every other view of this list renders identically.
+    /// </summary>
+    static void ReportPreloads(string when)
+    {
+        UnityEngine.Object[] preloaded = PlayerSettings.GetPreloadedAssets();
+        Debug.Log("[Build] Preloaded assets " + when + " - " + preloaded.Length + ":");
+
+        foreach (UnityEngine.Object asset in preloaded)
+        {
+            if (asset == null)
+            {
+                Debug.Log("[Build]    (null)");
+                continue;
+            }
+
+            string guid;
+            long id;
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out guid, out id);
+
+            Debug.Log("[Build]    " + asset.GetType().Name + " \"" + asset.name +
+                      "\"  id=" + id + "  " + AssetDatabase.GetAssetPath(asset));
+        }
+    }
+
+    /// <summary>
+    /// The one object inside an asset file with this local id. Sub-objects cannot be
+    /// reached by path, and the wrong one is worse than none - it looks correct.
+    /// </summary>
+    static UnityEngine.Object FindByLocalId(string path, long localId)
+    {
+        UnityEngine.Object[] all = AssetDatabase.LoadAllAssetsAtPath(path);
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i] == null)
+                continue;
+
+            string guid;
+            long id;
+
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(all[i], out guid, out id))
+                continue;
+
+            if (id == localId)
+                return all[i];
+        }
+
+        return null;
+    }
+
+    static Shader FindShader(string name)
+    {
+        string[] found = AssetDatabase.FindAssets(name + " t:Shader");
+
+        for (int i = 0; i < found.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(found[i]);
+
+            if (Path.GetFileNameWithoutExtension(path) == name)
+                return AssetDatabase.LoadAssetAtPath<Shader>(path);
+        }
+
+        return null;
+    }
+
     [MenuItem("Tools/Build/Android APK")]
     public static void Build()
     {
@@ -33,6 +235,10 @@ public static class BuildApk
         EditorSceneManager.OpenScene(Scene, OpenSceneMode.Single);
         AppUIBuilder.BuildForPreview();
         EditorSceneManager.SaveOpenScenes();
+
+        ReportPreloads("as batch mode left it");
+        RestorePreloadedAssets();
+        ReportPreloads("as the build will use it");
 
         BuildPlayerOptions options = new BuildPlayerOptions
         {
