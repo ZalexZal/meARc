@@ -112,6 +112,7 @@ public static class UIPreview
 
         try
         {
+            Pieces.Strip(canvas.transform, "Mid");
             Shoot(canvas, rig, "01-map", "MapPanel");
             Shoot(canvas, rig, "02-camera", "CameraPanel");
             Shoot(canvas, rig, "03-browse", "BrowsePanel");
@@ -181,7 +182,9 @@ public static class UIPreview
             // Light mode, where the contrast decisions are easiest to get wrong.
             SetTheme(false);
             Shoot(canvas, rig, "09-settings-light", "SettingsPanel");
+            Pieces.Strip(canvas.transform, "Start");
             Shoot(canvas, rig, "10-map-light", "MapPanel");
+            Pieces.Strip(canvas.transform, "Mid");
             Shoot(canvas, rig, "25-terms-light", "Doors/Terms");
             Shoot(canvas, rig, "26-trails-light", "MapPanel", "Doors/Backdrop", "Doors/Trails");
 
@@ -1158,6 +1161,61 @@ public static class UIPreview
                 return found;
 
             return door.Find("Safe/Inner/" + tail);
+        }
+
+        /// <summary>
+        /// Puts a believable route in the strip: one stop behind, one ahead.
+        ///
+        /// Straight at the labels rather than through NextStopStrip, because the
+        /// component reads DiscoveryTracker and a live position, and neither exists
+        /// in a batch-mode render.
+        /// </summary>
+        public static void Strip(Transform root, string state)
+        {
+            NextStopStrip strip = root.GetComponentInChildren<NextStopStrip>(true);
+
+            if (strip == null)
+            {
+                Debug.LogWarning("[Preview] No strip on the map.");
+                return;
+            }
+
+            bool started = state != "Start";
+            bool done = state == "Done";
+
+            Show(strip.previousRow, started);
+            Show(strip.nextRow, !done);
+            Show(strip.hereWire, !done);
+
+            if (started && strip.previousName != null)
+            {
+                strip.previousName.text = "Часовниковата кула";
+                strip.previousMeta.text = string.Format(AppStrings.Get("strip.stopFound"), 2);
+            }
+
+            if (done)
+            {
+                strip.hereName.text = string.Format(AppStrings.Get("strip.allFound"), 9);
+                strip.hereMeta.text = AppStrings.Get("strip.complete");
+                return;
+            }
+
+            strip.hereName.text = AppStrings.Get("strip.here");
+            strip.hereMeta.text = started
+                ? string.Format(AppStrings.Get("strip.foundOf"), 2, 9)
+                : AppStrings.Get("strip.nothingYet");
+
+            if (strip.nextName != null)
+            {
+                strip.nextName.text = "Ески джамия";
+                strip.nextMeta.text = string.Format(AppStrings.Get("strip.stopOf"), 3, 9);
+            }
+
+            if (strip.nextDistance != null)
+                strip.nextDistance.text = AppStrings.FormatDistance(180d);
+
+            if (strip.nextKnob != null)
+                strip.nextKnob.color = MarkerPalette.ForKey("eski");
         }
 
         static void Show(GameObject go, bool on)

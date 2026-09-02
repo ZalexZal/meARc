@@ -19,6 +19,11 @@ public class BuildingData : ScriptableObject
     // be written in one pass while the research is in front of you. Leave a
     // Bulgarian field empty and the English one is shown in its place.
 
+    [Tooltip("Which stop this is on an ordered trail: 1, 2, 3. Zero means the trail " +
+             "has no order and the app falls back to whatever is nearest and unopened. " +
+             "Set by whoever makes the trail, not by the reader.")]
+    public int step;
+
     [Header("Name")]
     public string buildingName;
 

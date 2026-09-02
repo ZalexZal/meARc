@@ -22,15 +22,10 @@ public class MapTabController : MonoBehaviour
     public TabNavigationController tabs;
 
     [Header("Panel")]
-    [Tooltip("The card resting on the map naming the nearest marker.")]
-    public GameObject nearestCard;
-    public Button nearestButton;
-    public Image nearestDot;
-    public Image nearestRing;
-    public TextMeshProUGUI nearestName;
-    public TextMeshProUGUI nearestDistance;
-    public BearingArrow nearestArrow;
-    public TextMeshProUGUI nearestCaption;
+    [Tooltip("Previous, here, next - the strip resting on the map. It replaced a card " +
+             "that named whatever happened to be closest, which is proximity rather " +
+             "than the reader's question.")]
+    public NextStopStrip nextStop;
 
     [Header("Chrome")]
     public GuidanceBanner guidance;
@@ -39,6 +34,11 @@ public class MapTabController : MonoBehaviour
     [Tooltip("Appears only once the reader has panned or zoomed away, so it is not " +
              "a permanent button for a thing that is already true.")]
     public GameObject recentreHolder;
+
+    [Tooltip("The gear at the end of the top row. Settings used to be a tab, which " +
+             "spent a third of the only surface visible on every screen on a page " +
+             "opened twice in the life of an install.")]
+    public Button settingsButton;
 
     [Header("Browse")]
     [Tooltip("Opens the full list with its filters. The map answers what is around " +
@@ -49,14 +49,10 @@ public class MapTabController : MonoBehaviour
     [Header("Behaviour")]
     public double radiusMetres = 500d;
 
-    BuildingData _nearest;
     float _timer;
 
     void Awake()
     {
-        if (nearestButton != null)
-            nearestButton.onClick.AddListener(OpenNearest);
-
         if (browseButton != null)
             browseButton.onClick.AddListener(OpenBrowse);
     }
@@ -152,14 +148,6 @@ public class MapTabController : MonoBehaviour
         OpenMarker(building);
     }
 
-    void OpenNearest()
-    {
-        OpenMarker(_nearest);
-
-        if (map != null && _nearest != null)
-            map.Select(_nearest);
-    }
-
     void OpenBrowse()
     {
         if (tabs != null)
@@ -207,59 +195,25 @@ public class MapTabController : MonoBehaviour
             guidance.Refresh();
     }
 
+    /// <summary>
+    /// Hands the dock to the strip, and takes it away while guidance is running.
+    ///
+    /// The guidance banner already names the marker the reader is walking to. A
+    /// strip naming a different one underneath it is two answers to one question,
+    /// which is the same reason the card it replaced hid here.
+    /// </summary>
     void RefreshNearest()
     {
-        _nearest = null;
-
-        if (locationService != null && locationService.HasValidPose)
-        {
-            double best = double.MaxValue;
-
-            var all = BuildingDatabase.AllBuildings;
-            for (int i = 0; i < all.Count; i++)
-            {
-                double distance = locationService.DistanceMetresTo(all[i]);
-                if (distance >= 0d && distance < best)
-                {
-                    best = distance;
-                    _nearest = all[i];
-                }
-            }
-        }
-
-        // While guidance is running the banner already names a marker, and a second
-        // card naming a different one underneath it is two answers to one question.
-        bool show = _nearest != null && !GuidanceService.IsGuiding;
-
-        if (nearestCard != null)
-            nearestCard.SetActive(show);
-
-        if (!show)
+        if (nextStop == null)
             return;
 
-        Color colour = MarkerPalette.Resolve(_nearest);
+        bool show = !GuidanceService.IsGuiding;
 
-        if (nearestDot != null)
-            nearestDot.color = colour;
+        if (nextStop.gameObject.activeSelf != show)
+            nextStop.gameObject.SetActive(show);
 
-        if (nearestRing != null)
-            nearestRing.color = MarkerPalette.RingFor(colour);
-
-        if (nearestName != null)
-            nearestName.text = _nearest.DisplayName;
-
-        if (nearestCaption != null)
-            nearestCaption.text = AppStrings.Get("map.nearest");
-
-        if (nearestArrow != null)
-            nearestArrow.SetTarget(_nearest);
-
-        if (nearestDistance != null)
-        {
-            double metres = locationService.DistanceMetresTo(_nearest);
-            nearestDistance.text = AppStrings.FormatDistance(
-                metres, locationService.IsApproximate);
-        }
+        if (show)
+            nextStop.Refresh();
     }
 
     void RefreshState()

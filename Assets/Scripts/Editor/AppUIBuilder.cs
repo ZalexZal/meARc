@@ -196,6 +196,14 @@ public static class AppUIBuilder
         // Serialized references rather than delegates: an Action assigned here is
         // silently discarded when the scene saves, and the control then does nothing.
         mapTab.tabs = tabs;
+
+        // Wired here rather than in BuildMapTab, which runs before the tab
+        // controller exists.
+        if (mapTab.settingsButton != null)
+            Wire(mapTab.settingsButton.onClick, tabs.ShowSettings, "Open settings");
+        else
+            _notes.Add("No settings gear on the map, so settings cannot be opened.");
+
         browseTab.tabs = tabs;
         browseTab.mapTab = mapTab;
         browseTab.cameraTab = cameraTab;
@@ -878,14 +886,31 @@ public static class AppUIBuilder
         // tell them - and it doubles as the way to swap.
         BuildTrailChip(top, out RectTransform chipRect);
         UIFactory.Corner(chipRect, new Vector2(0f, 0.5f),
-                         new Vector2(600f, 84f), new Vector2(Margin - 18f, -14f));
+                         new Vector2(800f, 84f), new Vector2(Margin - 18f, -14f));
 
         // Labelled, not icon-only. Recentring has no universally read symbol, and
         // this control only appears once the reader has already lost track of where
         // they are - the worst moment to make them guess.
-        RectTransform recentre = UIFactory.Rect("Recentre", top);
-        UIFactory.Corner(recentre, new Vector2(1f, 0.5f), new Vector2(330f, Tap),
+        // The gear, at the far end of a row that is already a row of controls.
+        const float GearSize = 96f;
+
+        RectTransform gear = UIFactory.Rect("Settings", top);
+        UIFactory.Corner(gear, new Vector2(1f, 0.5f), new Vector2(GearSize, GearSize),
                          new Vector2(-Margin, -14f));
+        controller.settingsButton = UIFactory.Button(gear, ThemeRole.Surface, 0.96f,
+                                                     UIShape.Circle);
+        Outline(gear);
+        Icon(gear, AppIcon.Settings, 44f, ThemeRole.TextSecondary);
+
+        // On its own line, under the top bar.
+        //
+        // It only appears once the reader has panned away, so making the trail name
+        // share a row with it permanently costs the name the width it needs - and
+        // naming the open trail is the entire job of that bar. Below, it competes
+        // with nothing and the name gets the room.
+        RectTransform recentre = UIFactory.Rect("Recentre", safe);
+        UIFactory.Corner(recentre, new Vector2(1f, 1f), new Vector2(330f, Tap),
+                         new Vector2(-Margin, -182f));
         map.recentreButton = UIFactory.Button(recentre, ThemeRole.Surface, 0.96f, UIShape.Pill);
         controller.recentreHolder = recentre.gameObject;
 
@@ -943,45 +968,7 @@ public static class AppUIBuilder
 
         controller.guidance = BuildGuidanceBanner(dockArea, location, BearingArrow.Frame.NorthUp);
 
-        RectTransform nearest = UIFactory.Rect("Nearest", dockArea);
-        UIFactory.Size(nearest.gameObject, 150f);
-        controller.nearestButton = UIFactory.Button(nearest, ThemeRole.Surface, 0.97f,
-                                                    UIShape.Rounded);
-        controller.nearestCard = nearest.gameObject;
-        Outline(nearest);
-
-        RectTransform nearestRow = UIFactory.Rect("Row", nearest);
-        UIFactory.Stretch(nearestRow);
-        nearestRow.offsetMin = new Vector2(28f, 0f);
-        nearestRow.offsetMax = new Vector2(-28f, 0f);
-        UIFactory.HorizontalStack(nearestRow, 22f);
-
-        controller.nearestRing = Disc(nearestRow, 52f, ThemeRole.Line, UIShape.Ring,
-                                      out RectTransform nearestRingRect);
-        controller.nearestDot = Disc(nearestRingRect, 32f, ThemeRole.Accent, UIShape.Circle,
-                                     out RectTransform _);
-
-        RectTransform nearestText = UIFactory.Rect("Text", nearestRow);
-        UIFactory.Size(nearestText.gameObject, 100f);
-        UIFactory.Flexible(nearestText.gameObject);
-        UIFactory.VerticalStack(nearestText, 2f, false);
-
-        controller.nearestCaption = UIFactory.Text("Caption", nearestText, Caption,
-                                                   ThemeRole.TextMuted,
-                                                   TextAlignmentOptions.Left, "map.nearest");
-        UIFactory.Size(controller.nearestCaption.gameObject, 40f);
-
-        controller.nearestName = UIFactory.Text("Name", nearestText, Body, ThemeRole.TextPrimary,
-                                                TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(controller.nearestName.gameObject, 56f);
-
-        controller.nearestArrow = Arrow(nearestRow, location, BearingArrow.Frame.NorthUp, 40f);
-
-        controller.nearestDistance = UIFactory.Text("Distance", nearestRow, Body, ThemeRole.Accent,
-                                                    TextAlignmentOptions.Right, null,
-                                                    FontStyles.Bold);
-        LayoutElement distanceSize = UIFactory.Size(controller.nearestDistance.gameObject, 60f, 180f);
-        distanceSize.flexibleWidth = 0f;
+        controller.nextStop = BuildNextStopStrip(dockArea, location, controller);
 
         RectTransform browse = UIFactory.Rect("Browse", dockArea);
         UIFactory.Size(browse.gameObject, Tap);
@@ -1468,6 +1455,143 @@ public static class AppUIBuilder
         radar.facing = facing;
 
         return radar;
+    }
+
+    /// <summary>
+    /// The bus-stop strip: previous, here, next.
+    ///
+    /// Three rows on a rail, in the place the "nearest to you" card used to sit and
+    /// at the same size, so nothing on the map moves. Only the last row is a
+    /// control - the other two are status, and giving them chevrons would invite a
+    /// tap that does nothing.
+    ///
+    /// The rows are built at full strength and switched off by the component, so a
+    /// trail at its start or its end keeps the same height and the map does not
+    /// reflow underneath as the reader walks.
+    /// </summary>
+    static NextStopStrip BuildNextStopStrip(RectTransform parent,
+                                            UserLocationService location,
+                                            MapTabController map)
+    {
+        const float RowHeight = 96f;
+        const float RailWidth = 38f;
+
+        RectTransform card = UIFactory.Rect("NextStop", parent);
+        UIFactory.Size(card.gameObject, RowHeight * 3f + 24f);
+        UIFactory.Fill(card, ThemeRole.Surface, 0.97f, UIShape.Rounded).raycastTarget = true;
+        Outline(card);
+
+        RectTransform stack = UIFactory.Rect("Rows", card);
+        UIFactory.Stretch(stack);
+        stack.offsetMin = new Vector2(22f, 14f);
+        stack.offsetMax = new Vector2(-22f, -14f);
+        UIFactory.VerticalStack(stack, 0f, false);
+
+        NextStopStrip strip = card.gameObject.AddComponent<NextStopStrip>();
+        strip.locationService = location;
+        strip.mapTab = map;
+
+        // --- previous ---
+        RectTransform prev = Row(stack, "Previous", RowHeight, RailWidth,
+                                 out RectTransform prevRail, out RectTransform prevText);
+        strip.previousRow = prev.gameObject;
+        strip.previousKnob = Knob(prevRail, true, out RectTransform _);
+        strip.previousWire = Wire(prevRail, RowHeight);
+
+        strip.previousName = UIFactory.Text("Name", prevText, Secondary, ThemeRole.TextSecondary,
+                                            TextAlignmentOptions.Left, null, FontStyles.Bold);
+        strip.previousMeta = UIFactory.Text("Meta", prevText, Caption, ThemeRole.TextMuted,
+                                            TextAlignmentOptions.Left);
+
+        // --- here ---
+        RectTransform here = Row(stack, "Here", RowHeight, RailWidth,
+                                 out RectTransform hereRail, out RectTransform hereText);
+        Knob(hereRail, true, out RectTransform _);
+        strip.hereWire = Wire(hereRail, RowHeight).gameObject;
+
+        strip.hereName = UIFactory.Text("Name", hereText, Secondary, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Left, "strip.here", FontStyles.Bold);
+        strip.hereMeta = UIFactory.Text("Meta", hereText, Caption, ThemeRole.TextMuted,
+                                        TextAlignmentOptions.Left);
+
+        // --- next: the only row that is a control ---
+        RectTransform next = Row(stack, "Next", RowHeight, RailWidth,
+                                 out RectTransform nextRail, out RectTransform nextText);
+        strip.nextRow = next.gameObject;
+
+        strip.nextButton = UIFactory.Button(next, ThemeRole.Surface, 0f);
+        next.GetComponent<Image>().raycastTarget = true;
+
+        strip.nextKnob = Knob(nextRail, false, out RectTransform nextKnobRect);
+        nextKnobRect.SetAsFirstSibling();
+
+        strip.nextName = UIFactory.Text("Name", nextText, Secondary, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Left, null, FontStyles.Bold);
+        strip.nextMeta = UIFactory.Text("Meta", nextText, Caption, ThemeRole.TextMuted,
+                                        TextAlignmentOptions.Left);
+
+        strip.nextArrow = Arrow(next, location, BearingArrow.Frame.NorthUp, 34f);
+
+        strip.nextDistance = UIFactory.Text("Distance", next, Secondary, ThemeRole.Accent,
+                                            TextAlignmentOptions.Right, null, FontStyles.Bold);
+        LayoutElement distSize = UIFactory.Size(strip.nextDistance.gameObject, RowHeight, 170f);
+        distSize.flexibleWidth = 0f;
+
+        EditorUtility.SetDirty(strip);
+        return strip;
+    }
+
+    /// <summary>One row of the strip: a rail on the left, text filling the rest.</summary>
+    static RectTransform Row(RectTransform parent, string name, float height, float rail,
+                             out RectTransform railRect, out RectTransform textRect)
+    {
+        RectTransform row = UIFactory.Rect(name, parent);
+        UIFactory.Size(row.gameObject, height);
+        HorizontalLayoutGroup layout = UIFactory.HorizontalStack(row, 12f);
+        layout.childAlignment = TextAnchor.MiddleLeft;
+
+        railRect = UIFactory.Rect("Rail", row);
+        LayoutElement railSize = UIFactory.Size(railRect.gameObject, height, rail);
+        railSize.flexibleWidth = 0f;
+
+        textRect = UIFactory.Rect("Text", row);
+        UIFactory.Size(textRect.gameObject, height);
+        UIFactory.Flexible(textRect.gameObject);
+        UIFactory.VerticalStack(textRect, 0f, false).childAlignment = TextAnchor.MiddleLeft;
+
+        return row;
+    }
+
+    /// <summary>
+    /// The dot on the rail. Filled for a stop already found, hollow for one ahead -
+    /// which is the entire bus-stop metaphor, and it costs one boolean.
+    /// </summary>
+    static Image Knob(RectTransform rail, bool filled, out RectTransform rect)
+    {
+        rect = UIFactory.Rect("Knob", rail);
+        UIFactory.Corner(rect, new Vector2(0.5f, 0.5f), new Vector2(18f, 18f),
+                         new Vector2(0f, 0f));
+
+        Image knob = UIFactory.Fill(rect, filled ? ThemeRole.Accent : ThemeRole.Line,
+                                    1f, UIShape.Circle);
+        knob.raycastTarget = false;
+        Unthemed(rect.gameObject);
+
+        return knob;
+    }
+
+    /// <summary>The line down from a knob to the row below it.</summary>
+    static Image Wire(RectTransform rail, float rowHeight)
+    {
+        RectTransform rect = UIFactory.Rect("Wire", rail);
+        UIFactory.Corner(rect, new Vector2(0.5f, 0f), new Vector2(3f, rowHeight * 0.5f - 9f),
+                         Vector2.zero);
+
+        Image wire = UIFactory.Fill(rect, ThemeRole.Line, 1f, UIShape.Pill);
+        wire.raycastTarget = false;
+        Unthemed(rect.gameObject);
+
+        return wire;
     }
 
     /// <summary>A circle outline drawn as geometry, crisp at any size.</summary>
@@ -2318,20 +2442,19 @@ public static class AppUIBuilder
         Button camera = NavButton(navRow, "CameraTabButton", "tab.camera", NavGlyph.Camera,
                                   out tabs.cameraLabel, out tabs.cameraIcon,
                                   out Image cameraPill);
-        Button settings = NavButton(navRow, "SettingsTabButton", "tab.settings",
-                                    NavGlyph.Settings,
-                                    out tabs.settingsLabel, out tabs.settingsIcon,
-                                    out Image settingsPill);
-
+        // No settings tab.
+        //
+        // The tab bar is the only surface visible on every screen, and a third of it
+        // went to a page holding a theme switch, a language toggle and a link to the
+        // walkthrough - opened twice in the life of an install. It is a gear on the
+        // map's top row now, which is where a gear has lived since about 2008.
         tabs.mapIndicator = mapPill;
         tabs.cameraIndicator = cameraPill;
-        tabs.settingsIndicator = settingsPill;
 
         // Persistent listeners, not AddListener: a runtime listener added here is
         // thrown away when the scene is saved, and the tab bar would do nothing.
         Wire(map.onClick, tabs.ShowMap, "Map tab");
         Wire(camera.onClick, tabs.ShowCamera, "Camera tab");
-        Wire(settings.onClick, tabs.ShowSettings, "Settings tab");
 
         EditorUtility.SetDirty(tabs);
         return tabs;
@@ -2619,7 +2742,7 @@ public static class AppUIBuilder
 
         view.nameLabel = UIFactory.Text("Name", row, Title, ThemeRole.TextPrimary,
                                         TextAlignmentOptions.Left, "tab.map", FontStyles.Bold);
-        LayoutElement nameSize = UIFactory.Size(view.nameLabel.gameObject, 84f, 340f);
+        LayoutElement nameSize = UIFactory.Size(view.nameLabel.gameObject, 84f, 540f);
         nameSize.flexibleWidth = 0f;
 
         // One line, cut with an ellipsis. Autosizing alone was not enough: a name
@@ -2636,7 +2759,7 @@ public static class AppUIBuilder
         // Before the chevron: it belongs to the name, and the chevron belongs to
         // the whole control.
         RectTransform mode = UIFactory.Rect("Mode", row);
-        LayoutElement modeSize = UIFactory.Size(mode.gameObject, 50f, 200f);
+        LayoutElement modeSize = UIFactory.Size(mode.gameObject, 50f, 150f);
         modeSize.flexibleWidth = 0f;
         UIFactory.Fill(mode, ThemeRole.Accent, 0.18f, UIShape.Pill).raycastTarget = false;
         view.modeChip = mode.gameObject;

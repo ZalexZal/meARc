@@ -397,6 +397,7 @@ public class RemoteMarkerSource : MonoBehaviour
 
         marker.markerStyle = row.style_key;
         marker.markerColourHex = row.colour_hex;
+        marker.step = row.step;
 
         // content is jsonb keyed by language. JsonUtility cannot describe a map with
         // arbitrary keys, so the two known languages are read as named fields and
@@ -469,6 +470,11 @@ public class RemoteMarkerSource : MonoBehaviour
         public double lng;
         public string style_key;
         public string colour_hex;
+
+        // Absent until the step column and the markers_near change are applied, and
+        // JsonUtility leaves it at zero when it is - which is exactly the value that
+        // means "this trail has no order". The client needs no migration of its own.
+        public int step;
         public MarkerContent content;
         public int version;
         public double distance_m;
