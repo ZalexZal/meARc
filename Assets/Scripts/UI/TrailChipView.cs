@@ -81,14 +81,17 @@ public class TrailChipView : MonoBehaviour
             modeLabel.text = named.StartsWith("mode.") ? mode : named;
         }
 
-        // Pressable when there is somewhere to go: more than one trail to swap
-        // between, or no trail at all - in which case pressing this is how the
-        // reader gets one.
+        // Always pressable.
         //
-        // The second half is not a nicety. Dismissing the trail list leaves a
-        // reader with no trail, and with only the first half this chip was the
-        // greyed-out remains of the only way back to it.
-        bool switchable = service != null && (service.Mine.Count > 1 || !hasName);
+        // It was interactable only with more than one trail, or none - so holding
+        // exactly one made it dead, and My trails is the only route to joining a
+        // second or leaving the one you have. A reader who joins one trail could
+        // not reach that screen again by any path in the app.
+        //
+        // The chevron follows the same rule now. It said "there is somewhere to
+        // go" and there always is: the list is worth opening to leave a trail even
+        // when there is only one in it.
+        bool switchable = service != null;
 
         if (chevron != null)
             chevron.SetActive(switchable);

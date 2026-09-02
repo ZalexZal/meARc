@@ -176,7 +176,13 @@ public class CameraTabController : MonoBehaviour
 
     void WakeCamera()
     {
-        if (arSession == null || arSession.enabled || _asking)
+        // isActiveAndEnabled, not enabled.
+        //
+        // The session ships on a switched-off GameObject, and a component's own
+        // enabled flag stays true on an inactive object - so this read "already
+        // running" and returned every time. Opening the Camera tab asked for
+        // nothing and started nothing: a black screen with chrome on it.
+        if (arSession == null || arSession.isActiveAndEnabled || _asking)
             return;
 
         if (!AndroidPermissions.Has(CameraPermission))
