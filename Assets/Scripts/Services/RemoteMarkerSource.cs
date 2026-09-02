@@ -124,17 +124,28 @@ public class RemoteMarkerSource : MonoBehaviour
     }
 
     string _fetchedWorld;
+    string _fetchedAs;
 
     /// <summary>
     /// A different trail, or a different reader, means the markers on screen
     /// belong to neither. Refetched at once rather than on the usual throttle.
+    ///
+    /// Who asked matters as much as what was asked for. Joining the built-in trail
+    /// does not change the world id at all - the fallback is that same world - so a
+    /// guard that compared only the id sat still through the one event it existed
+    /// to catch, and the empty list fetched before the reader was a member stayed
+    /// on screen until the app was reinstalled.
     /// </summary>
     void HandleTrailChanged()
     {
-        if (_fetchedWorld == ActiveWorld)
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        string asWhom = auth != null && auth.IsSignedIn ? auth.UserId : null;
+
+        if (_fetchedWorld == ActiveWorld && _fetchedAs == asWhom)
             return;
 
         _fetchedWorld = ActiveWorld;
+        _fetchedAs = asWhom;
 
         BuildingDatabase.SetBuildings(new System.Collections.Generic.List<BuildingData>());
         Refresh();
@@ -213,6 +224,23 @@ public class RemoteMarkerSource : MonoBehaviour
     {
         float waitedUntil = Time.unscaledTime + 30f;
 
+        // Sign-in first. A request sent before the session exists falls back to the
+        // anon key, and the anon key is a member of nothing - so it comes back empty
+        // and looks exactly like a trail with no markers near you. Bounded, because
+        // a reader with no network should still get the cache and a failure they can
+        // retry rather than a screen that waits forever.
+        while (!SupabaseAuth.HasSettledYet)
+        {
+            if (Time.unscaledTime > waitedUntil)
+            {
+                Debug.LogWarning("[Markers] Sign-in did not settle in 30s - " +
+                                 "fetching anyway, which will only see open trails.");
+                break;
+            }
+
+            yield return new WaitForSeconds(0.25f);
+        }
+
         while (!TryGetPosition(out double _, out double __))
         {
             if (Time.unscaledTime > waitedUntil)
@@ -280,6 +308,23 @@ public class RemoteMarkerSource : MonoBehaviour
             }
 
             string json = request.downloadHandler.text;
+
+            // Says what was actually asked, and as whom.
+            //
+            // An empty array is a successful answer, so nothing here used to log at
+            // all - and markers_near returns an empty array both when nothing is
+            // nearby and when the caller is not a member of the trail. It does that
+            // on purpose: an error would tell an attacker the world exists. The
+            // cost is that the app cannot tell "nothing near you" from "you are not
+            // in this trail", and says the friendlier of the two either way.
+            SupabaseAuth auth = SupabaseAuth.Instance;
+            bool asMember = auth != null && auth.IsSignedIn;
+            int returned = json != null ? json.Split('"' + "id" + '"').Length - 1 : 0;
+
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "[Markers] world={0} at {1:F5},{2:F5} r={3} as={4} -> {5} row(s)",
+                world, latitude, longitude, radiusMetres,
+                asMember ? "member" : "ANON KEY", returned));
 
             if (Publish(json, "network"))
             {

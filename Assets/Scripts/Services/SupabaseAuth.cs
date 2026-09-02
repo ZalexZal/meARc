@@ -37,6 +37,18 @@ public class SupabaseAuth : MonoBehaviour
     /// <summary>True once the first sign-in attempt has finished, succeeded or not.</summary>
     public bool HasSettled { get; private set; }
 
+    /// <summary>
+    /// Whether sign-in has finished, answered safely before the service exists.
+    ///
+    /// A caller in another object's Start cannot assume this one has run its Awake,
+    /// and "no auth service at all" has to read as settled or a scene without one
+    /// would hang everything waiting on it.
+    /// </summary>
+    public static bool HasSettledYet
+    {
+        get { return Instance == null || Instance.HasSettled; }
+    }
+
     [Tooltip("Refreshed this many seconds before the token actually expires, so a " +
              "request is never made with one that dies in flight.")]
     public int refreshMarginSeconds = 120;
