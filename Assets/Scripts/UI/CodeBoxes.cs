@@ -199,8 +199,20 @@ public class CodeBoxes : MonoBehaviour
         if (soFar != null && soFar.Length >= Length)
             return '\0';
 
-        char c = char.ToUpperInvariant(typed);
-        return Alphabet.IndexOf(c) >= 0 ? c : '\0';
+        // Accepted case-insensitively and returned EXACTLY as typed.
+        //
+        // Returning char.ToUpperInvariant(typed) brought the scrambling back, by
+        // the same route the class comment describes. Join codes are lowercase
+        // now, so a reader types "m", the Android keyboard's buffer holds "m",
+        // and uppercasing made our text hold "M". TMP_InputField.LateUpdate
+        // compares the two, finds them different, and rebuilds its text from the
+        // keyboard while moving the caret to the native selection - once a frame,
+        // for every character after the first few. Filtering in onValidateInput
+        // was never the whole fix; not changing the character is.
+        //
+        // The boxes uppercase for display, and join_world compares with upper()
+        // on both sides, so nothing downstream cares what case arrives.
+        return Alphabet.IndexOf(char.ToUpperInvariant(typed)) >= 0 ? typed : '\0';
     }
 
     /// <summary>
@@ -251,7 +263,13 @@ public class CodeBoxes : MonoBehaviour
 
             if (cell.letter != null)
             {
-                cell.letter.text = filled ? code[i].ToString() : string.Empty;
+                // Uppercased here and only here. The field holds exactly what the
+                // keyboard sent, because rewriting it as it is typed is what makes
+                // TMP and the keyboard disagree and scramble the code; the boxes
+                // are a picture of that text and a picture may be tidied.
+                cell.letter.text = filled
+                    ? char.ToUpperInvariant(code[i]).ToString()
+                    : string.Empty;
                 cell.letter.color = _text;
             }
 

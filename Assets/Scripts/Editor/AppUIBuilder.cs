@@ -954,7 +954,9 @@ public static class AppUIBuilder
                                                 TextAlignmentOptions.Left);
         UIFactory.Corner(credit.rectTransform, new Vector2(0f, 1f), new Vector2(560f, 34f),
                          new Vector2(Margin, -256f));
-        credit.text = "\u00A9 OpenStreetMap contributors";
+        // Names whoever drew the tiles. Esri asks for it, and the data under
+        // their Gray Canvas is still OpenStreetMap's, so both are owed a line.
+        credit.text = "Esri \u00B7 \u00A9 OpenStreetMap contributors";
 
         // --- the states where there is nothing to draw ---
         controller.stateCard = BuildStateCard(safe);
@@ -1406,6 +1408,65 @@ public static class AppUIBuilder
         // Tapping the disc opens the list. That is also what the nearby button
         // used to do, so the controller keeps its existing wiring.
         controller.nearbyButton = UIFactory.Button(rt, ThemeRole.Surface, 0.9f, UIShape.Circle);
+
+        // ---------------------------------------------------------- the map
+        //
+        // The disc used to be dots on a blank surface, which told a reader the
+        // bearing and distance of a marker and nothing about what stood between
+        // them and it. Two markers 200 m away read identically whether one is
+        // across a square and the other across a river.
+        //
+        // It is the same MapView and MapTileLayer the map tab uses, at a fixed
+        // width, not interactive, and with no pins of its own - the radar draws
+        // those, and two sets of marks on one disc would be two answers to one
+        // question. North stays up, matching the rest of the disc and the N.
+        RectTransform mapHole = UIFactory.Rect("MapMask", rt);
+        UIFactory.Stretch(mapHole);
+
+        // Unity's Mask reads the alpha of its own graphic, so a circle sprite is
+        // the clip. showMaskGraphic off, or the circle paints over the tiles.
+        Image maskShape = UIFactory.Plain(mapHole, Color.white, UIShape.Circle);
+        maskShape.raycastTarget = false;
+        Mask mask = mapHole.gameObject.AddComponent<Mask>();
+        mask.showMaskGraphic = false;
+
+        RectTransform mapSurface = UIFactory.Rect("Map", mapHole);
+        UIFactory.Stretch(mapSurface);
+
+        MapView radarMap = mapSurface.gameObject.AddComponent<MapView>();
+        radarMap.locationService = location;
+        radarMap.pinPrefab = null;
+        radarMap.interactable = false;
+
+        // 1000 m across a 500 m radar, so the rim of the disc is the edge of the
+        // range the dots are placed against and the two agree.
+        radarMap.metresAcross = 1000f;
+        radarMap.minMetresAcross = 1000f;
+        radarMap.maxMetresAcross = 1000f;
+
+        RectTransform radarTiles = UIFactory.Rect("Tiles", mapSurface);
+        UIFactory.Stretch(radarTiles);
+
+        MapTileLayer radarTileLayer = mapSurface.gameObject.AddComponent<MapTileLayer>();
+        radarTileLayer.map = radarMap;
+        radarTileLayer.tileParent = radarTiles;
+
+        // Fewer than the map tab keeps, because this disc is 300px and is on
+        // screen at the same time as a camera feed.
+        radarTileLayer.maxCachedTextures = 60;
+
+        RectTransform radarContent = UIFactory.Rect("Content", mapSurface);
+        UIFactory.Stretch(radarContent);
+        radarMap.contentParent = radarContent;
+
+        // Dimmed, so the dots and the arrow stay the brightest things on it. A
+        // map at full strength turns the radar into a small second map tab.
+        //
+        // Its own object, not mapHole: that one already carries the Image the Mask
+        // clips with, and a second Image on one object comes back null.
+        RectTransform dim = UIFactory.Rect("Dim", rt);
+        UIFactory.Stretch(dim);
+        UIFactory.Fill(dim, ThemeRole.Surface, 0.45f, UIShape.Circle).raycastTarget = false;
 
         CameraRadar radar = rt.gameObject.AddComponent<CameraRadar>();
         radar.locationService = location;
@@ -2738,18 +2799,51 @@ public static class AppUIBuilder
         rect = UIFactory.Rect("TrailChip", parent);
 
         TrailChipView view = rect.gameObject.AddComponent<TrailChipView>();
-        view.button = UIFactory.Button(rect, ThemeRole.Surface, 0f, UIShape.Pill);
+
+        // A visible surface, and an outline around it.
+        //
+        // This was drawn at zero alpha, so an open trail rendered as bold text on
+        // the map with nothing around it - which reads as the name of the screen,
+        // not as the way to change trails. It sits directly under a tab bar whose
+        // first tab is called Map, so a heading in that position is read as the
+        // heading of the tab you are already in, and the one control that opens
+        // My trails looked like a caption.
+        view.button = UIFactory.Button(rect, ThemeRole.Surface, 0.94f, UIShape.Pill);
+        Outline(rect);
 
         RectTransform row = UIFactory.Rect("Row", rect);
         UIFactory.Stretch(row);
-        row.offsetMin = new Vector2(18f, 0f);
-        row.offsetMax = new Vector2(-18f, 0f);
+        row.offsetMin = new Vector2(20f, 0f);
+        row.offsetMax = new Vector2(-16f, 0f);
         HorizontalLayoutGroup layout = UIFactory.HorizontalStack(row, 12f);
         layout.childAlignment = TextAnchor.MiddleLeft;
 
+        // Says what the thing beside it is. Without it the name is just a name,
+        // and a name on a map is a label rather than a chooser.
+        TextMeshProUGUI eyebrow = UIFactory.Text("Label", row, 24f, ThemeRole.Accent,
+                                                 TextAlignmentOptions.Left, "trails.label",
+                                                 FontStyles.Bold);
+        eyebrow.characterSpacing = 8f;
+        LayoutElement eyebrowSize = UIFactory.Size(eyebrow.gameObject, 40f, 150f);
+        eyebrowSize.flexibleWidth = 0f;
+        eyebrow.textWrappingMode = TextWrappingModes.NoWrap;
+        eyebrow.raycastTarget = false;
+
+        // No localisation key, deliberately.
+        //
+        // Passing one attaches a LocalizedLabel, and that component rewrites the
+        // text from its key in OnEnable and on every language change. This label
+        // is the trail's NAME, which TrailChipView writes - so the key silently
+        // won every time, and the control permanently read "Map", the string
+        // behind tab.map. That is not a styling problem: it is why the chip
+        // looked like the title of the tab you were already in.
+        //
+        // TrailChipView subscribes to OnLanguageChanged itself and re-renders
+        // "Choose a trail" through AppStrings when no trail is open, so nothing
+        // is lost by owning the text here.
         view.nameLabel = UIFactory.Text("Name", row, Title, ThemeRole.TextPrimary,
-                                        TextAlignmentOptions.Left, "tab.map", FontStyles.Bold);
-        LayoutElement nameSize = UIFactory.Size(view.nameLabel.gameObject, 84f, 540f);
+                                        TextAlignmentOptions.Left, null, FontStyles.Bold);
+        LayoutElement nameSize = UIFactory.Size(view.nameLabel.gameObject, 84f, 400f);
         nameSize.flexibleWidth = 0f;
 
         // One line, cut with an ellipsis. Autosizing alone was not enough: a name
@@ -2777,7 +2871,7 @@ public static class AppUIBuilder
         view.modeLabel.textWrappingMode = TextWrappingModes.NoWrap;
         view.modeLabel.overflowMode = TextOverflowModes.Ellipsis;
 
-        Icon(row, AppIcon.ChevronRight, 34f, ThemeRole.TextMuted, out RectTransform chevron);
+        Icon(row, AppIcon.List, 34f, ThemeRole.Accent, out RectTransform chevron);
         view.chevron = chevron.gameObject;
 
         return view.nameLabel;

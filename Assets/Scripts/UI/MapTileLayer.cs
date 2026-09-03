@@ -19,7 +19,7 @@ using UnityEngine.UI;
 /// Every tile is cached to disk on first sight, so a street walked once works with
 /// no signal afterwards, and a pan back over ground already seen costs nothing.
 ///
-/// On the tile server: <see cref="urlTemplate"/> points at OpenStreetMap's own
+/// On the tile server: <see cref="urlTemplateLight"/> and its dark twin point at Esri's
 /// tiles, which is fine for development at this volume and is NOT fine for a
 /// released app - their tile usage policy forbids it. Shipping means pointing this
 /// at a provider (MapTiler, Thunderforest, Stadia) or a self-hosted renderer. It is
@@ -34,8 +34,61 @@ public class MapTileLayer : MonoBehaviour
     public RectTransform tileParent;
 
     [Header("Source")]
-    [Tooltip("{z}, {x} and {y} are replaced. See the note on this class before release.")]
-    public string urlTemplate = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    // Esri's Light and Dark Gray Canvas. Note the order: this service takes
+    // {z}/{y}/{x}, not {z}/{x}/{y}, and swapping them silently returns a tile
+    // from somewhere else entirely rather than an error.
+    //
+    // Not CARTO, which was tried first. basemaps.cartocdn.com answers HTTP 200
+    // for a key-less request and returns a tile with "API KEY REQUIRED" printed
+    // across it, so a check that reads the status code and not the picture says
+    // the map works. It reached the phone before anybody looked at it.
+    [Tooltip("Light theme. {z}, {y} and {x} are replaced - in that order.")]
+    public string urlTemplateLight =
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+
+    [Tooltip("Dark theme. Drawn dark at the source, which replaced inverting a " +
+             "light tile per pixel - a decent impression of a night map that " +
+             "never actually was one.")]
+    public string urlTemplateDark =
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+
+    /// <summary>Whichever the theme is asking for.</summary>
+    public string urlTemplate
+    {
+        get { return _dark ? urlTemplateDark : urlTemplateLight; }
+    }
+
+    /// <summary>
+    /// Part of the cache filename: which server, and which theme.
+    ///
+    /// The theme alone was not enough. Switching providers kept every tile the
+    /// old one had drawn, because "dark_15_18796_12104.png" says nothing about
+    /// who drew it - so a CARTO tile with API KEY REQUIRED printed across it
+    /// survived the move to Esri and arrived on the phone looking exactly like a
+    /// change that had not been made.
+    ///
+    /// Taken from the host, so a future swap busts the cache without anybody
+    /// having to remember to.
+    /// </summary>
+    string StyleKey
+    {
+        get
+        {
+            string host = "tiles";
+
+            try
+            {
+                host = new System.Uri(urlTemplate).Host.Replace('.', '_');
+            }
+            catch (System.Exception)
+            {
+                // A template that is not a URL yet is not worth throwing over;
+                // the request itself will report it far more clearly.
+            }
+
+            return host + "_" + (_dark ? "dark" : "light");
+        }
+    }
 
     [Tooltip("Sent with every request. OpenStreetMap rejects anonymous clients, and " +
              "being identifiable is the least a tile consumer owes a free service.")]
@@ -54,7 +107,16 @@ public class MapTileLayer : MonoBehaviour
     public int maxCachedTextures = 220;
 
     [Tooltip("OSM has no tiles past this, and asking wastes a request.")]
-    public int maxZoom = 19;
+    // 16, because that is where Esri's Gray Canvas stops having tiles over
+    // Bulgaria. Past it the service answers with a 2,521-byte image reading
+    // "Map data not yet available", identically at every zoom and every
+    // coordinate, so a check on the status code or the size sees a tile.
+    //
+    // Capping here rather than letting it ask is what turns the ceiling into an
+    // overzoom: tiles are positioned by projecting their own corners, so a z16
+    // tile asked to cover a z18 view is simply drawn four times larger. Softer
+    // close in, and continuous - which beats a wall of placeholders.
+    public int maxZoom = 16;
 
     public int minZoom = 3;
 
@@ -393,7 +455,9 @@ public class MapTileLayer : MonoBehaviour
 
         Unpack(key, out int z, out int x, out int y);
 
-        string path = Path.Combine(CacheFolder, z + "_" + x + "_" + y + ".png");
+        // The style is in the name. Without it a dark tile is served to the light
+        // theme from cache, which looks like the theme toggle half-working.
+        string path = Path.Combine(CacheFolder, StyleKey + "_" + z + "_" + x + "_" + y + ".png");
         byte[] data = null;
 
         if (File.Exists(path))
@@ -462,9 +526,13 @@ public class MapTileLayer : MonoBehaviour
     }
 
     /// <summary>
-    /// Decodes a tile, inverting it for the dark theme. The inversion turns an OSM
-    /// tile into a passable dark map - light roads on a dark ground - and is done
-    /// once per tile rather than per frame.
+    /// Decodes a tile.
+    ///
+    /// This used to invert every pixel for the dark theme, because OpenStreetMap
+    /// only serves a light tile and an inverted one is a passable night map. The
+    /// dark basemap is now fetched dark, so the loop is gone - along with a
+    /// GetPixels32/SetPixels32 round trip on every tile, which was the most
+    /// expensive thing this class did.
     /// </summary>
     Texture2D Build(byte[] data)
     {
@@ -479,31 +547,6 @@ public class MapTileLayer : MonoBehaviour
         texture.wrapMode = TextureWrapMode.Clamp;
         texture.filterMode = FilterMode.Bilinear;
 
-        if (_dark)
-        {
-            Color32[] pixels = texture.GetPixels32();
-
-            for (int i = 0; i < pixels.Length; i++)
-            {
-                Color32 c = pixels[i];
-
-                // Inverted, then pulled back towards neutral so the result is a
-                // muted dark map rather than a photographic negative.
-                int r = 255 - c.r;
-                int g = 255 - c.g;
-                int b = 255 - c.b;
-
-                int grey = (r * 30 + g * 59 + b * 11) / 100;
-
-                pixels[i] = new Color32(
-                    (byte)((r + grey * 2) / 3 * 82 / 100),
-                    (byte)((g + grey * 2) / 3 * 84 / 100),
-                    (byte)((b + grey * 2) / 3 * 88 / 100),
-                    c.a);
-            }
-
-            texture.SetPixels32(pixels);
-        }
 
         texture.Apply(false, true); // no longer readable: halves the memory
         return texture;
