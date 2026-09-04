@@ -22,10 +22,18 @@ using UnityEngine.UI;
 ///   yet opened. The row loses its "Stop n of 9" and keeps everything else, which
 ///   is why this is one component with a variable rather than two components.
 ///
-/// The mode is inferred from the data, not from a setting: if any marker in the
-/// trail carries a step, the trail is ordered. That means the strip works today,
-/// before the step column exists, and lights up on its own the moment a creator
-/// puts an order on a trail.
+/// Which of the two applies is read off the trail's mode, not off the data.
+///
+/// It used to be inferred - any marker carrying a step meant the trail was
+/// ordered - which was a reasonable guess while nothing set steps. It stopped
+/// being reasonable when the creator began numbering every stop on creation:
+/// under the old rule the first marker placed on a Freefall trail turned it into
+/// a guided one, and the creator was never asked. Mode is the thing the creator
+/// actually chose; a step is data that may or may not be there.
+///
+/// A blank mode still means guide, as it does everywhere else, and a guided
+/// trail whose creator never set an order falls through to nearest-unopened on
+/// its own, because there is no route to draw.
 /// </summary>
 public class NextStopStrip : MonoBehaviour
 {
@@ -111,16 +119,18 @@ public class NextStopStrip : MonoBehaviour
             return;
         }
 
-        // Ordered if anybody bothered to order it. Reading the mode off the data
-        // rather than off the trail's mode field means a guided trail whose creator
-        // never set an order still behaves sensibly instead of claiming a sequence
-        // it does not have.
+        // Freefall is unordered by definition, so it ignores steps even when the
+        // markers carry them - which they now always do, because the creator
+        // numbers every stop as it is placed.
         List<BuildingData> route = new List<BuildingData>();
 
-        for (int i = 0; i < all.Count; i++)
+        if (!IsFreefall)
         {
-            if (all[i] != null && all[i].step > 0)
-                route.Add(all[i]);
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i] != null && all[i].step > 0)
+                    route.Add(all[i]);
+            }
         }
 
         route.Sort((a, b) => a.step.CompareTo(b.step));
@@ -129,6 +139,29 @@ public class NextStopStrip : MonoBehaviour
             DrawRoute(route);
         else
             DrawNearest(all);
+    }
+
+    /// <summary>
+    /// Whether the open trail is the one mode that has no order.
+    ///
+    /// Anything else - guide, ctf, educational, and a blank mode from a row that
+    /// predates the column - follows the creator's sequence. Defaulting the
+    /// unknown case to ordered is the safer way round: a trail that should have
+    /// been ordered and is not merely loses its "Stop 3 of 9", whereas the
+    /// reverse sends a Freefall walker to a stop the creator never meant to send
+    /// them to first.
+    /// </summary>
+    static bool IsFreefall
+    {
+        get
+        {
+            TrailService trails = TrailService.Instance;
+            if (trails == null || trails.Selected == null)
+                return false;
+
+            return string.Equals(trails.Selected.mode, "freefall",
+                                 System.StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>A trail with an order: next is the next step nobody has found.</summary>
