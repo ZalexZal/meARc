@@ -2236,6 +2236,123 @@ const float ReferenceWidth = 1080f;
         return controller;
     }
 
+    /// <summary>
+    /// Sign up, sign in, sign out - the two states of an account in one card.
+    ///
+    /// Built here rather than as a door because it is a setting, not a gate: the
+    /// app opens and works without one, and the reader who wants their walking to
+    /// survive a reinstall comes looking for it. A modal in the way of the map
+    /// would be asking for a form before earning the right to.
+    /// </summary>
+    static AccountSectionView BuildAccountCard(Transform content)
+    {
+        SectionLabel(content, "settings.account");
+
+        RectTransform card = UIFactory.Rect("AccountCard", content);
+        UIFactory.Card(card, 34f, 20f);
+
+        AccountSectionView view = card.gameObject.AddComponent<AccountSectionView>();
+
+        // ------------------------------------------------------- signed in
+        RectTransform inGroup = UIFactory.Rect("SignedIn", card);
+        UIFactory.VerticalStack(inGroup, 16f);
+        view.signedInGroup = inGroup.gameObject;
+
+        UIFactory.Text("Caption", inGroup, Caption, ThemeRole.TextMuted,
+                       TextAlignmentOptions.Left, "account.signedInAs");
+
+        view.emailLabel = UIFactory.Text("Email", inGroup, Body, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.emailLabel.gameObject, 52f);
+
+        view.signOutButton = FullWidthButton(inGroup, "SignOut", "account.signOut",
+                                             ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        // ------------------------------------------------------- anonymous
+        RectTransform outGroup = UIFactory.Rect("Anonymous", card);
+        UIFactory.VerticalStack(outGroup, 16f);
+        view.anonymousGroup = outGroup.gameObject;
+
+        TextMeshProUGUI none = UIFactory.Text("None", outGroup, Body, ThemeRole.TextPrimary,
+                                              TextAlignmentOptions.Left, "account.none",
+                                              FontStyles.Bold);
+        UIFactory.Size(none.gameObject, 52f);
+
+        TextMeshProUGUI body = UIFactory.Text("Body", outGroup, Secondary, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.Left, "account.noneBody");
+        body.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(body.gameObject, 110f);
+
+        view.emailField = Field(outGroup, "Email", "account.email");
+        view.emailField.contentType = TMP_InputField.ContentType.EmailAddress;
+
+        view.passwordField = Field(outGroup, "Password", "account.password");
+        view.passwordField.contentType = TMP_InputField.ContentType.Password;
+
+        view.signUpButton = FullWidthButton(outGroup, "Create", "account.create",
+                                            ThemeRole.Accent, ThemeRole.OnAccent);
+        view.signInButton = FullWidthButton(outGroup, "SignIn", "account.signIn",
+                                            ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        // Said before it happens, not after. There is no correct merge - two start
+        // times, two teams, the same stop solved twice - so the only honest thing
+        // is to warn and then keep the account's own history.
+        TextMeshProUGUI warn = UIFactory.Text("Merge", outGroup, Caption, ThemeRole.TextMuted,
+                                              TextAlignmentOptions.Left,
+                                              "account.mergeWarning");
+        warn.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(warn.gameObject, 80f);
+
+        // ----------------------------------------------------------- status
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(view.statusLabel.gameObject, 60f);
+        view.statusLabel.text = string.Empty;
+        view.statusLabel.gameObject.SetActive(false);
+
+        return view;
+    }
+
+    /// <summary>
+    /// A text field that can be seen on a card.
+    ///
+    /// UIFactory.InputField paints itself Surface, which is the colour of the
+    /// card it is sitting on - so the box vanished and the account form was two
+    /// grey words floating in the middle of a panel. SurfaceAlt is the step the
+    /// palette keeps for exactly this, a thing inside a thing.
+    /// </summary>
+    static TMP_InputField Field(Transform parent, string name, string placeholderKey)
+    {
+        TMP_InputField field = UIFactory.InputField(name, parent, placeholderKey, out _);
+
+        ThemedElement themed = field.GetComponent<ThemedElement>();
+        if (themed != null)
+        {
+            themed.role = ThemeRole.SurfaceAlt;
+            themed.Apply();
+        }
+
+        return field;
+    }
+
+    /// <summary>A button that fills the card's width, with its label centred.</summary>
+    static Button FullWidthButton(Transform parent, string name, string key,
+                                  ThemeRole background, ThemeRole ink)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        UIFactory.Size(rt.gameObject, Tap);
+
+        Button button = UIFactory.Button(rt, background, 1f, UIShape.Rounded);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", rt, Body, ink,
+                                               TextAlignmentOptions.Center, key,
+                                               FontStyles.Bold);
+        UIFactory.Stretch(label.rectTransform);
+
+        return button;
+    }
+
     static TextMeshProUGUI SectionLabel(Transform parent, string key)
     {
         TextMeshProUGUI label = UIFactory.Text("Label", parent, Caption, ThemeRole.TextMuted,
@@ -2308,6 +2425,8 @@ const float ReferenceWidth = 1080f;
         rootView.offsetMax = new Vector2(-Margin, -Margin);
         RectTransform content = UIFactory.ScrollList("Scroll", rootView, 26f);
         navigator.rootView = rootView.gameObject;
+
+        BuildAccountCard(content);
 
         controller.appearanceLabel = SectionLabel(content, "settings.appearance");
         RectTransform appearance = UIFactory.Rect("AppearanceCard", content);

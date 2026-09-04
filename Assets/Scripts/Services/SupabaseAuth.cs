@@ -29,6 +29,9 @@ public class SupabaseAuth : MonoBehaviour
     public string UserId { get; private set; }
     public bool IsAnonymous { get; private set; }
 
+    /// <summary>The address on the account, or null while anonymous.</summary>
+    public string Email { get; private set; }
+
     public bool IsSignedIn
     {
         get { return !string.IsNullOrEmpty(AccessToken); }
@@ -130,6 +133,212 @@ public class SupabaseAuth : MonoBehaviour
         _working = false;
     }
 
+    /// <summary>
+    /// Turns the anonymous user into a permanent one, in place.
+    ///
+    /// PUT on the existing session, never signup. The anonymous user is a real
+    /// row in auth.users with real progress hanging off its id - team
+    /// memberships, solved stops, submissions - and this converts that row,
+    /// keeping the uid, so there is nothing to migrate.
+    ///
+    /// Calling signup instead would mint a second user and strand the first. It
+    /// looks like it worked, because the new account is empty and empty looks
+    /// clean, and the walk somebody did this morning is simply gone.
+    ///
+    /// The refresh afterwards is not tidying: the reply is a user, not a session,
+    /// so the token still in hand says is_anonymous and every screen reading that
+    /// would go on believing it.
+    /// </summary>
+    public IEnumerator SignUp(string email, string password, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || !IsSignedIn)
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        _working = true;
+
+        string body = "{\"email\":\"" + Escape(email) + "\"," +
+                      "\"password\":\"" + Escape(password) + "\"}";
+
+        using (UnityWebRequest request = Put(config.Endpoint("/auth/v1/user"), body))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                _working = false;
+                Fail(done, Explain(request), request);
+                yield break;
+            }
+        }
+
+        // Same uid, now permanent. The session catches up here.
+        yield return Refresh();
+
+        _working = false;
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>
+    /// Signs in to an account that already exists, replacing this session.
+    ///
+    /// Anything done anonymously on this device stays with the anonymous user and
+    /// is NOT merged into the account. Merging has no correct answer - two start
+    /// times, two teams, the same stop solved twice - so the caller is expected to
+    /// have said so before getting here.
+    /// </summary>
+    public IEnumerator SignIn(string email, string password, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        _working = true;
+
+        string body = "{\"email\":\"" + Escape(email) + "\"," +
+                      "\"password\":\"" + Escape(password) + "\"}";
+
+        using (UnityWebRequest request =
+               Post(config.Endpoint("/auth/v1/token?grant_type=password"), body, config.anonKey))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                _working = false;
+                Fail(done, Explain(request), request);
+                yield break;
+            }
+
+            Handle(request, "sign-in");
+        }
+
+        _working = false;
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>
+    /// Leaves the account and goes back to being nobody in particular.
+    ///
+    /// A new anonymous user follows immediately, because every screen in this app
+    /// assumes there is a session - a signed-out state with no uid would show a
+    /// map with no trails and no way to say why.
+    /// </summary>
+    public IEnumerator SignOut(Action done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config != null && IsSignedIn)
+        {
+            _working = true;
+
+            using (UnityWebRequest request =
+                   Post(config.Endpoint("/auth/v1/logout"), "{}", AccessToken))
+            {
+                yield return request.SendWebRequest();
+                // A failed logout is not worth blocking on. The token is being
+                // thrown away here either way.
+            }
+
+            _working = false;
+        }
+
+        AccessToken = null;
+        UserId = null;
+        Email = null;
+        IsAnonymous = true;
+        PlayerPrefs.DeleteKey(RefreshKey);
+        PlayerPrefs.Save();
+
+        yield return SignInAnonymously();
+
+        if (done != null)
+            done();
+    }
+
+    /// <summary>A PUT carrying the reader's own token. Used only by SignUp.</summary>
+    static UnityWebRequest Put(string url, string json)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        UnityWebRequest request = new UnityWebRequest(url, "PUT");
+        request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Content-Type", "application/json");
+        request.timeout = 20;
+
+        if (config != null)
+            request.SetRequestHeader("apikey", config.anonKey);
+
+        // The anon key is no use: this changes the calling user's own row, so the
+        // call has to be made as them.
+        if (Instance != null && !string.IsNullOrEmpty(Instance.AccessToken))
+            request.SetRequestHeader("Authorization", "Bearer " + Instance.AccessToken);
+
+        return request;
+    }
+
+    /// <summary>
+    /// GoTrue's own words where it wrote any, and a string key where it did not.
+    ///
+    /// "That address is already registered" and "Password should be at least 6
+    /// characters" are both things a person can act on; "sign-up failed" is not.
+    /// </summary>
+    static string Explain(UnityWebRequest request)
+    {
+        string payload = request.downloadHandler != null ? request.downloadHandler.text : null;
+
+        if (!string.IsNullOrWhiteSpace(payload))
+        {
+            try
+            {
+                AuthError error = JsonUtility.FromJson<AuthError>(payload);
+
+                if (error != null && !string.IsNullOrWhiteSpace(error.Best))
+                    return error.Best;
+            }
+            catch (Exception)
+            {
+                // Not JSON, or not a shape we know. The key below is the answer.
+            }
+        }
+
+        return "auth.failed";
+    }
+
+    static void Fail(Action<string> done, string message, UnityWebRequest request = null)
+    {
+        if (request != null)
+        {
+            Debug.LogWarning("[Auth] " + message + " (" + request.responseCode + ") " +
+                             Trim(request.downloadHandler != null
+                                  ? request.downloadHandler.text : string.Empty));
+        }
+
+        if (done != null)
+            done(message);
+    }
+
+    static string Escape(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+
     IEnumerator Refresh()
     {
         SupabaseConfig config = SupabaseConfig.Instance;
@@ -186,6 +395,7 @@ public class SupabaseAuth : MonoBehaviour
         AccessToken = session.access_token;
         UserId = session.user != null ? session.user.id : null;
         IsAnonymous = session.user != null && session.user.is_anonymous;
+        Email = session.user != null ? session.user.email : null;
 
         // Supabase reports a lifetime, not a moment, so it is turned into one here
         // rather than being recomputed at every call site.
@@ -301,5 +511,29 @@ public class SupabaseAuth : MonoBehaviour
     {
         public string id;
         public bool is_anonymous;
+        public string email;
+    }
+
+    /// <summary>
+    /// GoTrue's error shapes. It uses two, depending on which part of it failed,
+    /// and a person reading "sign-up failed" learns nothing - the message it
+    /// sends says whether the address is taken or the password is too short.
+    /// </summary>
+    [Serializable]
+    class AuthError
+    {
+        public string msg;
+        public string message;
+        public string error_description;
+
+        public string Best
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(msg)) return msg;
+                if (!string.IsNullOrWhiteSpace(message)) return message;
+                return error_description;
+            }
+        }
     }
 }

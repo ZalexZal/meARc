@@ -116,11 +116,60 @@ public class MarkerMedia
             if (!string.IsNullOrWhiteSpace(written))
                 return written;
 
-            return AppStrings.Get(Kind == MarkerMediaKind.Audio ? "piece.listen" : "piece.watch");
+            // The builder has no field for a piece's name, so in practice there
+            // never is one. Falling back to the kind word made the row say the
+            // same thing twice - "Look" over "Look" - and made three photographs
+            // on one marker three identical rows. The file's own name at least
+            // tells them apart, and a creator who named the file sensibly gets a
+            // sensible row for free.
+            string named = FileName(path);
+            if (!string.IsNullOrWhiteSpace(named))
+                return named;
+
+            return AppStrings.Get(Kind == MarkerMediaKind.Audio ? "piece.listen" :
+                                  Kind == MarkerMediaKind.Image ? "piece.look" : "piece.watch");
         }
     }
 
     /// <summary>m:ss, or empty when the portal did not record a length.</summary>
+    /// <summary>
+    /// A readable name out of a storage path.
+    ///
+    /// The portal uploads as "&lt;world&gt;/&lt;marker&gt;/&lt;timestamp&gt;-&lt;name&gt;",
+    /// so the last segment carries a millisecond stamp nobody wants to read.
+    /// Underscores go back to spaces because the portal put them there when it
+    /// scrubbed the original name.
+    /// </summary>
+    static string FileName(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Contains("://"))
+            return null;
+
+        string last = path.TrimEnd('/');
+        int slash = last.LastIndexOf('/');
+        if (slash >= 0)
+            last = last.Substring(slash + 1);
+
+        int dash = last.IndexOf('-');
+        if (dash > 0 && dash < last.Length - 1)
+        {
+            string prefix = last.Substring(0, dash);
+            bool digits = prefix.Length > 0;
+
+            for (int i = 0; i < prefix.Length && digits; i++)
+                digits = char.IsDigit(prefix[i]);
+
+            if (digits)
+                last = last.Substring(dash + 1);
+        }
+
+        int dot = last.LastIndexOf('.');
+        if (dot > 0)
+            last = last.Substring(0, dot);
+
+        return last.Replace('_', ' ').Trim();
+    }
+
     public string Duration
     {
         get

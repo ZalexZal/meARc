@@ -142,14 +142,17 @@ public class MediaPlayerView : MonoBehaviour
         if (timeLabel != null)
             timeLabel.gameObject.SetActive(!still);
 
+        // Before the early return below, not after it. Returning first left the
+        // label holding the word UIFactory seeds every text object with - the
+        // object is called Title, so a photograph was captioned "Title".
+        if (titleLabel != null)
+            titleLabel.text = media.Title;
+
         if (still)
         {
             ShowStill(media);
             return;
         }
-
-        if (titleLabel != null)
-            titleLabel.text = media.Title;
 
         SetProgress(0f);
         UpdateTime(0d);
