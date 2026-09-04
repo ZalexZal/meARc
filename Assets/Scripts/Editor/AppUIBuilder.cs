@@ -25,7 +25,20 @@ using UnityEngine.XR.ARFoundation;
 /// </summary>
 public static class AppUIBuilder
 {
-    const float ReferenceWidth = 1080f;
+        /// <summary>
+    /// The Stadia Maps key, in one place.
+    ///
+    /// Two MapTileLayers are built - the map tab's and the radar's - and a key
+    /// set on one of them is a map that is sharp in one place and soft in the
+    /// other, which reads as a rendering bug rather than a missing setting.
+    ///
+    /// It ships in the APK and Stadia offers no way to restrict it - their domain
+    /// authentication is referer-based and covers browsers only. Give the app its
+    /// own property so this key can be rotated without touching the website's.
+    /// </summary>
+    const string StadiaKey = "a6a14986-fcf4-45c1-9033-e7e6040a5ed6";
+
+const float ReferenceWidth = 1080f;
     const float ReferenceHeight = 1920f;
 
     const float Nav = 190f;
@@ -817,6 +830,7 @@ public static class AppUIBuilder
         MapTileLayer tileLayer = surface.gameObject.AddComponent<MapTileLayer>();
         tileLayer.map = map;
         tileLayer.tileParent = tiles;
+        tileLayer.stadiaApiKey = StadiaKey;
 
         RectTransform content = UIFactory.Rect("Content", surface);
         UIFactory.Stretch(content);
@@ -950,13 +964,21 @@ public static class AppUIBuilder
 
         // Required by the tile licence, and it belongs on screen anyway - the map
         // is somebody else's work.
-        TextMeshProUGUI credit = UIFactory.Text("Attribution", safe, 26f, ThemeRole.TextMuted,
+        TextMeshProUGUI credit = UIFactory.Text("Attribution", safe, 23f, ThemeRole.TextMuted,
                                                 TextAlignmentOptions.Left);
-        UIFactory.Corner(credit.rectTransform, new Vector2(0f, 1f), new Vector2(560f, 34f),
-                         new Vector2(Margin, -256f));
-        // Names whoever drew the tiles. Esri asks for it, and the data under
-        // their Gray Canvas is still OpenStreetMap's, so both are owed a line.
-        credit.text = "Esri \u00B7 \u00A9 OpenStreetMap contributors";
+        UIFactory.Corner(credit.rectTransform, new Vector2(0f, 1f), new Vector2(900f, 30f),
+                         new Vector2(Margin, -272f));
+        credit.textWrappingMode = TextWrappingModes.NoWrap;
+        credit.overflowMode = TextOverflowModes.Ellipsis;
+
+        // The box was 560 wide for a string that needed more, so the longer
+        // Stadia attribution folded onto a second line and sat on top of the
+        // scale bar. A licence notice covering the distance legend is two
+        // failures at once.
+        //
+        // All three are owed a line: Stadia drew the tiles, OpenMapTiles built
+        // the schema, and the data underneath is OpenStreetMap's.
+        credit.text = "\u00A9 Stadia Maps \u00B7 OpenMapTiles \u00B7 OpenStreetMap";
 
         // --- the states where there is nothing to draw ---
         controller.stateCard = BuildStateCard(safe);
@@ -1450,6 +1472,7 @@ public static class AppUIBuilder
         MapTileLayer radarTileLayer = mapSurface.gameObject.AddComponent<MapTileLayer>();
         radarTileLayer.map = radarMap;
         radarTileLayer.tileParent = radarTiles;
+        radarTileLayer.stadiaApiKey = StadiaKey;
 
         // Fewer than the map tab keeps, because this disc is 300px and is on
         // screen at the same time as a camera feed.

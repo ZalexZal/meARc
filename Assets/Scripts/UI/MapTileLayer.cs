@@ -33,60 +33,114 @@ public class MapTileLayer : MonoBehaviour
     [Tooltip("Tiles are parented here, under everything else on the map.")]
     public RectTransform tileParent;
 
-    [Header("Source")]
-    // Esri's Light and Dark Gray Canvas. Note the order: this service takes
-    // {z}/{y}/{x}, not {z}/{x}/{y}, and swapping them silently returns a tile
-    // from somewhere else entirely rather than an error.
+    // ------------------------------------------------------------- the source
     //
-    // Not CARTO, which was tried first. basemaps.cartocdn.com answers HTTP 200
-    // for a key-less request and returns a tile with "API KEY REQUIRED" printed
-    // across it, so a check that reads the status code and not the picture says
-    // the map works. It reached the phone before anybody looked at it.
-    [Tooltip("Light theme. {z}, {y} and {x} are replaced - in that order.")]
-    public string urlTemplateLight =
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+    // Stadia Outdoors, in both themes.
+    //
+    // Alidade Smooth came first and is the prettier map, but it hides points of
+    // interest by design - the opposite of what somebody standing in a street
+    // needs. Outdoors names the cafes, the banks, the library and the
+    // playground, and those are what a person navigates by: "past the bank, then
+    // left" is a direction; "past the unlabelled grey block" is not.
+    //
+    // It is a light style and there is no dark variant that keeps the labels, so
+    // the dark theme gets the same tiles. A bright map under dark chrome is a
+    // real cost and it is the smaller one: these trails are walked in daylight,
+    // where a dark map is the harder thing to read.
+    //
+    // @2x asks for 512-pixel tiles covering the same ground as a 256-pixel one,
+    // so the view carries twice the linear resolution. Nothing else changes for
+    // it: tiles are placed by projecting their own corners, and ZoomFor still
+    // reasons in logical 256-pixel tiles, so this buys sharpness rather than a
+    // different zoom.
+    //
+    // Zoom 20, where Esri's Gray Canvas stopped at 16 over Bulgaria and
+    // everything past it was one z16 tile stretched.
 
-    [Tooltip("Dark theme. Drawn dark at the source, which replaced inverting a " +
-             "light tile per pixel - a decent impression of a night map that " +
-             "never actually was one.")]
+    [Header("Source")]
+    [Tooltip("Stadia Maps API key, on its own property. Stadia offers no way to " +
+             "restrict a key - rotate it if it is abused. Empty falls back to " +
+             "Esri, which works but is not sharp past zoom 16.")]
+    public string stadiaApiKey = "";
+
+    [Tooltip("Light theme. {z}, {x} and {y} are replaced.")]
+    public string urlTemplateLight =
+        "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}@2x.png";
+
+    [Tooltip("Dark theme. The same style: Outdoors has no dark variant that keeps " +
+             "its labels, and the labels are why it is here.")]
     public string urlTemplateDark =
+        "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}@2x.png";
+
+    // Esri's Gray Canvas. No key, capped at zoom 16, used only when no Stadia key
+    // is set. A soft map beats no map on a walk, and OnEnable says which is in
+    // use so a soft one is never a mystery.
+    const string FallbackLight =
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+    const string FallbackDark =
         "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
 
-    /// <summary>Whichever the theme is asking for.</summary>
+    public bool HasKey { get { return !string.IsNullOrWhiteSpace(stadiaApiKey); } }
+
+    /// <summary>Whichever the theme is asking for, from whichever server we may use.</summary>
     public string urlTemplate
     {
-        get { return _dark ? urlTemplateDark : urlTemplateLight; }
+        get
+        {
+            if (!HasKey)
+                return _dark ? FallbackDark : FallbackLight;
+
+            return (_dark ? urlTemplateDark : urlTemplateLight) + "?api_key=" + stadiaApiKey;
+        }
     }
 
     /// <summary>
-    /// Part of the cache filename: which server, and which theme.
+    /// How deep the current source actually has tiles.
     ///
-    /// The theme alone was not enough. Switching providers kept every tile the
-    /// old one had drawn, because "dark_15_18796_12104.png" says nothing about
-    /// who drew it - so a CARTO tile with API KEY REQUIRED printed across it
-    /// survived the move to Esri and arrived on the phone looking exactly like a
-    /// change that had not been made.
+    /// Esri answers past its ceiling with a 2,521-byte image reading "Map data
+    /// not yet available", identically at every zoom and coordinate, so asking
+    /// beyond it fills the screen with placeholders rather than failing. Capping
+    /// turns the ceiling into an overzoom: a z16 tile covering a z18 view is
+    /// simply drawn larger.
+    /// </summary>
+    public int EffectiveMaxZoom { get { return HasKey ? maxZoom : 16; } }
+
+    /// <summary>
+    /// Part of the cache filename: which picture, and which theme.
     ///
-    /// Taken from the host, so a future swap busts the cache without anybody
-    /// having to remember to.
+    /// Built from the whole template rather than the host. Keying on the host
+    /// fixed the CARTO-to-Esri switch and then failed on the very next one:
+    /// alidade_smooth_dark and outdoors are both tiles.stadiamaps.com, so the
+    /// name did not change and the phone went on serving the old style from
+    /// disk. The map came back looking exactly like the change had not been
+    /// made - twice now, from the same mistake made one level too shallow.
+    ///
+    /// The api_key is stripped first, so rotating a key does not throw away
+    /// every cached tile.
     /// </summary>
     string StyleKey
     {
         get
         {
-            string host = "tiles";
+            string template = urlTemplate;
 
-            try
-            {
-                host = new System.Uri(urlTemplate).Host.Replace('.', '_');
-            }
-            catch (System.Exception)
-            {
-                // A template that is not a URL yet is not worth throwing over;
-                // the request itself will report it far more clearly.
-            }
+            int query = template.IndexOf('?');
+            if (query >= 0)
+                template = template.Substring(0, query);
 
-            return host + "_" + (_dark ? "dark" : "light");
+            // Not a security hash - a short, stable name for a string.
+            unchecked
+            {
+                uint hash = 2166136261u;
+
+                for (int i = 0; i < template.Length; i++)
+                {
+                    hash ^= template[i];
+                    hash *= 16777619u;
+                }
+
+                return hash.ToString("x8") + (_dark ? "_d" : "_l");
+            }
         }
     }
 
@@ -116,7 +170,9 @@ public class MapTileLayer : MonoBehaviour
     // overzoom: tiles are positioned by projecting their own corners, so a z16
     // tile asked to cover a z18 view is simply drawn four times larger. Softer
     // close in, and continuous - which beats a wall of placeholders.
-    public int maxZoom = 16;
+    // What Stadia serves. The Esri fallback caps itself lower through
+    // EffectiveMaxZoom.
+    public int maxZoom = 20;
 
     public int minZoom = 3;
 
@@ -169,6 +225,12 @@ public class MapTileLayer : MonoBehaviour
 
     void OnEnable()
     {
+        if (!HasKey)
+        {
+            Debug.LogWarning("[Tiles] No Stadia key, so the map falls back to Esri " +
+                             "and will not be sharp past zoom 16.");
+        }
+
         _dark = ThemeManager.IsDark;
         ThemeManager.OnThemeChanged += HandleThemeChanged;
     }
@@ -599,7 +661,7 @@ public class MapTileLayer : MonoBehaviour
             EarthCircumference * Math.Cos(latitude * Math.PI / 180d) / TilePixels;
 
         int zoom = (int)Math.Round(Math.Log(groundAtZoomZero / metresPerPixel, 2d));
-        return Mathf.Clamp(zoom, minZoom, maxZoom);
+        return Mathf.Clamp(zoom, minZoom, EffectiveMaxZoom);
     }
 
     static double LonToTileX(double longitude, int n)
