@@ -65,6 +65,24 @@ public class MarkerPieceController : MonoBehaviour
     // ------------------------------------------------------------------- list
 
     /// <summary>Called when the sheet opens on a marker.</summary>
+    /// <summary>
+    /// What a reader is being asked to do with this piece.
+    ///
+    /// A photograph labelled "Watch" is a photograph that looks like a video that
+    /// will not start. Uploaded stills have been possible in the builder from the
+    /// beginning and the app had no word for one.
+    /// </summary>
+    static string Verb(MarkerMedia piece)
+    {
+        if (piece.Kind == MarkerMediaKind.Audio)
+            return "piece.listen";
+
+        if (piece.Kind == MarkerMediaKind.Image)
+            return "piece.look";
+
+        return "piece.watch";
+    }
+
     public void Bind(BuildingData marker)
     {
         _marker = marker;
@@ -133,7 +151,7 @@ public class MarkerPieceController : MonoBehaviour
                 bool audio = piece.Kind == MarkerMediaKind.Audio;
 
                 _rows[i].Bind(audio ? audioIcon : videoIcon,
-                              AppStrings.Get(audio ? "piece.listen" : "piece.watch"),
+                              AppStrings.Get(Verb(piece)),
                               piece.Title,
                               _played.Contains(Key(piece)));
             }
@@ -185,8 +203,7 @@ public class MarkerPieceController : MonoBehaviour
         // one. Putting the name in both places printed it twice, one line apart.
         if (pageTitle != null)
         {
-            pageTitle.text = AppStrings.Get(
-                piece.Kind == MarkerMediaKind.Audio ? "piece.listen" : "piece.watch");
+            pageTitle.text = AppStrings.Get(Verb(piece));
         }
 
         // Marked as played on opening, not on finishing. The tick means "you have

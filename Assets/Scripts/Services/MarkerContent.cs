@@ -49,7 +49,14 @@ public enum MarkerMediaKind
 {
     Unknown,
     Video,
-    Audio
+    Audio,
+
+    /// <summary>
+    /// A still. The builder has offered photo uploads all along and the app had
+    /// no name for one, so every uploaded picture arrived as Unknown, failed
+    /// IsUsable, and was dropped without a word.
+    /// </summary>
+    Image
 }
 
 /// <summary>One uploaded file attached to a marker.</summary>
@@ -81,6 +88,16 @@ public class MarkerMedia
 
             if (string.Equals(kind, "audio", StringComparison.OrdinalIgnoreCase))
                 return MarkerMediaKind.Audio;
+
+            if (string.Equals(kind, "image", StringComparison.OrdinalIgnoreCase))
+                return MarkerMediaKind.Image;
+
+            // "link" is what the builder writes when a creator pastes a URL
+            // instead of uploading, and the control that produces it is labelled
+            // "add video". The path is already absolute, which MarkerMediaUrl
+            // passes through untouched.
+            if (string.Equals(kind, "link", StringComparison.OrdinalIgnoreCase))
+                return MarkerMediaKind.Video;
 
             return MarkerMediaKind.Unknown;
         }
@@ -131,6 +148,34 @@ public class MarkerMedia
 
             return Mathf.Max(1, Mathf.RoundToInt(bytes / (1024f * 1024f))) + " MB";
         }
+    }
+}
+
+/// <summary>
+/// One hint on a marker, and whether this team has paid for it.
+///
+/// The body arrives only once it has been revealed. A hint that travels
+/// unrevealed is a hint that cost nothing - anybody with a proxy would read the
+/// whole ladder without spending a point.
+/// </summary>
+[Serializable]
+public class MarkerHint
+{
+    public string id;
+    public int ord;
+
+    [Tooltip("Points this costs to reveal. Zero is a free hint, which is a " +
+             "deliberate thing a creator may want for a first nudge.")]
+    public int cost;
+
+    public bool revealed;
+
+    [Tooltip("Null until revealed.")]
+    public LocalisedText body;
+
+    public bool HasText
+    {
+        get { return revealed && body != null && body.HasText; }
     }
 }
 
@@ -195,8 +240,20 @@ public class MarkerTask
             if (string.Equals(kind, "choice", StringComparison.OrdinalIgnoreCase))
                 return MarkerTaskKind.Choice;
 
-            if (string.Equals(kind, "open", StringComparison.OrdinalIgnoreCase))
+            // "exact" and "free" are the server's two typed-answer kinds and both
+            // draw the same thing here: a box to type in and a button. What
+            // separates them is who marks it - exact is compared against a list
+            // inside check_answer, free comes back pending_review for a person -
+            // and that difference arrives in the verdict, not in advance.
+            //
+            // "open" is the name MARKER-CONTENT.md gave this and nothing has ever
+            // sent it. Kept because a document somewhere still says it.
+            if (string.Equals(kind, "exact", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(kind, "free", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(kind, "open", StringComparison.OrdinalIgnoreCase))
+            {
                 return MarkerTaskKind.Open;
+            }
 
             return MarkerTaskKind.None;
         }

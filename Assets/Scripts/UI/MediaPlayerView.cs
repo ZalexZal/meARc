@@ -1,5 +1,7 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 using UnityEngine.Video;
 
@@ -118,7 +120,8 @@ public class MediaPlayerView : MonoBehaviour
         if (media == null)
             return;
 
-        bool video = media.Kind == MarkerMediaKind.Video;
+        bool still = media.Kind == MarkerMediaKind.Image;
+        bool video = media.Kind == MarkerMediaKind.Video || still;
 
         if (screenHolder != null)
             screenHolder.SetActive(video);
@@ -126,6 +129,24 @@ public class MediaPlayerView : MonoBehaviour
         // A recording has no picture, and the frame from the last video is not it.
         if (screen != null && !video)
             screen.enabled = false;
+
+        // A still has a picture and no transport: nothing to play, pause, seek or
+        // count down. Leaving the controls up would offer three buttons that do
+        // nothing to a photograph.
+        if (playButton != null)
+            playButton.gameObject.SetActive(!still);
+
+        if (progressFill != null)
+            progressFill.transform.parent.gameObject.SetActive(!still);
+
+        if (timeLabel != null)
+            timeLabel.gameObject.SetActive(!still);
+
+        if (still)
+        {
+            ShowStill(media);
+            return;
+        }
 
         if (titleLabel != null)
             titleLabel.text = media.Title;
@@ -210,6 +231,63 @@ public class MediaPlayerView : MonoBehaviour
     }
 
     // ---------------------------------------------------------------- playback
+
+    /// <summary>
+    /// Downloads a photograph and puts it on the same surface the video renders
+    /// to, so a marker's pieces list does not need a second kind of row.
+    ///
+    /// UnityWebRequestTexture rather than VideoPlayer: VideoPlayer will happily
+    /// be handed a JPEG and will report a failure that says nothing useful.
+    /// </summary>
+    void ShowStill(MarkerMedia media)
+    {
+        string url = MarkerMediaUrl.For(media);
+
+        if (string.IsNullOrEmpty(url))
+        {
+            Fail("media.failed");
+            return;
+        }
+
+        if (Application.internetReachability == NetworkReachability.NotReachable)
+        {
+            Fail("media.needsConnection");
+            return;
+        }
+
+        StartCoroutine(LoadStill(url, media));
+    }
+
+    IEnumerator LoadStill(string url, MarkerMedia media)
+    {
+        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
+        {
+            yield return request.SendWebRequest();
+
+            // The reader may have moved on while this was in the air; painting it
+            // now would put one marker's photograph on another's sheet.
+            if (_media != media)
+                yield break;
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning("[Media] Image failed (" + request.responseCode + "): " +
+                                 request.error);
+                Fail("media.failed");
+                yield break;
+            }
+
+            Texture2D texture = DownloadHandlerTexture.GetContent(request);
+
+            if (screen != null)
+            {
+                screen.enabled = true;
+                screen.texture = texture;
+            }
+
+            _prepared = true;
+        }
+    }
 
     public void Toggle()
     {

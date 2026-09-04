@@ -36,6 +36,18 @@ public class MarkerTaskService : MonoBehaviour
         Correct,
         Wrong,
 
+        /// <summary>
+        /// Too soon after the last wrong answer. Not a wrong answer either - the
+        /// reader has not been marked down, they have been asked to wait.
+        /// </summary>
+        Wait,
+
+        /// <summary>
+        /// A free-text answer, filed for the creator to read. The reader has done
+        /// everything they can do here and is neither right nor wrong yet.
+        /// </summary>
+        PendingReview,
+
         /// <summary>The server could not be asked. Not a wrong answer.</summary>
         Unavailable
     }
@@ -70,6 +82,12 @@ public class MarkerTaskService : MonoBehaviour
         /// <summary>Points lost on the last wrong answer, for the bubble to say so.</summary>
         public int lastDeduction;
 
+        /// <summary>
+        /// A free-text answer is with the creator and has no verdict yet. Separate
+        /// from solved, because the reader has finished here and has not scored.
+        /// </summary>
+        public bool awaitingReview;
+
         public bool IsLocked
         {
             get { return SecondsLeft > 0f; }
@@ -90,7 +108,7 @@ public class MarkerTaskService : MonoBehaviour
         /// <summary>True once the reader can do nothing further here.</summary>
         public bool IsFinished
         {
-            get { return solved || skipped; }
+            get { return solved || skipped || awaitingReview; }
         }
     }
 
@@ -171,8 +189,12 @@ public class MarkerTaskService : MonoBehaviour
             yield break;
         }
 
+        // p_submitted, not p_answer. The function has always been
+        // check_answer(p_marker, p_submitted); PostgREST matches an RPC on its
+        // argument NAMES, so this call has never found it and every answer any
+        // reader has ever given came back Unavailable.
         string body = "{\"p_marker\":\"" + Escape(markerId) + "\"," +
-                      "\"p_answer\":\"" + Escape(answer) + "\"}";
+                      "\"p_submitted\":\"" + Escape(answer) + "\"}";
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/check_answer"), body, null))
@@ -220,13 +242,41 @@ public class MarkerTaskService : MonoBehaviour
         if (reply == null)
             return new Result { verdict = Verdict.Unavailable, progress = Progress(markerId) };
 
+        Verdict verdict = Read(reply.verdict);
         MarkerProgress progress = Progress(markerId);
-        progress.attempts = reply.attempts;
-        progress.solved = reply.solved;
-        progress.skipped = reply.skipped;
-        progress.points = reply.points;
-        progress.lastDeduction = reply.deducted;
-        progress.lockedUntil = ParseTime(reply.locked_until);
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        switch (verdict)
+        {
+            case Verdict.Correct:
+                progress.solved = true;
+
+                // Only what was awarded this time. `already` means the team had
+                // solved it before and the server sent zero, so adding is right
+                // in both cases and re-answering a solved stop cannot farm it.
+                progress.points += reply.points;
+                progress.lockedUntil = 0L;
+                break;
+
+            case Verdict.Wrong:
+                progress.attempts++;
+
+                if (reply.cooldown_seconds > 0)
+                    progress.lockedUntil = now + reply.cooldown_seconds;
+                break;
+
+            case Verdict.Wait:
+                // Not an attempt. The server refused to look at it, so counting
+                // it would punish somebody for pressing the button twice.
+                progress.lockedUntil = now + Mathf.Max(1, reply.seconds_left);
+                break;
+
+            case Verdict.PendingReview:
+                progress.attempts++;
+                progress.awaitingReview = true;
+                break;
+        }
 
         SaveCache();
 
@@ -235,10 +285,34 @@ public class MarkerTaskService : MonoBehaviour
 
         return new Result
         {
-            verdict = reply.correct ? Verdict.Correct : Verdict.Wrong,
-            feedback = reply.feedback,
+            verdict = verdict,
+            feedback = reply.after != null ? reply.after.Text : null,
             progress = progress
         };
+    }
+
+    /// <summary>
+    /// The verdict word, or Unavailable for anything this build does not know.
+    ///
+    /// Unavailable rather than Wrong on purpose: a verdict added to the server
+    /// after this APK shipped must not mark a reader down for it.
+    /// </summary>
+    static Verdict Read(string word)
+    {
+        if (string.Equals(word, "correct", StringComparison.OrdinalIgnoreCase))
+            return Verdict.Correct;
+
+        if (string.Equals(word, "incorrect", StringComparison.OrdinalIgnoreCase))
+            return Verdict.Wrong;
+
+        if (string.Equals(word, "wait", StringComparison.OrdinalIgnoreCase))
+            return Verdict.Wait;
+
+        if (string.Equals(word, "pending_review", StringComparison.OrdinalIgnoreCase))
+            return Verdict.PendingReview;
+
+        Debug.LogWarning("[Task] Unknown verdict \"" + word + "\" - treated as unavailable.");
+        return Verdict.Unavailable;
     }
 
     static void Report(Action<Result> done, Result result)
@@ -329,17 +403,34 @@ public class MarkerTaskService : MonoBehaviour
 
     /// <summary>
     /// What check_answer returns. Named for the wire, not for us.
+    ///
+    /// This is the shape the function actually sends, which is not the shape that
+    /// used to be written here. The old one asked for a bool called `correct` and
+    /// for four fields of progress the server has never tracked; a missing bool
+    /// deserialises to false, so every answer would have read as wrong even once
+    /// the call itself started working.
+    ///
+    /// Progress lives on the phone (see MarkerProgress) precisely because the
+    /// server keeps none of it per person - it keeps a team's solves.
     /// </summary>
     [Serializable]
     class AnswerReply
     {
-        public bool correct;
-        public string feedback;
-        public int attempts;
-        public bool solved;
-        public bool skipped;
-        public string locked_until;
+        /// <summary>correct | incorrect | wait | pending_review.</summary>
+        public string verdict;
+
         public int points;
-        public int deducted;
+
+        /// <summary>Set when this stop was already solved before this attempt.</summary>
+        public bool already;
+
+        /// <summary>On "wait": how long is left of the cooldown.</summary>
+        public int seconds_left;
+
+        /// <summary>On "incorrect": how long the next attempt must wait.</summary>
+        public int cooldown_seconds;
+
+        /// <summary>The creator's afterword, sent only once it has been earned.</summary>
+        public LocalisedText after;
     }
 }

@@ -347,6 +347,12 @@ const float ReferenceWidth = 1080f;
         // back Unavailable, which the sheet shows as "couldn't check that".
         go.AddComponent<MarkerTaskService>();
 
+        // The stop's own contents - media, hints, the question - which live in
+        // their own tables and arrive when a stop is opened rather than with
+        // every marker in radius. Harmless before 0017: marker_detail 404s, the
+        // warning says so once, and the sheet shows the marker's text.
+        go.AddComponent<MarkerDetailService>();
+
         // Markers come from the Supabase RPC, not from a spreadsheet and not from
         // assets in the build. RemoteBuildingSource is the old path and is
         // deliberately not added.

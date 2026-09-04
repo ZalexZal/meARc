@@ -85,6 +85,15 @@ public class BuildingData : ScriptableObject
              "see MarkerContent.cs.")]
     public MarkerTask task;
 
+    [Tooltip("Hints, in order, with their reveal state. Fetched with the rest of " +
+             "the stop's contents when it is opened.")]
+    public MarkerHint[] hints;
+
+    [Tooltip("How close somebody has to be for this to count as arriving at, in " +
+             "metres. The creator sets it per stop; 0 means it was never sent " +
+             "and the app falls back to its own default.")]
+    public int radiusMetres;
+
     /// <summary>Media the app can actually play, in order. Never null.</summary>
     public System.Collections.Generic.List<MarkerMedia> UsableMedia
     {

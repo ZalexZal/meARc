@@ -443,6 +443,7 @@ public class RemoteMarkerSource : MonoBehaviour
         marker.markerStyle = row.style_key;
         marker.markerColourHex = row.colour_hex;
         marker.step = row.step;
+        marker.radiusMetres = row.radius_m;
 
         // content is jsonb keyed by language. JsonUtility cannot describe a map with
         // arbitrary keys, so the two known languages are read as named fields and
@@ -458,14 +459,17 @@ public class RemoteMarkerSource : MonoBehaviour
         marker.externalLinkURL = en != null ? en.link : null;
         marker.externalLinkURLBg = bg != null ? bg.link : null;
 
-        // media and task come across whole, because unlike the localised text they
-        // are the same shape in every language. A task that arrives malformed is
-        // dropped rather than half-shown: IsUsable is what the sheet asks.
-        marker.media = row.content != null ? row.content.media : null;
-        marker.task = row.content != null && row.content.task != null &&
-                      row.content.task.IsUsable
-            ? row.content.task
-            : null;
+        // Media, hints and the question are NOT read from content any more.
+        //
+        // They were, and nothing ever wrote them there: the website puts uploads
+        // in marker_media, questions in marker_answers and hints in marker_hints,
+        // so every marker arrived here with both fields null and the sheet showed
+        // a stop with nothing on it. MarkerDetailService fetches them from those
+        // tables when the stop is opened.
+        //
+        // Left out rather than kept as a fallback. Two sources for one field is
+        // the thing being fixed, and a marker whose media rows were deleted would
+        // otherwise go on showing whatever content still claimed.
 
         // A marker with text in only one language should still be visible in the
         // other, rather than rendering as a blank row.
@@ -520,6 +524,10 @@ public class RemoteMarkerSource : MonoBehaviour
         // JsonUtility leaves it at zero when it is - which is exactly the value that
         // means "this trail has no order". The client needs no migration of its own.
         public int step;
+
+        // Absent until 0017 is applied, and zero is exactly the value that means
+        // "the server did not say", which is what BuildRow falls back from.
+        public int radius_m;
         public MarkerContent content;
         public int version;
         public double distance_m;

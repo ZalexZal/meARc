@@ -76,7 +76,8 @@ public class CubeTapManager : MonoBehaviour
         }
 
         Log($"Opening panel for: {tappable.buildingData.buildingName}");
-        infoPanel.ShowPanel(tappable.buildingData);
+        // The one route that counts as having been there.
+        infoPanel.ShowPanel(tappable.buildingData, true);
     }
 
     /// <summary>

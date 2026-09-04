@@ -143,7 +143,62 @@ public class InfoPanelController : MonoBehaviour
         ClosePanel();
     }
 
-    public void ShowPanel(BuildingData data)
+    /// <summary>
+    /// Whether opening this stop counts as having explored it.
+    ///
+    /// The rule is the AR marker: walk to it, see it standing on the place, tap
+    /// it. Nothing else earns the credit.
+    ///
+    /// The exception below is not a loophole, it is the difference between a
+    /// strict rule and an unplayable one. Terrain anchors come from ARCore
+    /// Geospatial, so when Earth tracking is not up there is no marker in the
+    /// world to tap - and "VPS unavailable" is a state this app has already been
+    /// observed in, in the town it was built for. Without a fallback a trail
+    /// would simply be uncompletable there. So when the AR path is unavailable,
+    /// standing inside the stop's own radius is accepted instead, by GPS.
+    ///
+    /// Widened by the fix's own accuracy, never narrowed: a 40-metre reading
+    /// against a 20-metre radius should not make a stop impossible, whereas a
+    /// generous radius costs a few metres of rigour on the one path that is
+    /// already the concession.
+    /// </summary>
+    static bool MayCredit(BuildingData data, bool fromMarker)
+    {
+        if (fromMarker)
+            return true;
+
+        UserLocationService location = UserLocationService.Instance;
+
+        if (location == null || !location.HasValidPose)
+            return false;
+
+        // Earth tracking is up, so the marker is out there to be tapped, and
+        // tapping it is the rule.
+        if (location.HasPrecisePose)
+            return false;
+
+        double radius = data.radiusMetres > 0 ? data.radiusMetres : DefaultArrivalMetres;
+        radius = System.Math.Max(radius, location.HorizontalAccuracy);
+
+        return location.DistanceMetresTo(data) <= radius;
+    }
+
+    /// <summary>
+    /// Used when the server sent no radius - a marker placed before 0017, or a
+    /// build talking to an older database. The same 100 metres the column
+    /// defaults to, so the two agree.
+    /// </summary>
+    const double DefaultArrivalMetres = 100d;
+
+    /// <summary>
+    /// Opens a stop.
+    ///
+    /// <paramref name="fromMarker"/> is true only when the reader tapped the
+    /// marker standing in the world. Everything else - the map pin, the nearby
+    /// list, the proximity toast - opens the same sheet and does not count as
+    /// having been there. See <see cref="MayCredit"/>.
+    /// </summary>
+    public void ShowPanel(BuildingData data, bool fromMarker = false)
     {
         if (data == null)
         {
@@ -164,9 +219,33 @@ public class InfoPanelController : MonoBehaviour
             pieces.Bind(data);
         RefreshLabels();
 
-        // Counts the moment the reader sees it, whether they arrived from an AR
-        // marker, the Nearby list or a search result.
-        DiscoveryTracker.MarkDiscovered(data);
+        // Being there is what counts, not seeing it.
+        //
+        // This used to fire for every route into the sheet, and the comment here
+        // said so approvingly. On a guided walk that is harmless. On a
+        // competitive trail it means a marker can be explored from a bench on the
+        // other side of town by tapping its pin on the map, which is the whole
+        // game given away.
+        if (MayCredit(data, fromMarker))
+            DiscoveryTracker.MarkDiscovered(data);
+
+        // The contents are fetched either way, because reading a stop from the map
+        // is a legitimate thing to do - it just is not the same as walking to it.
+        // The sheet is already open by the time this returns; the pieces list
+        // fills in underneath.
+        if (MarkerDetailService.Instance != null)
+        {
+            MarkerDetailService.Instance.Fill(data, () =>
+            {
+                // Guard against a second stop having been opened while this was in
+                // the air, which would repaint the sheet with the wrong marker.
+                if (currentBuilding != data)
+                    return;
+
+                if (pieces != null)
+                    pieces.Bind(data);
+            });
+        }
 
         if (scrim != null)
             scrim.SetActive(true);
