@@ -112,88 +112,19 @@ public static class UIPreview
 
         try
         {
-            Pieces.Strip(canvas.transform, "Mid");
-            Shoot(canvas, rig, "01-map", "MapPanel");
-            Shoot(canvas, rig, "02-camera", "CameraPanel");
-            Shoot(canvas, rig, "03-browse", "BrowsePanel");
-            Shoot(canvas, rig, "04-settings", "SettingsPanel");
+            // Both themes, the same screens, every time.
+            //
+            // Light mode used to get six of the twenty-five, chosen by guessing
+            // which ones the contrast was likeliest to go wrong on. It went
+            // wrong on the map, which was one of the six, and on the pin labels
+            // drawn over it, which no shot at this size would have shown - so
+            // the guess was wrong twice over. Shooting both is cheap; deciding
+            // in advance which screens can afford not to be looked at is not.
+            Shots(canvas, rig, "dark");
 
-            // The sheet and the walkthrough sit over whatever is behind them.
-            Shoot(canvas, rig, "05-marker-sheet", "MapPanel", "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim");
-            Shoot(canvas, rig, "06-tutorial", "MapPanel", "Tutorial/Overlay");
-            Shoot(canvas, rig, "07-toast", "MapPanel", "ProximityToast/Safe/CardHolder");
-            Shoot(canvas, rig, "08-state-card", "MapPanel", "MapPanel/Safe/StateCard");
-
-            // --- the way in ---
-            Pieces.TrailsState(canvas.transform, "Rows");
-            Shoot(canvas, rig, "11-welcome", "Doors/Welcome");
-            Shoot(canvas, rig, "12-terms", "Doors/Terms");
-            Shoot(canvas, rig, "13-trails", "MapPanel", "Doors/Backdrop", "Doors/Trails");
-            Pieces.CodeState(canvas.transform, "", null);
-            Shoot(canvas, rig, "14-code", "MapPanel", "Doors/Backdrop", "Doors/Code");
-
-            // The two states of the list that are not a list. The third, waiting,
-            // is the empty one with different words.
-            Pieces.TrailsState(canvas.transform, "Empty");
-            Shoot(canvas, rig, "15-trails-empty", "MapPanel", "Doors/Backdrop", "Doors/Trails");
-            Pieces.TrailsState(canvas.transform, "Rows");
-
-            // Half a code in, and a code the server refused. Between them they show
-            // a filled box beside an empty one, where the caret sits, and what the
-            // card looks like once it has to say something went wrong.
-            Pieces.CodeState(canvas.transform, "T97", null);
-            Shoot(canvas, rig, "27-code-typing", "MapPanel", "Doors/Backdrop", "Doors/Code");
-
-            Pieces.CodeState(canvas.transform, "T97S25", "code.unknown");
-            Shoot(canvas, rig, "28-code-wrong", "MapPanel", "Doors/Backdrop", "Doors/Code");
-
-            // --- inside a marker ---
-            const string SheetPath = "InfoSheet/Safe/Sheet";
-
-            Pieces.Page(canvas.transform, Pieces.Which.Overview);
-            Shoot(canvas, rig, "16-sheet-pieces", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Page(canvas.transform, Pieces.Which.Video);
-            Shoot(canvas, rig, "17-video", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Page(canvas.transform, Pieces.Which.Audio);
-            Shoot(canvas, rig, "18-audio", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Page(canvas.transform, Pieces.Which.Question);
-            Shoot(canvas, rig, "19-question", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            // The four endings a creator can choose between, and the one they
-            // cannot: the server not answering at all.
-            Pieces.Verdict(canvas.transform, Pieces.Ending.Retry);
-            Shoot(canvas, rig, "20-wrong-retry", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Verdict(canvas.transform, Pieces.Ending.Lock);
-            Shoot(canvas, rig, "21-wrong-lock", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Verdict(canvas.transform, Pieces.Ending.Deduct);
-            Shoot(canvas, rig, "22-wrong-deduct", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Verdict(canvas.transform, Pieces.Ending.Skip);
-            Shoot(canvas, rig, "23-wrong-skip", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            Pieces.Verdict(canvas.transform, Pieces.Ending.Right);
-            Shoot(canvas, rig, "24-correct", "MapPanel", SheetPath, "InfoSheet/InfoScrim");
-
-            // Light mode, where the contrast decisions are easiest to get wrong.
             SetTheme(false);
-            Shoot(canvas, rig, "09-settings-light", "SettingsPanel");
-            Pieces.Strip(canvas.transform, "Start");
-            Shoot(canvas, rig, "10-map-light", "MapPanel");
-            Pieces.Strip(canvas.transform, "Mid");
-            Shoot(canvas, rig, "25-terms-light", "Doors/Terms");
-            Shoot(canvas, rig, "26-trails-light", "MapPanel", "Doors/Backdrop", "Doors/Trails");
-
-            Pieces.CodeState(canvas.transform, "T97", null);
-            Shoot(canvas, rig, "29-code-light", "MapPanel", "Doors/Backdrop", "Doors/Code");
-
-            Pieces.TrailsState(canvas.transform, "Empty");
-            Shoot(canvas, rig, "30-trails-empty-light", "MapPanel", "Doors/Backdrop", "Doors/Trails");
-            Pieces.TrailsState(canvas.transform, "Rows");
+            Stranded(canvas);
+            Shots(canvas, rig, "light");
             SetTheme(true);
         }
         finally
@@ -202,6 +133,163 @@ public static class UIPreview
         }
 
         Debug.Log("[Preview] Wrote screenshots to " + Path.GetFullPath(OutputFolder));
+    }
+
+    /// <summary>One pass over every screen, in whichever theme is currently set.</summary>
+    static void Shots(Canvas canvas, Rig rig, string theme)
+    {
+        string t = "-" + theme;
+
+        Pieces.Strip(canvas.transform, "Mid");
+        Shoot(canvas, rig, "01-map" + t, "MapPanel");
+        Shoot(canvas, rig, "02-camera" + t, "CameraPanel");
+        Shoot(canvas, rig, "03-browse" + t, "BrowsePanel");
+        Shoot(canvas, rig, "04-settings" + t, "SettingsPanel");
+
+        // The sheet and the walkthrough sit over whatever is behind them.
+        Shoot(canvas, rig, "05-marker-sheet" + t, "MapPanel", "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim");
+        Shoot(canvas, rig, "06-tutorial" + t, "MapPanel", "Tutorial/Overlay");
+        Shoot(canvas, rig, "07-toast" + t, "MapPanel", "ProximityToast/Safe/CardHolder");
+        Shoot(canvas, rig, "08-state-card" + t, "MapPanel", "MapPanel/Safe/StateCard");
+
+        // The map with the strip at the start of a trail, where the previous row
+        // is switched off and the card is at its shortest.
+        Pieces.Strip(canvas.transform, "Start");
+        Shoot(canvas, rig, "09-map-start" + t, "MapPanel");
+        Pieces.Strip(canvas.transform, "Mid");
+
+        // --- the way in ---
+        Pieces.TrailsState(canvas.transform, "Rows");
+        Shoot(canvas, rig, "10-welcome" + t, "Doors/Welcome");
+        Shoot(canvas, rig, "11-terms" + t, "Doors/Terms");
+        Shoot(canvas, rig, "12-trails" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
+
+        Pieces.CodeState(canvas.transform, "", null);
+        Shoot(canvas, rig, "13-code" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
+
+        // The two states of the list that are not a list. The third, waiting, is
+        // the empty one with different words.
+        Pieces.TrailsState(canvas.transform, "Empty");
+        Shoot(canvas, rig, "14-trails-empty" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
+        Pieces.TrailsState(canvas.transform, "Rows");
+
+        // Half a code in, and a code the server refused. Between them they show a
+        // filled box beside an empty one, where the caret sits, and what the card
+        // looks like once it has to say something went wrong.
+        Pieces.CodeState(canvas.transform, "T97", null);
+        Shoot(canvas, rig, "15-code-typing" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
+
+        Pieces.CodeState(canvas.transform, "T97S25", "code.unknown");
+        Shoot(canvas, rig, "16-code-wrong" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
+
+        // --- inside a marker ---
+        const string SheetPath = "InfoSheet/Safe/Sheet";
+
+        Pieces.Page(canvas.transform, Pieces.Which.Overview);
+        Shoot(canvas, rig, "17-sheet-pieces" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Page(canvas.transform, Pieces.Which.Video);
+        Shoot(canvas, rig, "18-video" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Page(canvas.transform, Pieces.Which.Audio);
+        Shoot(canvas, rig, "19-audio" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Page(canvas.transform, Pieces.Which.Question);
+        Shoot(canvas, rig, "20-question" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        // The four endings a creator can choose between, and the one they cannot:
+        // the server not answering at all.
+        Pieces.Verdict(canvas.transform, Pieces.Ending.Retry);
+        Shoot(canvas, rig, "21-wrong-retry" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Verdict(canvas.transform, Pieces.Ending.Lock);
+        Shoot(canvas, rig, "22-wrong-lock" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Verdict(canvas.transform, Pieces.Ending.Deduct);
+        Shoot(canvas, rig, "23-wrong-deduct" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Verdict(canvas.transform, Pieces.Ending.Skip);
+        Shoot(canvas, rig, "24-wrong-skip" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        Pieces.Verdict(canvas.transform, Pieces.Ending.Right);
+        Shoot(canvas, rig, "25-correct" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+    }
+
+    /// <summary>
+    /// Everything still holding a dark-theme colour after the switch to light.
+    ///
+    /// UIFactory has two ways to colour a graphic and only one of them follows
+    /// the theme: Fill and Text attach a ThemedElement, Plain bakes whatever
+    /// Color it is handed. Handing Plain a ThemeManager.Get(...) therefore
+    /// freezes the editor's current theme into the asset, and the result is
+    /// invisible in the theme it was built in - which is why the map pins
+    /// shipped with the dark Surface baked into their label plates and nobody
+    /// saw it until the app was opened in daylight.
+    ///
+    /// Roles whose two palettes agree are skipped: there is nothing to strand.
+    /// A colour a component paints at runtime will show up here too, because
+    /// nothing is running - so this is a list to read, not a list of faults.
+    /// </summary>
+    static void Stranded(Canvas canvas)
+    {
+        Palette dark = AppTheme.Dark();
+        Palette light = AppTheme.Light();
+        ThemeRole[] roles = (ThemeRole[])System.Enum.GetValues(typeof(ThemeRole));
+
+        Graphic[] all = canvas.GetComponentsInChildren<Graphic>(true);
+        int found = 0;
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            Graphic g = all[i];
+
+            // A ThemedElement means the graphic repaints itself, and it does so
+            // in OnEnable as well as on the event - so one on an inactive panel
+            // is not stranded, it is merely waiting. Counting those was the
+            // difference between a list of 120 and a list worth reading: every
+            // primary button in the app was on the long one, and all of them
+            // were measured correct on the phone.
+            if (g.GetComponent<ThemedElement>() != null)
+                continue;
+
+            for (int r = 0; r < roles.Length; r++)
+            {
+                if (Same(dark.Get(roles[r]), light.Get(roles[r])))
+                    continue;
+
+                if (!Same(g.color, dark.Get(roles[r])))
+                    continue;
+
+                Debug.LogWarning("[Stranded] " + NamePath(g.transform) + "  (" +
+                                 g.GetType().Name + ") still holds Dark." + roles[r]);
+                found++;
+                break;
+            }
+        }
+
+        Debug.Log("[Stranded] " + found + " graphic(s) kept a dark colour in the light theme.");
+    }
+
+    /// <summary>Colour equality on the three channels. Alpha is applied separately by Fill.</summary>
+    static bool Same(Color a, Color b)
+    {
+        return Mathf.Abs(a.r - b.r) < 0.004f &&
+               Mathf.Abs(a.g - b.g) < 0.004f &&
+               Mathf.Abs(a.b - b.b) < 0.004f;
+    }
+
+    /// <summary>Where a graphic lives, so a warning names something findable.</summary>
+    static string NamePath(Transform t)
+    {
+        string path = t.name;
+
+        while (t.parent != null)
+        {
+            t = t.parent;
+            path = t.name + "/" + path;
+        }
+
+        return path;
     }
 
     /// <summary>

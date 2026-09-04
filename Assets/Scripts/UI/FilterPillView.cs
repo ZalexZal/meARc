@@ -37,6 +37,10 @@ public class FilterPillView : MonoBehaviour
     void OnEnable()
     {
         ThemeManager.OnThemeChanged += ApplyColours;
+
+        // The same reason as everywhere else: a pill on the Browse panel is not
+        // enabled when the theme changes, so subscribing alone would never fire.
+        ApplyColours();
     }
 
     void OnDisable()

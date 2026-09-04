@@ -56,6 +56,19 @@ public class MapPinView : MonoBehaviour
     /// <summary>Re-reads colour and name, e.g. after a language or theme change.</summary>
     void OnEnable()
     {
+        // Repaint on the way in, not only on the event.
+        //
+        // This is the asymmetry the plate bug was really made of. ThemedElement
+        // calls Apply() in OnEnable and then subscribes; this only subscribed.
+        // A pin lives under MapPanel, which is switched off while Settings - the
+        // one screen with the theme toggle on it - is open, so the pin is always
+        // disabled at the exact moment the theme changes and always misses the
+        // event. Subscribing to a message you are guaranteed not to be there for
+        // is not a subscription.
+        //
+        // It costs a name and a colour per pin and it also picks up a language
+        // change, which arrives the same way and through the same closed door.
+        Refresh();
         ThemeManager.OnThemeChanged += Refresh;
     }
 
@@ -67,10 +80,16 @@ public class MapPinView : MonoBehaviour
     /// <summary>
     /// Repaints the pin.
     ///
-    /// Subscribed to the theme because nothing else repaints these: the plate and
-    /// the label are coloured here rather than by a ThemedElement, so switching to
-    /// the light theme left every pin holding the dark one - a dark plate with dark
-    /// text on it, which is a label nobody can read.
+    /// Still subscribed to the theme, though the plate and the label no longer
+    /// move with it - the marker's own colour and its ring do, because RingFor
+    /// picks whichever of black or white the marker is not.
+    ///
+    /// The plate used to be painted here from Surface and was the thing that
+    /// broke: UIFactory.Plain bakes the colour it is handed and attaches no
+    /// ThemedElement, so the prefab froze at whatever the editor's theme was
+    /// when it was written - #1A1F27, the dark Surface - while the label beside
+    /// it did follow the theme, because UIFactory.Text does attach one. Dark
+    /// text on a dark plate, in the light theme only.
     /// </summary>
     public void Refresh()
     {
@@ -85,14 +104,17 @@ public class MapPinView : MonoBehaviour
         if (ring != null)
             ring.color = MarkerPalette.RingFor(colour);
 
+        // Against the map, not against the chrome. See MapInk: Surface and
+        // TextPrimary made a white plate carrying near-black text sit on a cream
+        // map among its own near-black labels, which is a name nobody can find.
         if (label != null)
         {
             label.text = _building.DisplayName;
-            label.color = ThemeManager.Get(ThemeRole.TextPrimary);
+            label.color = MapInk.OnPlate;
         }
 
         if (labelPlate != null)
-            labelPlate.color = ThemeManager.Get(ThemeRole.Surface);
+            labelPlate.color = MapInk.Plate;
     }
 
     public void SetSelected(bool selected)

@@ -620,7 +620,6 @@ const float ReferenceWidth = 1080f;
         RectTransform guide = UIFactory.Rect("GuideButton", footer);
         UIFactory.Size(guide.gameObject, Tap);
         controller.guideButton = UIFactory.Button(guide, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(guide.gameObject);
 
         RectTransform guideInner = UIFactory.Rect("Inner", guide);
         UIFactory.Stretch(guideInner);
@@ -633,7 +632,6 @@ const float ReferenceWidth = 1080f;
                                                TextAlignmentOptions.Left, null, FontStyles.Bold);
         LayoutElement guideLabelSize = UIFactory.Size(controller.guideLabel.gameObject, Tap, 420f);
         guideLabelSize.flexibleWidth = 0f;
-        Unthemed(controller.guideLabel.gameObject);
         controller.guideLabel.text = AppStrings.Get("guide.start");
 
         RectTransform actions = UIFactory.Rect("Actions", footer);
@@ -952,14 +950,19 @@ const float ReferenceWidth = 1080f;
         UIFactory.Corner(scaleHolder, new Vector2(0f, 1f), new Vector2(420f, 70f),
                          new Vector2(Margin, -186f));
 
+        // The distance and the bar are on the map, so they take the map's ink
+        // rather than the chrome's. As TextSecondary they were near-white in the
+        // dark theme, which put the one thing that says how far a centimetre is
+        // in white on a cream map.
         map.scaleLabel = UIFactory.Text("Label", scaleHolder, Caption, ThemeRole.TextSecondary,
                                         TextAlignmentOptions.BottomLeft);
+        OnMap(map.scaleLabel, MapInk.Ink);
         UIFactory.Corner(map.scaleLabel.rectTransform, new Vector2(0f, 0f),
                          new Vector2(300f, 40f), new Vector2(0f, 14f));
 
         RectTransform bar = UIFactory.Rect("Bar", scaleHolder);
         UIFactory.Corner(bar, new Vector2(0f, 0f), new Vector2(160f, 8f), Vector2.zero);
-        UIFactory.Fill(bar, ThemeRole.TextSecondary, 1f, UIShape.Pill).raycastTarget = false;
+        UIFactory.Plain(bar, MapInk.Ink, UIShape.Pill).raycastTarget = false;
         map.scaleBar = bar;
 
         // Required by the tile licence, and it belongs on screen anyway - the map
@@ -979,6 +982,7 @@ const float ReferenceWidth = 1080f;
         // All three are owed a line: Stadia drew the tiles, OpenMapTiles built
         // the schema, and the data underneath is OpenStreetMap's.
         credit.text = "\u00A9 Stadia Maps \u00B7 OpenMapTiles \u00B7 OpenStreetMap";
+        OnMap(credit, MapInk.MutedInk);
 
         // --- the states where there is nothing to draw ---
         controller.stateCard = BuildStateCard(safe);
@@ -1193,12 +1197,10 @@ const float ReferenceWidth = 1080f;
         RectTransform action = UIFactory.Rect("Action", rt);
         UIFactory.Size(action.gameObject, Tap);
         view.actionButton = UIFactory.Button(action, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(action.gameObject);
 
         view.actionLabel = UIFactory.Text("Label", action, Secondary, ThemeRole.OnAccent,
                                           TextAlignmentOptions.Center, null, FontStyles.Bold);
         UIFactory.Stretch(view.actionLabel.rectTransform);
-        Unthemed(view.actionLabel.gameObject);
 
         rt.gameObject.SetActive(false);
         return view;
@@ -1447,7 +1449,14 @@ const float ReferenceWidth = 1080f;
 
         // Unity's Mask reads the alpha of its own graphic, so a circle sprite is
         // the clip. showMaskGraphic off, or the circle paints over the tiles.
+        //
+        // MaskCircle rather than Circle. Mask clips through the stencil buffer,
+        // which is a hard alpha test with no anti-aliasing, so the 64-pixel
+        // Circle stretched over this 300-pixel disc turned every texel of its
+        // soft edge into a visible step: the map inside came out as a torn blob
+        // that bulged past where the rim is drawn. 512 is denser than the disc.
         Image maskShape = UIFactory.Plain(mapHole, Color.white, UIShape.Circle);
+        maskShape.sprite = UISprites.MaskCircle;
         maskShape.raycastTarget = false;
         Mask mask = mapHole.gameObject.AddComponent<Mask>();
         mask.showMaskGraphic = false;
@@ -1487,9 +1496,16 @@ const float ReferenceWidth = 1080f;
         //
         // Its own object, not mapHole: that one already carries the Image the Mask
         // clips with, and a second Image on one object comes back null.
+        //
+        // A fixed scrim, not Surface at 45%. Surface darkens in the dark theme
+        // and brightens in the light one, so the thing meant to calm the map
+        // down was washing it out instead - and the tiles now arrive already
+        // dimmed in the dark theme, which this would have doubled.
         RectTransform dim = UIFactory.Rect("Dim", rt);
         UIFactory.Stretch(dim);
-        UIFactory.Fill(dim, ThemeRole.Surface, 0.45f, UIShape.Circle).raycastTarget = false;
+        Image dimImage = UIFactory.Plain(dim, MapInk.RadarScrim, UIShape.Circle);
+        dimImage.sprite = UISprites.MaskCircle;
+        dimImage.raycastTarget = false;
 
         CameraRadar radar = rt.gameObject.AddComponent<CameraRadar>();
         radar.locationService = location;
@@ -1498,12 +1514,20 @@ const float ReferenceWidth = 1080f;
         radar.maxRangeMetres = 500d;
         radar.circleSprite = UISprites.Circle;
 
-        Ring(rt, "InnerRing", Size * 0.52f, ThemeRole.TextPrimary, 0.10f, 2f);
-        Ring(rt, "Rim", Size - 3f, ThemeRole.TextPrimary, 0.16f, 2f);
+        // Both rings sit on the map, so they are drawn in the map's ink at a
+        // strength that survives it. As TextPrimary at 16% the rim was a faint
+        // white line over a light map, which is no line at all - and the rim is
+        // what gives the disc its edge now that the mask's is a hard clip.
+        RingGraphic inner = Ring(rt, "InnerRing", Size * 0.52f, ThemeRole.TextPrimary, 1f, 2f);
+        inner.color = new Color(MapInk.Ink.r, MapInk.Ink.g, MapInk.Ink.b, 0.22f);
+
+        RingGraphic rim = Ring(rt, "Rim", Size - 3f, ThemeRole.TextPrimary, 1f, 3f);
+        rim.color = new Color(MapInk.Ink.r, MapInk.Ink.g, MapInk.Ink.b, 0.55f);
 
         // North is up and stays up, so it is worth one letter to say so.
         TextMeshProUGUI north = UIFactory.Text("North", rt, 26f, ThemeRole.TextMuted,
                                                TextAlignmentOptions.Center);
+        OnMap(north, MapInk.MutedInk);
         UIFactory.Corner(north.rectTransform, new Vector2(0.5f, 1f), new Vector2(40f, 34f),
                          new Vector2(0f, -8f));
         north.text = "N";
@@ -1512,6 +1536,14 @@ const float ReferenceWidth = 1080f;
         RectTransform dots = UIFactory.Rect("Dots", rt);
         UIFactory.Stretch(dots);
         radar.dotParent = dots;
+
+        // A ring under it, for the same reason every marker dot has one: white
+        // on a light map is not a dot. MarkerPalette.RingFor would pick the dark
+        // ring for white, and this is that, drawn as the thing behind it.
+        RectTransform meRing = UIFactory.Rect("MeRing", rt);
+        UIFactory.Corner(meRing, new Vector2(0.5f, 0.5f), new Vector2(26f, 26f), Vector2.zero);
+        UIFactory.Plain(meRing, MarkerPalette.RingFor(Color.white),
+                        UIShape.Circle).raycastTarget = false;
 
         RectTransform me = UIFactory.Rect("Me", rt);
         UIFactory.Corner(me, new Vector2(0.5f, 0.5f), new Vector2(18f, 18f), Vector2.zero);
@@ -1686,6 +1718,24 @@ const float ReferenceWidth = 1080f;
     }
 
     /// <summary>A circle outline drawn as geometry, crisp at any size.</summary>
+    /// <summary>
+    /// Strips the ThemedElement UIFactory.Text attaches and paints the text a
+    /// fixed colour instead.
+    ///
+    /// For text that sits on the map. The ThemedElement would repaint it from
+    /// the app palette on the next theme change, which is exactly the bug being
+    /// fixed - the attribution was near-white on a cream map in the dark theme
+    /// because it followed the chrome instead of the thing behind it.
+    /// </summary>
+    static void OnMap(TextMeshProUGUI text, Color colour)
+    {
+        ThemedElement themed = text.GetComponent<ThemedElement>();
+        if (themed != null)
+            Object.DestroyImmediate(themed);
+
+        text.color = colour;
+    }
+
     static RingGraphic Ring(Transform parent, string name, float size, ThemeRole role,
                             float alpha, float thickness)
     {
@@ -2034,11 +2084,9 @@ const float ReferenceWidth = 1080f;
         next.sizeDelta = new Vector2(0f, Tap);
         next.anchoredPosition = new Vector2(0f, Tap + 16f);
         flow.nextButton = UIFactory.Button(next, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(next.gameObject);
         flow.nextLabel = UIFactory.Text("Label", next, Body, ThemeRole.OnAccent,
                                         TextAlignmentOptions.Center, null, FontStyles.Bold);
         UIFactory.Stretch(flow.nextLabel.rectTransform);
-        Unthemed(flow.nextLabel.gameObject);
 
         RectTransform skip = UIFactory.Rect("Skip", inner);
         skip.anchorMin = new Vector2(0f, 0f);
@@ -2670,11 +2718,20 @@ const float ReferenceWidth = 1080f;
         plate.sizeDelta = new Vector2(320f, 50f);
         plate.anchoredPosition = new Vector2(0f, 24f);
 
-        Image plateImage = UIFactory.Plain(plate, ThemeManager.Get(ThemeRole.Surface), UIShape.Pill);
+        // Baked as map ink rather than as Surface.
+        //
+        // Plain attaches no ThemedElement, so whatever colour it is handed is
+        // what the prefab keeps for good - and it was handed the editor's
+        // current Surface, which is how every pin on the phone ended up with the
+        // dark theme's #1A1F27 plate under the light theme's near-black text.
+        // Baking a colour is only wrong when the colour was supposed to move;
+        // this one is not, so baking it is now correct rather than a trap.
+        Image plateImage = UIFactory.Plain(plate, MapInk.Plate, UIShape.Pill);
         plateImage.raycastTarget = false;
 
         TextMeshProUGUI label = UIFactory.Text("Text", plate, Caption, ThemeRole.TextPrimary,
                                                TextAlignmentOptions.Center, null, FontStyles.Bold);
+        OnMap(label, MapInk.OnPlate);
         UIFactory.Stretch(label.rectTransform);
         label.rectTransform.offsetMin = new Vector2(18f, 0f);
         label.rectTransform.offsetMax = new Vector2(-18f, 0f);
@@ -2978,10 +3035,8 @@ const float ReferenceWidth = 1080f;
         RectTransform play = UIFactory.Rect("Play", transport);
         UIFactory.Corner(play, new Vector2(0f, 0.5f), new Vector2(Tap, Tap), Vector2.zero);
         view.playButton = UIFactory.Button(play, ThemeRole.Accent, 1f, UIShape.Circle);
-        Unthemed(play.gameObject);
 
         view.playIcon = Icon(play, AppIcon.Play, 52f, ThemeRole.OnAccent);
-        Unthemed(view.playIcon.gameObject);
 
         RectTransform track = UIFactory.Rect("Track", transport);
         track.anchorMin = new Vector2(0f, 0.5f);
@@ -3024,14 +3079,12 @@ const float ReferenceWidth = 1080f;
         UIFactory.BottomStretch(dataPlay, Tap, 20f);
         dataPlay.sizeDelta = new Vector2(-52f, Tap);
         view.dataPlayButton = UIFactory.Button(dataPlay, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(dataPlay.gameObject);
 
         TextMeshProUGUI dataPlayLabel = UIFactory.Text("Label", dataPlay, Secondary,
                                                        ThemeRole.OnAccent,
                                                        TextAlignmentOptions.Center,
                                                        "media.dataPlay", FontStyles.Bold);
         UIFactory.Stretch(dataPlayLabel.rectTransform);
-        Unthemed(dataPlayLabel.gameObject);
         data.gameObject.SetActive(false);
 
         page.gameObject.SetActive(false);
@@ -3106,13 +3159,11 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(check.gameObject, Tap);
         view.checkHolder = check.gameObject;
         view.checkButton = UIFactory.Button(check, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(check.gameObject);
 
         view.checkLabel = UIFactory.Text("Label", check, Body, ThemeRole.OnAccent,
                                          TextAlignmentOptions.Center, "task.check",
                                          FontStyles.Bold);
         UIFactory.Stretch(view.checkLabel.rectTransform);
-        Unthemed(view.checkLabel.gameObject);
         open.gameObject.SetActive(false);
 
         // --- what came back ---
@@ -3506,14 +3557,12 @@ const float ReferenceWidth = 1080f;
         RectTransform start = UIFactory.Rect("Start", inner);
         UIFactory.BottomStretch(start, Tap, Tap + 16f);
         Button startButton = UIFactory.Button(start, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(start.gameObject);
         Wire(startButton.onClick, flow.PassWelcome, "Welcome start");
 
         TextMeshProUGUI startLabel = UIFactory.Text("Label", start, Body, ThemeRole.OnAccent,
                                                     TextAlignmentOptions.Center, "welcome.start",
                                                     FontStyles.Bold);
         UIFactory.Stretch(startLabel.rectTransform);
-        Unthemed(startLabel.gameObject);
 
         RectTransform code = UIFactory.Rect("HaveCode", inner);
         UIFactory.BottomStretch(code, Tap);
@@ -3632,14 +3681,12 @@ const float ReferenceWidth = 1080f;
         RectTransform accept = UIFactory.Rect("Accept", inner);
         UIFactory.BottomStretch(accept, Tap);
         Button acceptButton = UIFactory.Button(accept, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(accept.gameObject);
         Wire(acceptButton.onClick, flow.AcceptTerms, "Accept terms");
 
         TextMeshProUGUI acceptLabel = UIFactory.Text("Label", accept, Body, ThemeRole.OnAccent,
                                                      TextAlignmentOptions.Center, "terms.accept",
                                                      FontStyles.Bold);
         UIFactory.Stretch(acceptLabel.rectTransform);
-        Unthemed(acceptLabel.gameObject);
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
@@ -4009,14 +4056,12 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(rt.gameObject, Tap);
 
         Button button = UIFactory.Button(rt, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Unthemed(rt.gameObject);
         Wire(button.onClick, call, what);
 
         TextMeshProUGUI label = UIFactory.Text("Label", rt, Body, ThemeRole.OnAccent,
                                                TextAlignmentOptions.Center, key,
                                                FontStyles.Bold);
         UIFactory.Stretch(label.rectTransform);
-        Unthemed(label.gameObject);
 
         return button;
     }
@@ -4178,7 +4223,19 @@ const float ReferenceWidth = 1080f;
         return rt;
     }
 
-    /// <summary>Strips automatic theming from anything a controller recolours itself.</summary>
+    /// <summary>
+    /// Strips automatic theming from anything a controller recolours itself.
+    ///
+    /// Only ever call this where a controller genuinely does. Eighteen of these
+    /// were on primary buttons and their labels - Guide me there, Get started,
+    /// I accept, Join, Play, Check, Next - where nothing recoloured anything, so
+    /// the strip did not prevent a fight, it just froze the editor's theme into
+    /// the asset. Every one of those buttons shipped in the dark accent, #45C4B0,
+    /// and in the light theme carried white text at 2.0:1 against it.
+    ///
+    /// A ThemedElement is the safe default. It repaints in OnEnable as well as on
+    /// the event, and a controller that sets a colour afterwards still wins.
+    /// </summary>
     static void Unthemed(GameObject go)
     {
         ThemedElement themed = go.GetComponent<ThemedElement>();

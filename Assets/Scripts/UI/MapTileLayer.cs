@@ -139,7 +139,11 @@ public class MapTileLayer : MonoBehaviour
                     hash *= 16777619u;
                 }
 
-                return hash.ToString("x8") + (_dark ? "_d" : "_l");
+                // No theme in the name any more. The themes differ by tint,
+                // not by picture, so a suffix here would keep two identical
+                // copies of every tile on disk and make each switch refetch
+                // the half it already had.
+                return hash.ToString("x8");
             }
         }
     }
@@ -231,7 +235,19 @@ public class MapTileLayer : MonoBehaviour
                              "and will not be sharp past zoom 16.");
         }
 
-        _dark = ThemeManager.IsDark;
+        // Handle the change on the way in rather than just recording it.
+        //
+        // This line used to read "_dark = ThemeManager.IsDark", which is the
+        // same event swallowed silently. The map panel is switched off while
+        // Settings is open, and Settings is the only screen carrying the theme
+        // toggle - so this component is guaranteed to be disabled at the moment
+        // the event fires and guaranteed to miss it. It then woke up, wrote down
+        // the new theme as though it had always known, and left every tile on
+        // screen at the old tint. The dark map came back cream.
+        //
+        // HandleThemeChanged already returns immediately when nothing moved, so
+        // the ordinary enable costs one comparison.
+        HandleThemeChanged();
         ThemeManager.OnThemeChanged += HandleThemeChanged;
     }
 
@@ -241,16 +257,35 @@ public class MapTileLayer : MonoBehaviour
     }
 
     /// <summary>
-    /// A light map behind dark chrome glares at night and washes out in sun, so the
-    /// tiles are inverted for the dark theme. Doing it when the texture is built
-    /// rather than in a shader keeps this to one file with nothing to compile.
+    /// A theme change is usually only a change of tint.
+    ///
+    /// Both themes now draw the same Outdoors tiles and the dark one multiplies
+    /// them down, so throwing every texture away and fetching them again would
+    /// re-download the identical bytes to show the identical picture. Only a
+    /// change of template - a different style, or the drop to the keyless Esri
+    /// fallback - is a change of picture, and only that one needs the refetch.
+    ///
+    /// This also matters on the walk: retinting is instant, whereas the refetch
+    /// left the map blank for as long as the network took.
     /// </summary>
     void HandleThemeChanged()
     {
         if (_dark == ThemeManager.IsDark)
             return;
 
+        string before = urlTemplate;
         _dark = ThemeManager.IsDark;
+
+        if (urlTemplate == before)
+        {
+            foreach (KeyValuePair<long, Tile> live in _live)
+            {
+                if (live.Value.image != null && live.Value.image.texture != null)
+                    live.Value.image.color = MapInk.TileTint;
+            }
+
+            return;
+        }
 
         foreach (KeyValuePair<long, Texture2D> pair in _textures)
         {
@@ -456,7 +491,7 @@ public class MapTileLayer : MonoBehaviour
         if (_textures.TryGetValue(key, out Texture2D texture) && texture != null)
         {
             tile.image.texture = texture;
-            tile.image.color = Color.white;
+            tile.image.color = MapInk.TileTint;
 
             Touch(key);
             return;
@@ -507,7 +542,7 @@ public class MapTileLayer : MonoBehaviour
         if (_live.TryGetValue(key, out Tile tile) && tile.image != null)
         {
             tile.image.texture = texture;
-            tile.image.color = Color.white;
+            tile.image.color = MapInk.TileTint;
         }
     }
 

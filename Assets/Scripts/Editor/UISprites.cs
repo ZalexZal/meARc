@@ -53,6 +53,18 @@ public static class UISprites
     public static Sprite Circle { get { return GetOrCreate("UICircle", 64, 32, false); } }
 
     /// <summary>
+    /// A circle big enough to be used as a Mask.
+    ///
+    /// Mask clips through the stencil buffer, which is a hard alpha test: it
+    /// keeps no anti-aliasing, so every texel of the sprite becomes a visible
+    /// step in the edge. Circle is 64 pixels, and stretched over the radar's
+    /// 300 it turned the map inside into a torn blob with a stippled rim - the
+    /// "map going outside the circle". At 512 the sprite is denser than the
+    /// disc it clips and the edge lands where it is drawn.
+    /// </summary>
+    public static Sprite MaskCircle { get { return GetOrCreate("UIMaskCircle", 512, 256, false); } }
+
+    /// <summary>
     /// A ring. This is what separates a marker from whatever is behind it, so it
     /// has to be a real hole rather than a circle in the background colour - the
     /// map, the camera feed and the sheet are three different backgrounds.
