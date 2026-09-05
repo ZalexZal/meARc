@@ -261,8 +261,17 @@ public class MarkerTaskService : MonoBehaviour
 
             case Verdict.Wrong:
                 progress.attempts++;
+                progress.lastDeduction = reply.deducted;
 
-                if (reply.cooldown_seconds > 0)
+                // The server decides this, not the phone. Under the skip rule it
+                // has already written the row that ends the stop, so a client
+                // that disagreed would only be lying to its own reader.
+                if (reply.skipped)
+                    progress.skipped = true;
+
+                // No cooldown on a stop that is over - there is nothing left to
+                // wait for.
+                if (reply.cooldown_seconds > 0 && !reply.skipped)
                     progress.lockedUntil = now + reply.cooldown_seconds;
                 break;
 
@@ -429,6 +438,18 @@ public class MarkerTaskService : MonoBehaviour
 
         /// <summary>On "incorrect": how long the next attempt must wait.</summary>
         public int cooldown_seconds;
+
+        /// <summary>The creator's rule: retry | lock | deduct | skip.</summary>
+        public string on_wrong;
+
+        /// <summary>
+        /// The stop is over. Under the skip rule one wrong answer ends it, and
+        /// the server has already written that down - this is not a request.
+        /// </summary>
+        public bool skipped;
+
+        /// <summary>What this wrong answer cost, under the deduct rule.</summary>
+        public int deducted;
 
         /// <summary>The creator's afterword, sent only once it has been earned.</summary>
         public LocalisedText after;
