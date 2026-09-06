@@ -2896,18 +2896,60 @@ const float ReferenceWidth = 1080f;
         return saved.GetComponent<MapPinView>();
     }
 
+    /// <summary>
+    /// A pin standing on a ring, rather than a cube floating over the pavement.
+    ///
+    /// The ring is the important half. It lies flat on the ground, so a reader
+    /// takes the marker's position off the paving rather than guessing at the
+    /// depth of something hanging in the air - and when localisation is a metre
+    /// out, a ring around roughly the right slab still reads as a place.
+    ///
+    /// The pin is what carries the creator's colour. The ring stays near-white
+    /// on purpose: it has to separate the marker from whatever is under it, and
+    /// a ring in the same colour as the pin separates nothing.
+    ///
+    /// One shape. Flag, plaque and post are the same machinery with different
+    /// numbers and can follow once this one has been seen outdoors.
+    /// </summary>
     static GameObject CreateMarkerPrefab()
     {
-        GameObject temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        temp.name = "BuildingMarker";
+        GameObject temp = new GameObject("BuildingMarker");
 
-        // Generous hit area: the visual is 1.5 m but the collider is wider, because
-        // a marker 80 m away is only a few pixels of screen to aim at.
-        BoxCollider collider = temp.GetComponent<BoxCollider>();
-        collider.size = Vector3.one * 2f;
+        // --- the pin
+        GameObject pin = new GameObject("Pin");
+        pin.transform.SetParent(temp.transform, false);
+
+        MeshFilter pinMesh = pin.AddComponent<MeshFilter>();
+        pinMesh.sharedMesh = MarkerShapes.Save(
+            MarkerShapes.Pin(0.22f, 0.48f, 1.0f), "MarkerPin");
+
+        MeshRenderer pinRenderer = pin.AddComponent<MeshRenderer>();
+        pinRenderer.sharedMaterial = MarkerShapes.Surface("MarkerBody", Color.white, 0.35f);
+
+        // --- the ring
+        GameObject ring = new GameObject("Ring");
+        ring.transform.SetParent(temp.transform, false);
+
+        MeshFilter ringMesh = ring.AddComponent<MeshFilter>();
+        ringMesh.sharedMesh = MarkerShapes.Save(
+            MarkerShapes.Torus(0.5f, 0.045f), "MarkerRing");
+
+        MeshRenderer ringRenderer = ring.AddComponent<MeshRenderer>();
+        ringRenderer.sharedMaterial = MarkerShapes.Surface(
+            "MarkerRing", new Color(0.96f, 0.97f, 0.98f), 0.2f);
+
+        // Generous hit area: the visual is about a metre and a half but the
+        // collider is wider, because a marker 80 m away is only a few pixels of
+        // screen to aim at.
+        BoxCollider collider = temp.AddComponent<BoxCollider>();
+        collider.center = new Vector3(0f, 0.5f, 0f);
+        collider.size = new Vector3(2f, 2f, 2f);
 
         MarkerView view = temp.AddComponent<MarkerView>();
-        view.tintedRenderers = new[] { temp.GetComponent<Renderer>() };
+
+        // The pin only. Tinting the ring as well would give the marker one
+        // colour and nothing to read it against.
+        view.tintedRenderers = new[] { (Renderer)pinRenderer };
         view.baseScale = 1.5f;
         view.clampDistance = 60f;
         view.billboard = false;
