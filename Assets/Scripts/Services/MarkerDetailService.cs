@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -32,11 +33,28 @@ public class MarkerDetailService : MonoBehaviour
     /// <summary>
     /// What has already been fetched, by marker id.
     ///
-    /// Kept for the session and not written to disk. A creator editing a trail
-    /// while somebody walks it is a real case, and a stale question cached across
-    /// launches would be a question nobody can answer.
+    /// Kept for the session. There is a copy on disk as well, but it is only ever
+    /// READ when the network has failed - a creator editing a trail while
+    /// somebody walks it is a real case, and a stale question served in
+    /// preference to a live one would be a question nobody can answer. Offline,
+    /// a stale question beats no question, which is the whole of the trade.
     /// </summary>
     readonly Dictionary<string, Detail> _cache = new Dictionary<string, Detail>();
+
+    /// <summary>
+    /// Where the copies live. One file per stop, named by its id, because the
+    /// alternative is one file rewritten on every fetch and JsonUtility cannot
+    /// serialise a dictionary anyway.
+    /// </summary>
+    static string Folder
+    {
+        get { return Path.Combine(Application.persistentDataPath, "stops"); }
+    }
+
+    static string FileFor(string id)
+    {
+        return Path.Combine(Folder, id + ".json");
+    }
 
     readonly HashSet<string> _inFlight = new HashSet<string>();
 
@@ -122,11 +140,19 @@ public class MarkerDetailService : MonoBehaviour
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                // A 404 means 0017 has not been applied. Either way the sheet
-                // shows the marker's text, which is the honest thing to show when
-                // we do not know what else it has.
+                // A 404 means 0017 has not been applied. A connection error means
+                // somebody has walked behind a building. The first cannot be
+                // helped; the second is what the copy on disk is for.
                 Debug.LogWarning("[Detail] marker_detail failed (" + request.responseCode +
                                  "): " + request.error);
+
+                Detail saved = ReadFromDisk(id);
+
+                if (saved != null)
+                {
+                    _cache[id] = saved;
+                    Apply(marker, saved);
+                }
 
                 if (done != null)
                     done();
@@ -140,11 +166,48 @@ public class MarkerDetailService : MonoBehaviour
             {
                 _cache[id] = detail;
                 Apply(marker, detail);
+                WriteToDisk(id, request.downloadHandler.text);
             }
         }
 
         if (done != null)
             done();
+    }
+
+    /// <summary>
+    /// Keeps the reply exactly as it arrived, so reading it back later goes
+    /// through the same parser and cannot drift from it.
+    /// </summary>
+    static void WriteToDisk(string id, string json)
+    {
+        try
+        {
+            Directory.CreateDirectory(Folder);
+            File.WriteAllText(FileFor(id), json);
+        }
+        catch (Exception exception)
+        {
+            // Not worth failing a sheet that has already been filled in.
+            Debug.LogWarning("[Detail] Could not keep a copy of " + id + ": " + exception.Message);
+        }
+    }
+
+    static Detail ReadFromDisk(string id)
+    {
+        try
+        {
+            string path = FileFor(id);
+
+            if (!File.Exists(path))
+                return null;
+
+            return Read(File.ReadAllText(path));
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Detail] Could not read the copy of " + id + ": " + exception.Message);
+            return null;
+        }
     }
 
     static Detail Read(string json)

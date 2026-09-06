@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.IO;
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -252,6 +256,18 @@ public class MediaPlayerView : MonoBehaviour
             return;
         }
 
+        // Disk first, and not only as a fallback. A media URL carries the
+        // timestamp it was uploaded with, so replacing a picture makes a new
+        // URL - a copy of this one can never be the wrong one, and the walker
+        // stops paying for the same photograph twice.
+        Texture2D kept = FromDisk(url);
+
+        if (kept != null)
+        {
+            Paint(kept);
+            return;
+        }
+
         if (Application.internetReachability == NetworkReachability.NotReachable)
         {
             Fail("media.needsConnection");
@@ -281,14 +297,85 @@ public class MediaPlayerView : MonoBehaviour
             }
 
             Texture2D texture = DownloadHandlerTexture.GetContent(request);
+            Paint(texture);
+            ToDisk(url, request.downloadHandler.data);
+        }
+    }
 
-            if (screen != null)
+    void Paint(Texture2D texture)
+    {
+        if (screen != null)
+        {
+            screen.enabled = true;
+            screen.texture = texture;
+        }
+
+        _prepared = true;
+    }
+
+    /// <summary>
+    /// Where a downloaded picture is kept. Named by a hash of its URL because
+    /// the URL is the identity - it holds the trail, the stop and the moment it
+    /// was uploaded - and because a URL is far too long to be a filename.
+    /// </summary>
+    static string PathFor(string url)
+    {
+        using (MD5 md5 = MD5.Create())
+        {
+            byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes(url));
+            StringBuilder name = new StringBuilder(32);
+
+            for (int i = 0; i < hash.Length; i++)
+                name.Append(hash[i].ToString("x2"));
+
+            return Path.Combine(Application.persistentDataPath, "media", name + ".img");
+        }
+    }
+
+    static Texture2D FromDisk(string url)
+    {
+        try
+        {
+            string path = PathFor(url);
+
+            if (!File.Exists(path))
+                return null;
+
+            Texture2D texture = new Texture2D(2, 2);
+
+            // LoadImage works out JPEG or PNG for itself and returns false rather
+            // than throwing on a file that was half written before the app died.
+            if (!texture.LoadImage(File.ReadAllBytes(path)))
             {
-                screen.enabled = true;
-                screen.texture = texture;
+                Destroy(texture);
+                return null;
             }
 
-            _prepared = true;
+            return texture;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Media] Could not read the kept picture: " + exception.Message);
+            return null;
+        }
+    }
+
+    static void ToDisk(string url, byte[] bytes)
+    {
+        if (bytes == null || bytes.Length == 0)
+            return;
+
+        try
+        {
+            string path = PathFor(url);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllBytes(path, bytes);
+        }
+        catch (Exception exception)
+        {
+            // The picture is already on screen. Failing to keep it is not worth
+            // telling anybody about.
+            Debug.LogWarning("[Media] Could not keep the picture: " + exception.Message);
         }
     }
 
