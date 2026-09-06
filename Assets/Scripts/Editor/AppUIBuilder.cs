@@ -3664,7 +3664,20 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(temp, 116f);
 
         PieceRowView view = temp.AddComponent<PieceRowView>();
-        view.button = UIFactory.Button(rt, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded);
+
+        // A card, not a slab. These sit on the sheet's own Surface, so the fill
+        // alone gives them no edge and the old SurfaceAlt read as three greyed
+        // out buttons. The hairline is what makes them objects.
+        view.button = UIFactory.Button(rt, ThemeRole.Surface, 1f, UIShape.Rounded);
+
+        RectTransform edge = UIFactory.Rect("Outline", rt);
+        UIFactory.Stretch(edge);
+        Image line = UIFactory.Fill(edge, ThemeRole.Line);
+        line.sprite = UISprites.CardOutline;
+        line.type = Image.Type.Sliced;
+        line.pixelsPerUnitMultiplier = 1f;
+        line.raycastTarget = false;
+        Ignore(edge);
 
         RectTransform row = UIFactory.Rect("Row", rt);
         UIFactory.Stretch(row);
@@ -3679,7 +3692,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(text, 2f, false);
         UIFactory.Flexible(text.gameObject);
 
-        view.caption = UIFactory.Text("Caption", text, 27f, ThemeRole.TextMuted,
+        view.caption = UIFactory.Text("Caption", text, Caption, ThemeRole.TextMuted,
                                       TextAlignmentOptions.Left);
         UIFactory.Size(view.caption.gameObject, 34f);
 
