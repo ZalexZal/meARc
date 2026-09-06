@@ -19,6 +19,12 @@ public class AccountSectionView : MonoBehaviour
 {
     [Header("Anonymous")]
     public GameObject anonymousGroup;
+
+    [Tooltip("What the leaderboard calls this person. Without it ensure_team " +
+             "falls back to \"Player\" and four characters of their id, and a " +
+             "board of six walkers is six rows nobody can tell apart.")]
+    public TMP_InputField nameField;
+
     public TMP_InputField emailField;
     public TMP_InputField passwordField;
     public Button signUpButton;
@@ -27,6 +33,8 @@ public class AccountSectionView : MonoBehaviour
     [Header("Signed in")]
     public GameObject signedInGroup;
     public TextMeshProUGUI emailLabel;
+    public TMP_InputField signedInNameField;
+    public Button saveNameButton;
     public Button signOutButton;
 
     [Header("Both")]
@@ -53,6 +61,12 @@ public class AccountSectionView : MonoBehaviour
         {
             signOutButton.onClick.RemoveAllListeners();
             signOutButton.onClick.AddListener(SignOut);
+        }
+
+        if (saveNameButton != null)
+        {
+            saveNameButton.onClick.RemoveAllListeners();
+            saveNameButton.onClick.AddListener(SaveName);
         }
 
         SupabaseAuth.OnSessionChanged += Refresh;
@@ -89,6 +103,15 @@ public class AccountSectionView : MonoBehaviour
                 : "—";
         }
 
+        // Only when it is not being typed into, or a repaint mid-edit would eat
+        // what somebody was halfway through writing.
+        if (signedInNameField != null && !signedInNameField.isFocused)
+        {
+            signedInNameField.text = auth != null && auth.DisplayName != null
+                ? auth.DisplayName
+                : string.Empty;
+        }
+
         SetBusy(_busy);
     }
 
@@ -109,7 +132,7 @@ public class AccountSectionView : MonoBehaviour
 
         SetBusy(true);
         Say("account.working");
-        StartCoroutine(auth.SignUp(email, password, Done));
+        StartCoroutine(auth.SignUp(email, password, Value(nameField), Done));
     }
 
     void SignIn()
@@ -130,6 +153,20 @@ public class AccountSectionView : MonoBehaviour
         SetBusy(true);
         Say("account.working");
         StartCoroutine(auth.SignIn(email, password, Done));
+    }
+
+    void SaveName()
+    {
+        if (_busy)
+            return;
+
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        if (auth == null)
+            return;
+
+        SetBusy(true);
+        Say("account.working");
+        StartCoroutine(auth.SetDisplayName(Value(signedInNameField), Done));
     }
 
     void SignOut()
@@ -202,6 +239,9 @@ public class AccountSectionView : MonoBehaviour
 
         if (signOutButton != null)
             signOutButton.interactable = !busy;
+
+        if (saveNameButton != null)
+            saveNameButton.interactable = !busy;
     }
 
     void Say(string key)
@@ -225,6 +265,9 @@ public class AccountSectionView : MonoBehaviour
     {
         if (emailField != null)
             emailField.text = string.Empty;
+
+        if (nameField != null)
+            nameField.text = string.Empty;
 
         // Always, and not only on success. A password left sitting in a field on
         // a phone that is about to be handed to somebody is the reason.

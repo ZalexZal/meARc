@@ -2265,6 +2265,14 @@ const float ReferenceWidth = 1080f;
                                          TextAlignmentOptions.Left, null, FontStyles.Bold);
         UIFactory.Size(view.emailLabel.gameObject, 52f);
 
+        // Changeable afterwards, because a name chosen in a hurry at sign-up is
+        // the one that ends up on a screen in front of a room.
+        UIFactory.Text("NameLabel", inGroup, Caption, ThemeRole.TextMuted,
+                       TextAlignmentOptions.Left, "account.name");
+        view.signedInNameField = Field(inGroup, "Name", "account.name");
+        view.saveNameButton = FullWidthButton(inGroup, "SaveName", "account.saveName",
+                                              ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
         view.signOutButton = FullWidthButton(inGroup, "SignOut", "account.signOut",
                                              ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
 
@@ -2282,6 +2290,16 @@ const float ReferenceWidth = 1080f;
                                               TextAlignmentOptions.Left, "account.noneBody");
         body.textWrappingMode = TextWrappingModes.Normal;
         UIFactory.Size(body.gameObject, 110f);
+
+        // First, because it is the one field that is about the person rather
+        // than about the login.
+        view.nameField = Field(outGroup, "Name", "account.name");
+
+        TextMeshProUGUI nameHint = UIFactory.Text("NameHint", outGroup, Caption,
+                                                  ThemeRole.TextMuted,
+                                                  TextAlignmentOptions.Left,
+                                                  "account.nameHint");
+        UIFactory.Size(nameHint.gameObject, 40f);
 
         view.emailField = Field(outGroup, "Email", "account.email");
         view.emailField.contentType = TMP_InputField.ContentType.EmailAddress;

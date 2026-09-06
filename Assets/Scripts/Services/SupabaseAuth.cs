@@ -32,6 +32,15 @@ public class SupabaseAuth : MonoBehaviour
     /// <summary>The address on the account, or null while anonymous.</summary>
     public string Email { get; private set; }
 
+    /// <summary>
+    /// What a person is called on a leaderboard.
+    ///
+    /// Kept here rather than read from the session, because it lives in
+    /// profiles and not in the JWT: the token knows who you are, the profile
+    /// knows what to call you.
+    /// </summary>
+    public string DisplayName { get; private set; }
+
     public bool IsSignedIn
     {
         get { return !string.IsNullOrEmpty(AccessToken); }
@@ -149,7 +158,8 @@ public class SupabaseAuth : MonoBehaviour
     /// so the token still in hand says is_anonymous and every screen reading that
     /// would go on believing it.
     /// </summary>
-    public IEnumerator SignUp(string email, string password, Action<string> done)
+    public IEnumerator SignUp(string email, string password, string displayName,
+                             Action<string> done)
     {
         SupabaseConfig config = SupabaseConfig.Instance;
 
@@ -161,8 +171,16 @@ public class SupabaseAuth : MonoBehaviour
 
         _working = true;
 
+        // The name goes into user_metadata as well as into profiles. GoTrue keeps
+        // the metadata and the trigger that made the profile row does not run
+        // again, so profiles has to be written separately below - but keeping
+        // both means a rebuilt profile still knows what to call somebody.
+        string named = string.IsNullOrWhiteSpace(displayName)
+            ? string.Empty
+            : ",\"data\":{\"display_name\":\"" + Escape(displayName.Trim()) + "\"}";
+
         string body = "{\"email\":\"" + Escape(email) + "\"," +
-                      "\"password\":\"" + Escape(password) + "\"}";
+                      "\"password\":\"" + Escape(password) + "\"" + named + "}";
 
         using (UnityWebRequest request = Put(config.Endpoint("/auth/v1/user"), body))
         {
@@ -179,10 +197,79 @@ public class SupabaseAuth : MonoBehaviour
         // Same uid, now permanent. The session catches up here.
         yield return Refresh();
 
+        if (!string.IsNullOrWhiteSpace(displayName))
+            yield return SetDisplayName(displayName, null);
+
         _working = false;
 
         if (done != null)
             done(null);
+    }
+
+    /// <summary>
+    /// Writes the name onto the profile row, which is what the leaderboard
+    /// actually reads.
+    ///
+    /// Separate from the account because they are separate rows: ensure_team
+    /// takes the team's name from profiles.display_name, and a name that only
+    /// ever reached user_metadata would leave every player on the board called
+    /// "Player" followed by four characters of their id.
+    /// </summary>
+    public IEnumerator SetDisplayName(string displayName, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || !IsSignedIn || string.IsNullOrEmpty(UserId))
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        string trimmed = displayName == null ? string.Empty : displayName.Trim();
+        string body = "{\"display_name\":\"" + Escape(trimmed) + "\"}";
+        string url = config.Endpoint("/rest/v1/profiles?id=eq." + UserId);
+
+        using (UnityWebRequest request = Patch(url, body))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Fail(done, Explain(request), request);
+                yield break;
+            }
+        }
+
+        DisplayName = trimmed;
+
+        if (OnSessionChanged != null)
+            OnSessionChanged();
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>A PATCH carrying the reader's own token, for their own row.</summary>
+    static UnityWebRequest Patch(string url, string json)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        UnityWebRequest request = new UnityWebRequest(url, "PATCH");
+        request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Content-Type", "application/json");
+        request.SetRequestHeader("Prefer", "return=minimal");
+        request.timeout = 20;
+
+        if (config != null)
+            request.SetRequestHeader("apikey", config.anonKey);
+
+        // profiles_update_own matches id against auth.uid(), so the anon key
+        // would update nothing at all - correctly, and silently.
+        if (Instance != null && !string.IsNullOrEmpty(Instance.AccessToken))
+            request.SetRequestHeader("Authorization", "Bearer " + Instance.AccessToken);
+
+        return request;
     }
 
     /// <summary>
@@ -396,6 +483,9 @@ public class SupabaseAuth : MonoBehaviour
         UserId = session.user != null ? session.user.id : null;
         IsAnonymous = session.user != null && session.user.is_anonymous;
         Email = session.user != null ? session.user.email : null;
+        DisplayName = session.user != null && session.user.user_metadata != null
+            ? session.user.user_metadata.display_name
+            : null;
 
         // Supabase reports a lifetime, not a moment, so it is turned into one here
         // rather than being recomputed at every call site.
@@ -512,6 +602,13 @@ public class SupabaseAuth : MonoBehaviour
         public string id;
         public bool is_anonymous;
         public string email;
+        public UserMetadata user_metadata;
+    }
+
+    [Serializable]
+    class UserMetadata
+    {
+        public string display_name;
     }
 
     /// <summary>
