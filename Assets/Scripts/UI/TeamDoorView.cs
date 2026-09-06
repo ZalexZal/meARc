@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -71,6 +72,15 @@ public class TeamDoorView : MonoBehaviour
         TeamService.OnTeamChanged += Refresh;
         AppStrings.OnLanguageChanged += Refresh;
 
+        // A teammate's solve is written by check_answer on their phone, so this
+        // one only learns about it by asking. Realtime would push it instead and
+        // is the better answer, but it means a WebSocket and the Phoenix channel
+        // protocol written from scratch, on a persistent connection over a mobile
+        // network, with no device here to try it on. Fifteen seconds is a few
+        // seconds of staleness nobody in a room will notice.
+        MarkerTaskService.OnProgressChanged += Reload;
+        _polling = StartCoroutine(Poll());
+
         // Asked every time it opens. A board that is one walk out of date is
         // worse than a board that took a moment to arrive.
         TrailService trails = TrailService.Instance;
@@ -86,6 +96,44 @@ public class TeamDoorView : MonoBehaviour
     {
         TeamService.OnTeamChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
+        MarkerTaskService.OnProgressChanged -= Reload;
+
+        // Stopped with the card. A poll that outlives the screen it feeds is a
+        // request every fifteen seconds for the rest of the walk.
+        if (_polling != null)
+        {
+            StopCoroutine(_polling);
+            _polling = null;
+        }
+    }
+
+    Coroutine _polling;
+
+    /// <summary>How often the standings are re-read while this card is open.</summary>
+    public float pollSeconds = 15f;
+
+    IEnumerator Poll()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(pollSeconds);
+            Reload();
+        }
+    }
+
+    /// <summary>
+    /// Asks again. Also wired to a finished answer, because the moment somebody
+    /// most wants to see the board move is the moment they just scored.
+    /// </summary>
+    void Reload()
+    {
+        TeamService teams = TeamService.Instance;
+        TrailService trails = TrailService.Instance;
+
+        if (teams == null || teams.Busy || trails == null || string.IsNullOrEmpty(trails.SelectedId))
+            return;
+
+        teams.Load(trails.SelectedId);
     }
 
     public void Refresh()
