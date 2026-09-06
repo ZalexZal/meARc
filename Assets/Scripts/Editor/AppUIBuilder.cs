@@ -2528,6 +2528,11 @@ const float ReferenceWidth = 1080f;
                                                TextAlignmentOptions.Left, null, FontStyles.Bold);
         UIFactory.Size(count.gameObject, 92f);
 
+        // A number, or a dash until there is one. Text() falls back to the object's
+        // name, so before the first count arrived this card announced "Count" in
+        // seventy-six point type.
+        count.text = "—";
+
         RectTransform bar = UIFactory.Rect("Bar", card);
         UIFactory.Size(bar.gameObject, 20f);
         UIFactory.Fill(bar, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);

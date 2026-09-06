@@ -191,7 +191,7 @@ public static class AppStrings
         { "search.empty", "No markers found" },
         { "buildings.offline", "Couldn't load markers. Check your connection." },
         { "search.discovered", "markers explored" },
-        { "search.discoveredNote", "* A marker counts as explored once you open it." },
+        { "search.discoveredNote", "* A stop counts once you tap its marker in the camera — or open it from the map while you are standing at it." },
 
         { "team.close", "Close" },
         { "team.eyebrow", "Your team" },
@@ -468,7 +468,7 @@ public static class AppStrings
         { "search.empty", "Няма намерени маркери" },
         { "buildings.offline", "Неуспешно зареждане на маркерите. Проверете връзката си." },
         { "search.discovered", "разгледани маркера" },
-        { "search.discoveredNote", "* Маркерът се отчита като разгледан, когато го отворите." },
+        { "search.discoveredNote", "* Спирката се отчита, когато натиснеш маркера в камерата — или я отвориш от картата, докато стоиш при нея." },
 
         { "team.close", "Затвори" },
         { "team.eyebrow", "Твоят отбор" },
