@@ -2144,6 +2144,9 @@ const float ReferenceWidth = 1080f;
     /// is explaining the screen behind it and a half-visible screen is a
     /// distraction rather than a demonstration.
     /// </summary>
+    /// <summary>Cards in the first-run walkthrough. Dots and pages share it.</summary>
+    const int TutorialCards = 6;
+
     static TutorialFlow BuildTutorial(Transform root)
     {
         RectTransform holder = UIFactory.Rect("Tutorial", root);
@@ -2180,8 +2183,11 @@ const float ReferenceWidth = 1080f;
         pages.offsetMin = new Vector2(0f, Tap * 2f + 120f);
         pages.offsetMax = new Vector2(0f, -(Tap + 40f));
 
-        for (int i = 1; i <= 4; i++)
-            flow.pages.Add(TutorialPage(pages, "tutorial." + i));
+        // Six since the trail code and the team card were added: the original
+        // four explained augmented reality and none of them explained how to
+        // start playing, which is the part somebody handed a phone needs.
+        for (int i = 1; i <= TutorialCards; i++)
+            flow.pages.Add(TutorialPage(pages, "tutorial." + i, first: i == 1));
 
         RectTransform dots = UIFactory.Rect("Dots", inner);
         UIFactory.Corner(dots, new Vector2(0.5f, 0f), new Vector2(300f, 40f),
@@ -2189,7 +2195,7 @@ const float ReferenceWidth = 1080f;
         HorizontalLayoutGroup dotsLayout = UIFactory.HorizontalStack(dots, 12f);
         dotsLayout.childAlignment = TextAnchor.MiddleCenter;
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < TutorialCards; i++)
         {
             RectTransform dot = UIFactory.Rect("Dot" + i, dots);
             LayoutElement dotSize = UIFactory.Size(dot.gameObject, 14f, 14f);
@@ -2208,7 +2214,8 @@ const float ReferenceWidth = 1080f;
         next.anchoredPosition = new Vector2(0f, Tap + 16f);
         flow.nextButton = UIFactory.Button(next, ThemeRole.Accent, 1f, UIShape.Rounded);
         flow.nextLabel = UIFactory.Text("Label", next, Body, ThemeRole.OnAccent,
-                                        TextAlignmentOptions.Center, null, FontStyles.Bold);
+                                        TextAlignmentOptions.Center, "tutorial.next",
+                                        FontStyles.Bold);
         UIFactory.Stretch(flow.nextLabel.rectTransform);
 
         RectTransform skip = UIFactory.Rect("Skip", inner);
@@ -2226,7 +2233,7 @@ const float ReferenceWidth = 1080f;
         return flow;
     }
 
-    static TutorialFlow.Page TutorialPage(RectTransform parent, string key)
+    static TutorialFlow.Page TutorialPage(RectTransform parent, string key, bool first)
     {
         RectTransform rt = UIFactory.Rect(key, parent);
         UIFactory.Stretch(rt);
@@ -2242,15 +2249,18 @@ const float ReferenceWidth = 1080f;
         LayoutElement spacerSize = spacer.gameObject.AddComponent<LayoutElement>();
         spacerSize.flexibleHeight = 1f;
 
+        // Keyed rather than blank, so this screen can be looked at before it is
+        // ever run - and so the first frame is the first card rather than a gap.
         page.title = UIFactory.Text("Title", rt, Display, ThemeRole.TextPrimary,
-                                    TextAlignmentOptions.BottomLeft, null, FontStyles.Bold);
+                                    TextAlignmentOptions.BottomLeft, key + ".title",
+                                    FontStyles.Bold);
         UIFactory.Size(page.title.gameObject, 190f);
 
         page.body = UIFactory.Text("Body", rt, Body, ThemeRole.TextSecondary,
-                                   TextAlignmentOptions.TopLeft);
+                                   TextAlignmentOptions.TopLeft, key + ".body");
         UIFactory.Size(page.body.gameObject, 260f);
 
-        rt.gameObject.SetActive(false);
+        rt.gameObject.SetActive(first);
         return page;
     }
 
