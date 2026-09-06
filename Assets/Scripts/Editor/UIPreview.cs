@@ -217,6 +217,12 @@ public static class UIPreview
 
         Pieces.Verdict(canvas.transform, Pieces.Ending.Right);
         Shoot(canvas, rig, "25-correct" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
+
+        // The chooser sits over the sheet, so both are named. It ships switched
+        // off, which is why it has to be asked for by name here.
+        Pieces.Page(canvas.transform, Pieces.Which.Overview);
+        Shoot(canvas, rig, "27-report" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim",
+              "InfoSheet/Safe/ReportChooser");
     }
 
     /// <summary>

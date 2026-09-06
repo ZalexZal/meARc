@@ -53,6 +53,15 @@ public class InfoPanelController : MonoBehaviour
     public Button hideButton;
     public TextMeshProUGUI hideLabel;
 
+    [Tooltip("Tells the people who run the trail. Hide is for one reader, this " +
+             "is for everybody, and only one of them needs a human to agree.")]
+    public Button reportButton;
+    public TextMeshProUGUI reportLabel;
+
+    [Tooltip("The reason chooser. Null on a build without it, and the button " +
+             "then stays hidden rather than doing nothing when tapped.")]
+    public ReportSheetView reportSheet;
+
     /// <summary>Raised before the sheet opens, so the Camera tab can close Nearby.</summary>
     public Action onWillOpen;
 
@@ -73,6 +82,15 @@ public class InfoPanelController : MonoBehaviour
 
         if (hideButton != null)
             hideButton.onClick.AddListener(HideThisMarker);
+
+        if (reportButton != null)
+        {
+            reportButton.onClick.AddListener(ReportThisMarker);
+
+            // A local marker from the CSV has no server row to report. Better an
+            // absent button than one that answers a tap with an error.
+            reportButton.gameObject.SetActive(reportSheet != null);
+        }
 
         if (scrim != null)
             scrim.SetActive(false);
@@ -141,6 +159,21 @@ public class InfoPanelController : MonoBehaviour
 
         HiddenMarkers.Hide(currentBuilding);
         ClosePanel();
+    }
+
+    /// <summary>
+    /// Opens the reason chooser for the stop on screen.
+    ///
+    /// The sheet stays where it is behind it. Reporting is a thing you do about
+    /// what you are looking at, and taking it away first would leave somebody
+    /// choosing a reason for a stop they can no longer see the name of.
+    /// </summary>
+    public void ReportThisMarker()
+    {
+        if (currentBuilding == null || reportSheet == null)
+            return;
+
+        reportSheet.Open(currentBuilding.buildingId);
     }
 
     /// <summary>

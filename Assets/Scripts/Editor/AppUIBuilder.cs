@@ -660,6 +660,12 @@ const float ReferenceWidth = 1080f;
                       out controller.hideLabel);
         controller.hideButton = hide;
 
+        // Third in the row, which is why marker.hide lost its noun: three labels
+        // sharing the sheet's width have room for one word each.
+        OutlineButton(actions, "ReportButton", "marker.report", out Button report,
+                      out controller.reportLabel);
+        controller.reportButton = report;
+
         RectTransform close = UIFactory.Rect("CloseButton", sheet);
         UIFactory.Corner(close, new Vector2(1f, 1f), new Vector2(Tap, Tap),
                          new Vector2(-24f, -6f));
@@ -675,6 +681,11 @@ const float ReferenceWidth = 1080f;
         // which is fully on screen. SnapClosed hides it the moment the app plays,
         // so this was invisible on device and covered the whole editor scene.
         sheet.anchoredPosition = new Vector2(0f, Nav - SheetHeight - 40f);
+
+        // Built after the sheet, so it draws over it. The sheet stays visible
+        // underneath: choosing a reason for a stop whose name has just been taken
+        // off the screen is a worse question than the one being asked.
+        controller.reportSheet = BuildReportChooser(sheetSafe);
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -788,6 +799,69 @@ const float ReferenceWidth = 1080f;
         UIFactory.Stretch(label.rectTransform);
 
         return rt;
+    }
+
+    /// <summary>
+    /// The reason chooser that opens over the marker sheet.
+    ///
+    /// Six reasons, one tap each, and no text field. Whoever uses this is standing
+    /// in a street next to something they would rather was not there; the reason
+    /// plus the coordinates report_marker snapshots is enough for the person who
+    /// runs the trail to walk out and look for themselves.
+    ///
+    /// A card rather than a sheet, because it sizes itself to the six and would
+    /// have to be re-measured by hand every time the wording changed.
+    /// </summary>
+    static ReportSheetView BuildReportChooser(Transform parent)
+    {
+        RectTransform panel = Door(parent, "ReportChooser", plain: false,
+                                   inner: out RectTransform inner);
+
+        // Door pads for the system bars and nothing else, so a card resting on
+        // the bottom of it grows upward from underneath our own nav - which is
+        // where the last button was landing, invisible behind the tab bar.
+        inner.offsetMin = new Vector2(inner.offsetMin.x, Nav + Margin);
+
+        ReportSheetView view = panel.gameObject.AddComponent<ReportSheetView>();
+
+        // Tapping the dimmed area is the way out that nobody has to be taught.
+        // Cancel below is the one they can see.
+        Button away = panel.gameObject.AddComponent<Button>();
+        away.targetGraphic = panel.GetComponent<Image>();
+        away.transition = Selectable.Transition.None;
+        Wire(away.onClick, view.Close, "Report chooser scrim");
+
+        RectTransform card = Card(inner, "Card", 14f);
+
+        view.titleLabel = UIFactory.Text("Title", card, Title, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.TopLeft, "report.title",
+                                         FontStyles.Bold);
+        view.titleLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(view.titleLabel.gameObject, 76f);
+
+        for (int i = 0; i < ReportSheetView.Reasons.Length; i++)
+        {
+            string key = "report.reason." + ReportSheetView.Reasons[i];
+
+            view.reasonButtons[i] = FullWidthButton(card, "Reason" + i, key,
+                                                    ThemeRole.SurfaceAlt,
+                                                    ThemeRole.TextPrimary);
+            view.reasonLabels[i] =
+                view.reasonButtons[i].GetComponentInChildren<TextMeshProUGUI>();
+        }
+
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left);
+        UIFactory.Size(view.statusLabel.gameObject, 52f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        // Not Surface: the card's own face is Surface, and a button the same
+        // colour as the thing it sits on is a button nobody can see.
+        view.cancelButton = FullWidthButton(card, "Cancel", "report.cancel",
+                                            ThemeRole.SurfaceAlt, ThemeRole.TextSecondary);
+
+        panel.gameObject.SetActive(false);
+        return view;
     }
 
     // ------------------------------------------------------------------- map tab
