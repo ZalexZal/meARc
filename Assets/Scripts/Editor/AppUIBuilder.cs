@@ -49,11 +49,16 @@ const float ReferenceWidth = 1080f;
 
     // Type scale. Nothing below Caption - 32 reference pixels is about 12dp, and
     // that is the floor for text a walking reader has to read.
-    const float Display = 62f;
-    const float Title = 48f;
-    const float Body = 42f;
-    const float Secondary = 36f;
-    const float Caption = 32f;
+    // A scale with real steps in it. The old one ran 62/48/42/36/32, which puts
+    // body and secondary seventeen per cent apart - close enough that a sheet of
+    // text reads as one undifferentiated block and nothing looks deliberate.
+    // Ratios now sit near 1.35 at the top, where one line has to carry a whole
+    // screen, and tighten towards the bottom where UI text lives.
+    const float Display = 76f;
+    const float Title = 54f;
+    const float Body = 40f;
+    const float Secondary = 33f;
+    const float Caption = 28f;
 
     const string PrefabFolder = "Assets/Prefabs";
     const string RowPrefabPath = PrefabFolder + "/BuildingRow.prefab";
@@ -517,7 +522,11 @@ const float ReferenceWidth = 1080f;
         sheetPad.left = true;
         sheetPad.right = true;
 
-        const float SheetHeight = 1180f;
+        // Taller than it was by a quarter. The stop's own words are the point of
+        // the stop and were getting one visible line: the pieces list and a
+        // two-row footer had taken the rest, and the fade over the last of it
+        // made one line look like the whole entry.
+        const float SheetHeight = 1440f;
         const float HeadRoom = 110f;                    // the grab bar and the close button
         const float FooterHeight = Tap * 2f + 16f;      // Guide, then the quieter row
 
