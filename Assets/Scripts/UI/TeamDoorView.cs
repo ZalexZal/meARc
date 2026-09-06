@@ -17,8 +17,11 @@ using UnityEngine.UI;
 /// </summary>
 public class TeamDoorView : MonoBehaviour
 {
-    public const int MaxRows = 12;
-    public const int MaxMembers = 4;
+    // Fifty-odd people at a launch, in teams the creator sizes: about twenty
+    // teams on the board, and twelve is the largest team the database allows.
+    // Both lists scroll, so these are the ceiling rather than what is drawn.
+    public const int MaxRows = 24;
+    public const int MaxMembers = 12;
 
     [Header("No team yet")]
     public GameObject noTeamGroup;
@@ -36,6 +39,10 @@ public class TeamDoorView : MonoBehaviour
 
     [Tooltip("One row per member, built once. Extra rows are switched off.")]
     public TextMeshProUGUI[] memberRows = new TextMeshProUGUI[MaxMembers];
+
+    [Tooltip("Says how many a team here holds, which is the trail's number and " +
+             "not this app's.")]
+    public TextMeshProUGUI capacityLabel;
 
     [Header("The board")]
     public GameObject boardEmpty;
@@ -184,6 +191,15 @@ public class TeamDoorView : MonoBehaviour
 
             if (createButton != null)
                 createButton.interactable = false;
+        }
+
+        if (capacityLabel != null)
+        {
+            int cap = team != null ? team.Cap : 4;
+
+            capacityLabel.text = onTeam
+                ? string.Format(AppStrings.Get("team.capacity"), team.Size, cap)
+                : string.Format(AppStrings.Get("team.capacityNone"), cap);
         }
 
         DrawBoard(teams);

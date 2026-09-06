@@ -4032,6 +4032,16 @@ const float ReferenceWidth = 1080f;
         UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
                        TextAlignmentOptions.TopLeft, "team.title", FontStyles.Bold);
 
+        // Above both groups, because the number belongs to the trail rather than
+        // to whether you happen to be on a team yet.
+        view.capacityLabel = UIFactory.Text("Capacity", card, Secondary, ThemeRole.TextMuted,
+                                            TextAlignmentOptions.Left);
+        UIFactory.Size(view.capacityLabel.gameObject, 46f);
+
+        // Blank until Refresh has a trail to ask about. Text() falls back to the
+        // object's name, and "Capacity" is not a sentence anybody should read.
+        view.capacityLabel.text = string.Empty;
+
         // Everything below the heading scrolls. The head and the footer are
         // pinned, so Close is always reachable - a card whose only way out has
         // scrolled off the bottom is a trap.

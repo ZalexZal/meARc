@@ -44,10 +44,19 @@ public class TeamService : MonoBehaviour
         public int solved;
         public int points;
 
+        /// <summary>
+        /// The trail's own cap, since 0027 - the creator sets it, so this class
+        /// cannot know it without being told. Four only for a reply written
+        /// before the column existed.
+        /// </summary>
+        public int max_size;
+
         public int Size { get { return members != null ? members.Length : 0; } }
 
-        /// <summary>Four is the trigger's number, repeated here only to grey a button.</summary>
-        public bool IsFull { get { return Size >= 4; } }
+        public int Cap { get { return max_size > 0 ? max_size : 4; } }
+
+        /// <summary>The trigger's number, repeated here only to grey a button.</summary>
+        public bool IsFull { get { return Size >= Cap; } }
     }
 
     [Serializable]
