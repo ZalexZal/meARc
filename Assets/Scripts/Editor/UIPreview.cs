@@ -1305,7 +1305,7 @@ public static class UIPreview
 
             if (strip.nextName != null)
             {
-                strip.nextName.text = "Ески джамия";
+                strip.nextName.text = "Градската градина";
                 strip.nextMeta.text = string.Format(AppStrings.Get("strip.stopOf"), 3, 9);
             }
 
@@ -1313,7 +1313,7 @@ public static class UIPreview
                 strip.nextDistance.text = AppStrings.FormatDistance(180d);
 
             if (strip.nextKnob != null)
-                strip.nextKnob.color = MarkerPalette.ForKey("eski");
+                strip.nextKnob.color = MarkerPalette.ForKey("garden");
         }
 
         static void Show(GameObject go, bool on)

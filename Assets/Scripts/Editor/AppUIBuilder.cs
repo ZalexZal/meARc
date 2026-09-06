@@ -1014,20 +1014,24 @@ const float ReferenceWidth = 1080f;
         // share a row with it permanently costs the name the width it needs - and
         // naming the open trail is the entire job of that bar. Below, it competes
         // with nothing and the name gets the room.
+        // An icon, not a labelled pill. It was three hundred and thirty pixels
+        // of chrome for a control nobody has to be taught: the crosshair is the
+        // whole message, and it was sitting next to the trail chip competing
+        // with the one thing at the top that does need reading.
         RectTransform recentre = UIFactory.Rect("Recentre", safe);
-        UIFactory.Corner(recentre, new Vector2(1f, 1f), new Vector2(330f, Tap),
+        UIFactory.Corner(recentre, new Vector2(1f, 1f), new Vector2(Tap, Tap),
                          new Vector2(-Margin, -182f));
-        map.recentreButton = UIFactory.Button(recentre, ThemeRole.Surface, 0.96f, UIShape.Pill);
+        map.recentreButton = UIFactory.Button(recentre, ThemeRole.Surface, 0.96f, UIShape.Circle);
+        Outline(recentre);
         controller.recentreHolder = recentre.gameObject;
 
+        Icon(recentre, AppIcon.MyLocation, 48f, ThemeRole.Accent);
+
+        // Kept and hidden rather than deleted: the controller still writes to
+        // this label, and a screen reader still needs the button to have a name.
         RectTransform recentreRow = UIFactory.Rect("Row", recentre);
         UIFactory.Stretch(recentreRow);
-        recentreRow.offsetMin = new Vector2(26f, 0f);
-        recentreRow.offsetMax = new Vector2(-26f, 0f);
-        HorizontalLayoutGroup recentreLayout = UIFactory.HorizontalStack(recentreRow, 14f);
-        recentreLayout.childAlignment = TextAnchor.MiddleCenter;
-
-        Icon(recentreRow, AppIcon.MyLocation, 44f, ThemeRole.Accent);
+        recentreRow.gameObject.SetActive(false);
 
         TextMeshProUGUI recentreLabel = UIFactory.Text("Label", recentreRow, Secondary,
                                                        ThemeRole.TextPrimary,
@@ -1092,20 +1096,26 @@ const float ReferenceWidth = 1080f;
 
         controller.nextStop = BuildNextStopStrip(dockArea, location, controller);
 
-        // Browse and Team share one row rather than stacking. The dock sits over
-        // the map, so every row it gains is map the reader cannot see; two halves
-        // of one row cost nothing.
-        RectTransform dockRow = UIFactory.Rect("Actions", dockArea);
+        // Inside the next-stop card rather than under it. They were a second
+        // card of their own, which is a whole row of map nobody could see for two
+        // controls that belong to the thing above them anyway. On the card they
+        // need no surface and no outline of their own - the card is already
+        // there, and a hairline is enough to say where it ends.
+        RectTransform dockRow = UIFactory.Rect("Actions", controller.nextStop.transform);
         UIFactory.Size(dockRow.gameObject, Tap);
-        HorizontalLayoutGroup dockRowLayout = UIFactory.HorizontalStack(dockRow, 12f);
+        HorizontalLayoutGroup dockRowLayout = UIFactory.HorizontalStack(dockRow, 0f);
         dockRowLayout.childAlignment = TextAnchor.MiddleCenter;
+
+        RectTransform dockLine = UIFactory.Rect("Rule", dockRow);
+        UIFactory.TopStretch(dockLine, 2f);
+        UIFactory.Fill(dockLine, ThemeRole.Line).raycastTarget = false;
+        Ignore(dockLine);
 
         RectTransform browse = UIFactory.Rect("Browse", dockRow);
         UIFactory.Size(browse.gameObject, Tap);
         UIFactory.Flexible(browse.gameObject);
-        controller.browseButton = UIFactory.Button(browse, ThemeRole.Surface, 0.97f,
+        controller.browseButton = UIFactory.Button(browse, ThemeRole.Surface, 0f,
                                                    UIShape.Rounded);
-        Outline(browse);
 
         RectTransform browseRow = UIFactory.Rect("Row", browse);
         UIFactory.Stretch(browseRow);
@@ -1127,8 +1137,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(team.gameObject, Tap);
         UIFactory.Flexible(team.gameObject);
 
-        Button teamButton = UIFactory.Button(team, ThemeRole.Surface, 0.97f, UIShape.Rounded);
-        Outline(team);
+        Button teamButton = UIFactory.Button(team, ThemeRole.Surface, 0f, UIShape.Rounded);
 
         // Wired at runtime, not here: the doors are built after the map, so
         // there is no DoorFlow to point at yet. TrailChipView solves the same
