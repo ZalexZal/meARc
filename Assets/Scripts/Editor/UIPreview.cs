@@ -167,6 +167,10 @@ public static class UIPreview
         Pieces.CodeState(canvas.transform, "", null);
         Shoot(canvas, rig, "13-code" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
 
+        // The team card as somebody sees it before they have a team, which is
+        // the state every walker starts in.
+        Shoot(canvas, rig, "26-team" + t, "MapPanel", "Doors/Backdrop", "Doors/Team");
+
         // The two states of the list that are not a list. The third, waiting, is
         // the empty one with different words.
         Pieces.TrailsState(canvas.transform, "Empty");

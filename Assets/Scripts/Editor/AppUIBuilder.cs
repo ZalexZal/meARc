@@ -353,6 +353,11 @@ const float ReferenceWidth = 1080f;
         // warning says so once, and the sheet shows the marker's text.
         go.AddComponent<MarkerDetailService>();
 
+        // Teams and the standings. Harmless before 0022: my_team_detail 404s,
+        // the card says it could not reach the server, and nothing invents a
+        // team that does not exist.
+        go.AddComponent<TeamService>();
+
         // Markers come from the Supabase RPC, not from a spreadsheet and not from
         // assets in the build. RemoteBuildingSource is the old path and is
         // deliberately not added.
@@ -1004,8 +1009,17 @@ const float ReferenceWidth = 1080f;
 
         controller.nextStop = BuildNextStopStrip(dockArea, location, controller);
 
-        RectTransform browse = UIFactory.Rect("Browse", dockArea);
+        // Browse and Team share one row rather than stacking. The dock sits over
+        // the map, so every row it gains is map the reader cannot see; two halves
+        // of one row cost nothing.
+        RectTransform dockRow = UIFactory.Rect("Actions", dockArea);
+        UIFactory.Size(dockRow.gameObject, Tap);
+        HorizontalLayoutGroup dockRowLayout = UIFactory.HorizontalStack(dockRow, 12f);
+        dockRowLayout.childAlignment = TextAnchor.MiddleCenter;
+
+        RectTransform browse = UIFactory.Rect("Browse", dockRow);
         UIFactory.Size(browse.gameObject, Tap);
+        UIFactory.Flexible(browse.gameObject);
         controller.browseButton = UIFactory.Button(browse, ThemeRole.Surface, 0.97f,
                                                    UIShape.Rounded);
         Outline(browse);
@@ -1021,9 +1035,38 @@ const float ReferenceWidth = 1080f;
                                                 ThemeRole.TextPrimary,
                                                 TextAlignmentOptions.Left, "map.browse",
                                                 FontStyles.Bold);
-        LayoutElement browseLabelSize = UIFactory.Size(controller.browseLabel.gameObject,
-                                                       Tap, 320f);
-        browseLabelSize.flexibleWidth = 0f;
+        UIFactory.Flexible(controller.browseLabel.gameObject);
+        controller.browseLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        controller.browseLabel.overflowMode = TextOverflowModes.Ellipsis;
+
+        // --- who you are walking with, and the standings
+        RectTransform team = UIFactory.Rect("Team", dockRow);
+        UIFactory.Size(team.gameObject, Tap);
+        UIFactory.Flexible(team.gameObject);
+
+        Button teamButton = UIFactory.Button(team, ThemeRole.Surface, 0.97f, UIShape.Rounded);
+        Outline(team);
+
+        // Wired at runtime, not here: the doors are built after the map, so
+        // there is no DoorFlow to point at yet. TrailChipView solves the same
+        // problem the same way.
+        OpenTeamButton opener = team.gameObject.AddComponent<OpenTeamButton>();
+        opener.button = teamButton;
+
+        RectTransform teamRow = UIFactory.Rect("Row", team);
+        UIFactory.Stretch(teamRow);
+        HorizontalLayoutGroup teamLayout = UIFactory.HorizontalStack(teamRow, 16f);
+        teamLayout.childAlignment = TextAnchor.MiddleCenter;
+
+        Icon(teamRow, AppIcon.Users, 38f, ThemeRole.TextSecondary);
+
+        TextMeshProUGUI teamLabel = UIFactory.Text("Label", teamRow, Secondary,
+                                                   ThemeRole.TextPrimary,
+                                                   TextAlignmentOptions.Left, "team.title",
+                                                   FontStyles.Bold);
+        UIFactory.Flexible(teamLabel.gameObject);
+        teamLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        teamLabel.overflowMode = TextOverflowModes.Ellipsis;
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -3655,6 +3698,7 @@ const float ReferenceWidth = 1080f;
         flow.termsPanel = BuildTerms(holder, flow);
         flow.trailsPanel = BuildTrailsDoor(holder, flow, trailRowPrefab, out TrailsDoor trails);
         flow.codePanel = BuildCodeDoor(holder, flow, out CodeDoor code);
+        flow.teamPanel = BuildTeamDoor(holder, flow);
 
         flow.trails = trails;
         flow.code = code;
@@ -3891,6 +3935,164 @@ const float ReferenceWidth = 1080f;
     /// bus with one bar of signal sees the other three, so each says something
     /// true rather than showing an empty box.
     /// </summary>
+    /// <summary>
+    /// Who you are walking with, and where everybody stands.
+    ///
+    /// One card rather than two screens, because a walker opening this is asking
+    /// one question and the standings are the reason they care who their team
+    /// is. Rows are built once and shown or hidden: a team holds four and a
+    /// school board holds a dozen, so pooling is less machinery than a prefab
+    /// and a spawner, and it cannot leak them.
+    /// </summary>
+    static GameObject BuildTeamDoor(Transform parent, DoorFlow flow)
+    {
+        RectTransform panel = Door(parent, "Team", plain: false, inner: out RectTransform inner);
+
+        TeamDoorView view = panel.gameObject.AddComponent<TeamDoorView>();
+
+        RectTransform card = Card(inner, "Card", 26f);
+
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.VerticalStack(head, 6f, false);
+        Eyebrow(head, "team.eyebrow");
+        UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "team.title", FontStyles.Bold);
+
+        // Everything below the heading scrolls. The head and the footer are
+        // pinned, so Close is always reachable - a card whose only way out has
+        // scrolled off the bottom is a trap.
+        RectTransform body = UIFactory.Rect("Body", card);
+        LayoutElement bodySize = UIFactory.Size(body.gameObject, 260f);
+        bodySize.flexibleHeight = 1f;
+        bodySize.preferredHeight = 900f;
+
+        RectTransform scroll = UIFactory.ScrollList("Scroll", body, 16f);
+
+        // ----------------------------------------------------- no team yet
+        RectTransform none = UIFactory.Rect("NoTeam", scroll);
+        UIFactory.VerticalStack(none, 14f);
+        view.noTeamGroup = none.gameObject;
+
+        UIFactory.Text("None", none, Body, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.Left, "team.none", FontStyles.Bold);
+
+        TextMeshProUGUI noneBody = UIFactory.Text("NoneBody", none, Secondary,
+                                                  ThemeRole.TextSecondary,
+                                                  TextAlignmentOptions.Left, "team.noneBody");
+        noneBody.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(noneBody.gameObject, 96f);
+
+        view.nameField = Field(none, "Name", "team.name");
+        view.createButton = FullWidthButton(none, "Create", "team.create",
+                                            ThemeRole.Accent, ThemeRole.OnAccent);
+
+        view.codeField = Field(none, "Code", "team.code");
+        view.joinButton = FullWidthButton(none, "Join", "team.join",
+                                          ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        // ------------------------------------------------------- on a team
+        RectTransform mine = UIFactory.Rect("Team", scroll);
+        UIFactory.VerticalStack(mine, 12f);
+        view.teamGroup = mine.gameObject;
+
+        view.teamName = UIFactory.Text("Name", mine, Title, ThemeRole.TextPrimary,
+                                       TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.teamName.gameObject, 60f);
+
+        view.teamMeta = UIFactory.Text("Meta", mine, Caption, ThemeRole.TextMuted,
+                                       TextAlignmentOptions.Left);
+        UIFactory.Size(view.teamMeta.gameObject, 40f);
+
+        for (int i = 0; i < TeamDoorView.MaxMembers; i++)
+        {
+            view.memberRows[i] = UIFactory.Text("Member" + i, mine, Body,
+                                                ThemeRole.TextPrimary,
+                                                TextAlignmentOptions.Left);
+            UIFactory.Size(view.memberRows[i].gameObject, 52f);
+            view.memberRows[i].gameObject.SetActive(false);
+        }
+
+        UIFactory.Text("InviteLabel", mine, Caption, ThemeRole.TextMuted,
+                       TextAlignmentOptions.Left, "team.invite");
+
+        view.inviteCode = UIFactory.Text("Invite", mine, Title, ThemeRole.Accent,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        view.inviteCode.characterSpacing = 10f;
+        UIFactory.Size(view.inviteCode.gameObject, 64f);
+
+        // Said plainly, because this is the code people confuse with the trail's
+        // and then wonder why nobody can join them.
+        TextMeshProUGUI inviteHint = UIFactory.Text("InviteHint", mine, Caption,
+                                                    ThemeRole.TextMuted,
+                                                    TextAlignmentOptions.Left,
+                                                    "team.inviteHint");
+        inviteHint.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(inviteHint.gameObject, 68f);
+
+        view.leaveButton = FullWidthButton(mine, "Leave", "team.leave",
+                                           ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        // ------------------------------------------------------ the board
+        RectTransform board = UIFactory.Rect("Board", scroll);
+        UIFactory.VerticalStack(board, 6f);
+
+        Eyebrow(board, "team.board");
+
+        TextMeshProUGUI empty = UIFactory.Text("Empty", board, Secondary,
+                                               ThemeRole.TextMuted,
+                                               TextAlignmentOptions.Left, "team.boardEmpty");
+        UIFactory.Size(empty.gameObject, 48f);
+        view.boardEmpty = empty.gameObject;
+
+        for (int i = 0; i < TeamDoorView.MaxRows; i++)
+        {
+            RectTransform row = UIFactory.Rect("Row" + i, board);
+            UIFactory.Size(row.gameObject, 56f);
+
+            // The wash that marks your own row, behind the text rather than in
+            // it: a board is read from across a room.
+            view.boardHighlight[i] = UIFactory.Plain(row, Color.clear, UIShape.Rounded);
+            view.boardHighlight[i].raycastTarget = false;
+            view.boardHighlight[i].gameObject.SetActive(false);
+
+            RectTransform line = UIFactory.Rect("Line", row);
+            UIFactory.Stretch(line);
+            line.offsetMin = new Vector2(14f, 0f);
+            line.offsetMax = new Vector2(-14f, 0f);
+            HorizontalLayoutGroup layout = UIFactory.HorizontalStack(line, 14f);
+            layout.childAlignment = TextAnchor.MiddleLeft;
+
+            view.boardRank[i] = UIFactory.Text("Rank", line, Body, ThemeRole.TextMuted,
+                                               TextAlignmentOptions.Left);
+            UIFactory.Size(view.boardRank[i].gameObject, 52f, 56f).flexibleWidth = 0f;
+
+            view.boardName[i] = UIFactory.Text("Name", line, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left);
+            UIFactory.Flexible(view.boardName[i].gameObject);
+            view.boardName[i].textWrappingMode = TextWrappingModes.NoWrap;
+            view.boardName[i].overflowMode = TextOverflowModes.Ellipsis;
+
+            view.boardPoints[i] = UIFactory.Text("Points", line, Body, ThemeRole.Accent,
+                                                 TextAlignmentOptions.Right, null,
+                                                 FontStyles.Bold);
+            UIFactory.Size(view.boardPoints[i].gameObject, 100f, 56f).flexibleWidth = 0f;
+
+            view.boardRows[i] = row;
+            row.gameObject.SetActive(false);
+        }
+
+        // ---------------------------------------------------------- status
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(view.statusLabel.gameObject, 56f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        view.closeButton = QuietAction(card, "Close", "team.close", flow.Close, "close team");
+
+        return panel.gameObject;
+    }
+
     static GameObject BuildTrailsDoor(Transform parent, DoorFlow flow,
                                       TrailRowView rowPrefab, out TrailsDoor door)
     {

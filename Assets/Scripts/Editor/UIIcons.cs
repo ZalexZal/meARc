@@ -19,6 +19,7 @@ public enum AppIcon
     List,
     Warning,
     Check,
+    Users,
 
     // Everything a marker's pieces need.
     Play,
@@ -313,6 +314,24 @@ public static class UIIcons
                         Circle(p, 4.6f, 6f, 1.6f));
 
                     return Union(lines, dots);
+                };
+
+            case AppIcon.Users:
+                return p =>
+                {
+                    // Two people: a head and a pair of shoulders each, the second
+                    // set behind and smaller. Shoulders are thick capsules rather
+                    // than arcs because a stroked arc at 38 pixels reads as a
+                    // smudge, and a capsule keeps its shape all the way down.
+                    float front = Union(
+                        Circle(p, 9.5f, 16.5f, 4f),
+                        Segment(p, 6f, 6f, 13f, 6f, 8f));
+
+                    float behind = Union(
+                        Circle(p, 17.6f, 17.2f, 3.1f),
+                        Segment(p, 15.8f, 7f, 20f, 7f, 6.4f));
+
+                    return Union(front, behind);
                 };
 
             case AppIcon.Warning:

@@ -26,7 +26,14 @@ public class DoorFlow : MonoBehaviour
         Welcome,
         Terms,
         Trails,
-        Code
+        Code,
+
+        /// <summary>
+        /// Who you are walking with. Not a gate: nothing waits behind it and the
+        /// reader opens it because they want to, which is why nothing in
+        /// Evaluate ever shows it.
+        /// </summary>
+        Team
     }
 
     [Header("Screens")]
@@ -34,6 +41,10 @@ public class DoorFlow : MonoBehaviour
     public GameObject termsPanel;
     public GameObject trailsPanel;
     public GameObject codePanel;
+
+    [Tooltip("Who you are walking with, and the standings. Opened from the map " +
+             "rather than by the flow itself - it is not a gate, it is a screen.")]
+    public GameObject teamPanel;
 
     [Header("Behind them")]
     [Tooltip("The blurred still of the map. Only the card doors use it - Welcome " +
@@ -88,6 +99,7 @@ public class DoorFlow : MonoBehaviour
         Hide(termsPanel);
         Hide(trailsPanel);
         Hide(codePanel);
+        Hide(teamPanel);
     }
 
     void OnDestroy()
@@ -213,6 +225,14 @@ public class DoorFlow : MonoBehaviour
         Show(Door.Trails);
     }
 
+    /// <summary>The standings, from the map. Always the reader's own choice.</summary>
+    public void OpenTeam()
+    {
+        _reopened = true;
+        _dismissed = false;
+        Show(Door.Team);
+    }
+
     /// <summary>The trail name on the map. A door the reader chose to open.</summary>
     public void OpenTrails()
     {
@@ -257,10 +277,11 @@ public class DoorFlow : MonoBehaviour
         Hide(termsPanel);
         Hide(trailsPanel);
         Hide(codePanel);
+        Hide(teamPanel);
 
         // The two card doors are the ones the map shows through. Welcome and Terms
         // are plain: nothing behind them, because there is nothing yet to look at.
-        bool wantsMap = door == Door.Trails || door == Door.Code;
+        bool wantsMap = door == Door.Trails || door == Door.Code || door == Door.Team;
 
         if (navBar != null)
             navBar.SetActive(door == Door.None);
