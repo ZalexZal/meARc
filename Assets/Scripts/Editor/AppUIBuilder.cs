@@ -178,7 +178,6 @@ const float ReferenceWidth = 1080f;
         EnsureFolder();
 
         BuildingRowView rowPrefab = CreateRowPrefab();
-        FilterPillView pillPrefab = CreatePillPrefab();
         MapPinView pinPrefab = CreateMapPinPrefab();
         TrailRowView trailRowPrefab = CreateTrailRowPrefab();
         PieceRowView pieceRowPrefab = CreatePieceRowPrefab();
@@ -197,7 +196,7 @@ const float ReferenceWidth = 1080f;
 
         MapTabController mapTab = BuildMapTab(mapPanel, location, pinPrefab, info);
         CameraTabController cameraTab = BuildCameraTab(cameraPanel, location, rowPrefab, info);
-        SearchTabController browseTab = BuildBrowseTab(browsePanel, location, rowPrefab, pillPrefab);
+        SearchTabController browseTab = BuildBrowseTab(browsePanel, location, rowPrefab);
         SettingsTabController settingsTab = BuildSettingsTab(settingsPanel);
 
         // BuildNav returns the padded row the buttons go in. The bar itself is its
@@ -2285,8 +2284,7 @@ const float ReferenceWidth = 1080f;
     // ---------------------------------------------------------------- browse tab
 
     static SearchTabController BuildBrowseTab(RectTransform panel, UserLocationService location,
-                                              BuildingRowView rowPrefab,
-                                              FilterPillView pillPrefab)
+                                              BuildingRowView rowPrefab)
     {
         RectTransform rt = UIFactory.Rect("BrowseContent", SafeContent(panel));
         UIFactory.Stretch(rt);
@@ -2296,7 +2294,6 @@ const float ReferenceWidth = 1080f;
         SearchTabController controller = rt.gameObject.AddComponent<SearchTabController>();
         controller.locationService = location;
         controller.rowPrefab = rowPrefab;
-        controller.pillPrefab = pillPrefab;
 
         // Back first. Browse has no tab of its own, so without this the only way out
         // is the nav bar - and a screen whose exit is somewhere else is a trap.
@@ -2351,24 +2348,6 @@ const float ReferenceWidth = 1080f;
         // headings and a list, where it read as a footnote.
         controller.progressCard = BuildProgressCard(content);
         controller.discoverySection = controller.progressCard.gameObject;
-
-        RectTransform eras = UIFactory.Rect("EraSection", content);
-        UIFactory.VerticalStack(eras, 14f, false);
-        controller.eraSection = eras.gameObject;
-        controller.eraLabel = SectionLabel(eras, "search.byEra");
-        controller.eraPillParent = PillRow(eras);
-
-        // Off until BuildPills has something to put in them. On for one frame
-        // is still a heading over nothing, and the first frame of a screen is
-        // the one somebody judges it by.
-        eras.gameObject.SetActive(false);
-
-        RectTransform types = UIFactory.Rect("TypeSection", content);
-        UIFactory.VerticalStack(types, 14f, false);
-        controller.typeSection = types.gameObject;
-        controller.typeLabel = SectionLabel(types, "search.byType");
-        controller.typePillParent = PillRow(types);
-        types.gameObject.SetActive(false);
 
         RectTransform closest = UIFactory.Rect("ClosestSection", content);
         UIFactory.VerticalStack(closest, 14f, false);
@@ -2545,16 +2524,6 @@ const float ReferenceWidth = 1080f;
         return label;
     }
 
-    static RectTransform PillRow(Transform parent)
-    {
-        RectTransform row = UIFactory.Rect("Pills", parent);
-
-        FlowLayoutGroup flow = row.gameObject.AddComponent<FlowLayoutGroup>();
-        flow.spacingX = 16f;
-        flow.spacingY = 16f;
-
-        return row;
-    }
 
     static DiscoveryProgressCard BuildProgressCard(Transform parent)
     {
@@ -3193,51 +3162,6 @@ const float ReferenceWidth = 1080f;
         return saved.GetComponent<BuildingRowView>();
     }
 
-    static FilterPillView CreatePillPrefab()
-    {
-        GameObject temp = new GameObject("FilterPill", typeof(RectTransform));
-        RectTransform rt = (RectTransform)temp.transform;
-        rt.sizeDelta = new Vector2(220f, Tap);
-
-        // No ThemedElement on either of these: FilterPillView drives both colours
-        // itself, because they depend on whether the pill is the active filter.
-        Image background = UIFactory.Plain(rt, ThemeManager.Get(ThemeRole.Surface), UIShape.Pill);
-
-        Button button = temp.AddComponent<Button>();
-        button.targetGraphic = background;
-        UIFactory.Feedback(button);
-
-        RectTransform labelRect = UIFactory.Rect("Label", rt);
-        TextMeshProUGUI label = labelRect.gameObject.AddComponent<TextMeshProUGUI>();
-        label.fontSize = Secondary;
-        label.alignment = TextAlignmentOptions.Center;
-        label.color = ThemeManager.Get(ThemeRole.TextSecondary);
-        label.raycastTarget = false;
-
-        if (TMP_Settings.defaultFontAsset != null)
-            label.font = TMP_Settings.defaultFontAsset;
-
-        UIFactory.Stretch(labelRect);
-
-        // No ContentSizeFitter and no layout group here. FilterPillView measures its
-        // own label and writes the result to this LayoutElement, which the parent
-        // FlowLayoutGroup then reads - one measurement instead of nested auto-sizing,
-        // which is what crashed the editor on play-mode exit.
-        LayoutElement element = temp.AddComponent<LayoutElement>();
-        element.preferredHeight = Tap;
-        element.minHeight = Tap;
-
-        FilterPillView view = temp.AddComponent<FilterPillView>();
-        view.label = label;
-        view.background = background;
-        view.button = button;
-        view.layoutElement = element;
-
-        GameObject saved = PrefabUtility.SaveAsPrefabAsset(temp, PillPrefabPath);
-        Object.DestroyImmediate(temp);
-
-        return saved.GetComponent<FilterPillView>();
-    }
 
 
     /// <summary>

@@ -41,17 +41,6 @@ public class SearchTabController : MonoBehaviour
     public TMP_InputField searchField;
     public TextMeshProUGUI searchPlaceholder;
 
-    [Header("Filters - shown only when they have something in them")]
-    [Tooltip("The whole section, heading included. A heading with no pills under " +
-             "it is a promise the screen does not keep.")]
-    public GameObject eraSection;
-    public TextMeshProUGUI eraLabel;
-    public RectTransform eraPillParent;
-
-    public GameObject typeSection;
-    public TextMeshProUGUI typeLabel;
-    public RectTransform typePillParent;
-
     [Header("Browse only")]
     public GameObject closestSection;
     public RectTransform closestParent;
@@ -66,7 +55,6 @@ public class SearchTabController : MonoBehaviour
 
     [Header("Prefabs")]
     public BuildingRowView rowPrefab;
-    public FilterPillView pillPrefab;
 
     [Header("Behaviour")]
     [Tooltip("How many buildings the \"Closest to you\" section shows.")]
@@ -75,13 +63,6 @@ public class SearchTabController : MonoBehaviour
     /// <summary>Set by the scene so a result can open the info sheet.</summary>
     public Action<BuildingData> onBuildingSelected;
 
-    readonly HashSet<EraDefinition> _activeEras = new HashSet<EraDefinition>();
-    readonly HashSet<BuildingCategory> _activeCategories = new HashSet<BuildingCategory>();
-
-    readonly List<FilterPillView> _eraPills = new List<FilterPillView>();
-    readonly List<EraDefinition> _eraOrder = new List<EraDefinition>();
-    readonly List<FilterPillView> _typePills = new List<FilterPillView>();
-    readonly List<BuildingCategory> _typeOrder = new List<BuildingCategory>();
 
     readonly List<GameObject> _spawned = new List<GameObject>();
 
@@ -150,7 +131,6 @@ public class SearchTabController : MonoBehaviour
     void RebuildAll()
     {
         ApplyLabels();
-        BuildPills();
         Refresh();
     }
 
@@ -165,11 +145,6 @@ public class SearchTabController : MonoBehaviour
         if (closestLabel != null)
             closestLabel.text = AppStrings.Get("search.closest");
 
-        if (eraLabel != null)
-            eraLabel.text = AppStrings.Get("search.byEra");
-
-        if (typeLabel != null)
-            typeLabel.text = AppStrings.Get("search.byType");
 
         if (emptyText != null)
             emptyText.text = AppStrings.Get("search.empty");
@@ -177,110 +152,14 @@ public class SearchTabController : MonoBehaviour
 
     // ------------------------------------------------------------------ pills
 
-    void BuildPills()
-    {
-        ClearPills(_eraPills);
-        _eraOrder.Clear();
-
-        ClearPills(_typePills);
-        _typeOrder.Clear();
-
-        foreach (EraDefinition era in BuildingDatabase.AllEras)
-        {
-            EraDefinition captured = era;
-            FilterPillView pill = Instantiate(pillPrefab, eraPillParent);
-
-            pill.Bind(captured.DisplayName, _activeEras.Contains(captured),
-                      () => ToggleEra(captured));
-
-            _eraPills.Add(pill);
-            _eraOrder.Add(captured);
-        }
-
-        foreach (BuildingCategory category in BuildingDatabase.AllCategories)
-        {
-            BuildingCategory captured = category;
-            FilterPillView pill = Instantiate(pillPrefab, typePillParent);
-
-            pill.Bind(captured.DisplayName, _activeCategories.Contains(captured),
-                      () => ToggleCategory(captured));
-
-            _typePills.Add(pill);
-            _typeOrder.Add(captured);
-        }
-
-        // A trail whose stops carry no era and no kind - which is every trail
-        // built in the web builder, since neither field is offered there - was
-        // showing two headings with nothing underneath them.
-        if (eraSection != null)
-            eraSection.SetActive(_eraPills.Count > 0);
-
-        if (typeSection != null)
-            typeSection.SetActive(_typePills.Count > 0);
-    }
-
-    /// <summary>Tapping a pill that is already on turns it off.</summary>
-    void ToggleEra(EraDefinition era)
-    {
-        if (!_activeEras.Remove(era))
-            _activeEras.Add(era);
-
-        SyncPillStates();
-        Refresh();
-    }
-
-    void ToggleCategory(BuildingCategory category)
-    {
-        if (!_activeCategories.Remove(category))
-            _activeCategories.Add(category);
-
-        SyncPillStates();
-        Refresh();
-    }
-
-    void SyncPillStates()
-    {
-        for (int i = 0; i < _eraPills.Count && i < _eraOrder.Count; i++)
-        {
-            if (_eraPills[i] != null)
-                _eraPills[i].SetSelected(_activeEras.Contains(_eraOrder[i]));
-        }
-
-        for (int i = 0; i < _typePills.Count && i < _typeOrder.Count; i++)
-        {
-            if (_typePills[i] != null)
-                _typePills[i].SetSelected(_activeCategories.Contains(_typeOrder[i]));
-        }
-    }
-
-    void ClearPills(List<FilterPillView> pills)
-    {
-        for (int i = 0; i < pills.Count; i++)
-        {
-            if (pills[i] == null)
-                continue;
-
-            // Unparent before destroying: Destroy is deferred to end of frame, and
-            // a layout rebuild in between would otherwise measure children that are
-            // on their way out.
-            pills[i].transform.SetParent(null, false);
-            Destroy(pills[i].gameObject);
-        }
-
-        pills.Clear();
-    }
-
     // --------------------------------------------------------------- refresh
 
     public void Refresh()
     {
-        bool browsing = string.IsNullOrWhiteSpace(_query) &&
-                        _activeEras.Count == 0 &&
-                        _activeCategories.Count == 0;
+        bool browsing = string.IsNullOrWhiteSpace(_query);
 
         ClearSpawned();
 
-        // The pill rows are never touched here - they stay visible in both states.
         if (discoverySection != null) discoverySection.SetActive(browsing);
         if (resultsSection != null) resultsSection.SetActive(!browsing);
 
@@ -368,19 +247,6 @@ public class SearchTabController : MonoBehaviour
             if (query.Length > 0 && !building.NameMatches(query))
                 return false;
 
-            if (_activeEras.Count > 0)
-            {
-                EraDefinition era = BuildingDatabase.GetEraFor(building);
-                if (era == null || !_activeEras.Contains(era))
-                    return false;
-            }
-
-            if (_activeCategories.Count > 0)
-            {
-                if (building.category == null || !_activeCategories.Contains(building.category))
-                    return false;
-            }
-
             return true;
         }).ToList();
     }
@@ -416,18 +282,14 @@ public class SearchTabController : MonoBehaviour
         _spawned.Clear();
     }
 
-    /// <summary>Clears every active filter and the query. Wired to nothing yet.</summary>
+    /// <summary>Clears the query. Wired to nothing yet.</summary>
     public void ClearAllFilters()
     {
-        _activeEras.Clear();
-        _activeCategories.Clear();
-
         if (searchField != null)
             searchField.SetTextWithoutNotify(string.Empty);
 
         _query = string.Empty;
 
-        SyncPillStates();
         Refresh();
     }
 }
