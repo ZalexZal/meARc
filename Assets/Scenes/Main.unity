@@ -78693,7 +78693,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupabaseConfig
   url: https://tajbebyhmvppqlswyjiq.supabase.co
   anonKey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhamJlYnlobXZwcHFsc3d5amlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NDg0OTQsImV4cCI6MjEwMzMyNDQ5NH0.e2-l3SbkBIRBCEOfbNrvQC0i2M_FbQxZ5Lwyg3zOHLo
-  termsVersion: 2026-08-30
+  termsVersion: 2026-09-07
 --- !u!114 &1997518875
 MonoBehaviour:
   m_ObjectHideFlags: 0

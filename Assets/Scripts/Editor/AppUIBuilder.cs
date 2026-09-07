@@ -4221,7 +4221,7 @@ const float ReferenceWidth = 1080f;
         // very bottom and nine hundred pixels of nothing above them reads as a
         // screen that failed to load rather than one that is deliberately quiet.
         RectTransform words = UIFactory.Rect("Words", inner);
-        UIFactory.BottomStretch(words, 620f, Tap * 2f + 76f);
+        UIFactory.BottomStretch(words, 620f, Tap + 60f);
         VerticalLayoutGroup wordStack = UIFactory.VerticalStack(words, 22f, false);
         wordStack.childAlignment = TextAnchor.LowerLeft;
 
@@ -4236,86 +4236,145 @@ const float ReferenceWidth = 1080f;
         UIFactory.Text("Body", words, Body, ThemeRole.TextSecondary,
                        TextAlignmentOptions.TopLeft, "welcome.body");
 
-        RectTransform start = UIFactory.Rect("Start", inner);
-        UIFactory.BottomStretch(start, Tap, Tap + 16f);
-        Button startButton = UIFactory.Button(start, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Wire(startButton.onClick, flow.PassWelcome, "Welcome start");
+        // Two doors, both open.
+        //
+        // A code was the quiet line under the loud button, which is the wrong way
+        // round for every organised walk: on the day of a test or a school trip
+        // everybody arrives already holding one. It is the wrong way round the
+        // other way too - most people, most of the time, will not have a code and
+        // should not be made to feel they are missing something.
+        //
+        // So neither is quiet. Side by side, equal width, and the two of them read
+        // as a question with two answers rather than an instruction with a way to
+        // disobey it.
+        RectTransform ways = UIFactory.Rect("Ways", inner);
+        UIFactory.BottomStretch(ways, Tap);
+        HorizontalLayoutGroup wayRow = UIFactory.HorizontalStack(ways, 14f);
+        wayRow.childForceExpandWidth = true;
+        wayRow.childControlWidth = true;
 
-        TextMeshProUGUI startLabel = UIFactory.Text("Label", start, Body, ThemeRole.OnAccent,
-                                                    TextAlignmentOptions.Center, "welcome.start",
-                                                    FontStyles.Bold);
-        UIFactory.Stretch(startLabel.rectTransform);
-
-        RectTransform code = UIFactory.Rect("HaveCode", inner);
-        UIFactory.BottomStretch(code, Tap);
-        Button codeButton = UIFactory.Button(code, ThemeRole.Background, 0f);
+        RectTransform code = UIFactory.Rect("HaveCode", ways);
+        UIFactory.Flexible(code.gameObject);
+        Button codeButton = UIFactory.Button(code, ThemeRole.Accent, 1f, UIShape.Rounded);
         Wire(codeButton.onClick, flow.PassWelcomeWithCode, "Welcome code");
 
-        TextMeshProUGUI codeLabel = UIFactory.Text("Label", code, Secondary,
-                                                   ThemeRole.TextSecondary,
+        TextMeshProUGUI codeLabel = UIFactory.Text("Label", code, Body, ThemeRole.OnAccent,
                                                    TextAlignmentOptions.Center,
                                                    "welcome.haveCode", FontStyles.Bold);
         UIFactory.Stretch(codeLabel.rectTransform);
+        codeLabel.raycastTarget = false;
+
+        RectTransform start = UIFactory.Rect("Start", ways);
+        UIFactory.Flexible(start.gameObject);
+        Button startButton = UIFactory.Button(start, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded);
+        Wire(startButton.onClick, flow.PassWelcome, "Welcome start");
+        Outline(start);
+
+        TextMeshProUGUI startLabel = UIFactory.Text("Label", start, Body, ThemeRole.TextPrimary,
+                                                    TextAlignmentOptions.Center, "welcome.start",
+                                                    FontStyles.Bold);
+        UIFactory.Stretch(startLabel.rectTransform);
+        startLabel.raycastTarget = false;
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
     }
 
     /// <summary>
-    /// Three markers in the empty half of the welcome screen.
+    /// A short walk, drawn in the empty half of the welcome screen.
     ///
-    /// Not decoration for its own sake: the headline says markers are left in real
-    /// places, and this is what one looks like in this app - the same ring and disc
-    /// the map draws, which is what the reader is looking at a few seconds later.
-    /// Scattered rather than lined up, and at three sizes, because a row of three
-    /// equal circles is a loading indicator.
+    /// It was three rings scattered at three sizes, which was honest about what a
+    /// marker looks like and said nothing about what the app is. The app is not
+    /// markers; it is markers in an order, joined up, walked between - and the
+    /// screen that says "markers left in real places" can show that in the space
+    /// it already had rather than decorating it.
     ///
-    /// Faint on purpose. It is the ground the words sit on, and anything bright
+    /// So: five stops, numbered, joined by a line, crossing the width rather
+    /// than running down one edge - a trail through a town does not stay in the
+    /// left-hand column. The same shape the progress
+    /// screen draws, which is what the reader meets a few minutes later. It
+    /// meanders rather than running straight, because a straight line of four
+    /// equal circles is a progress bar and this is a walk through a town.
+    ///
+    /// Faint on purpose. It is the ground the words stand on, and anything bright
     /// enough to compete with a headline in an eighty-eight point face would be
     /// the first thing read on a screen whose whole job is one sentence.
     /// </summary>
     static void WelcomeMarkers(RectTransform inner)
     {
-        RectTransform field = UIFactory.Rect("Markers", inner);
-        field.anchorMin = new Vector2(0f, 1f);
-        field.anchorMax = new Vector2(1f, 1f);
-        field.pivot = new Vector2(0.5f, 1f);
-        field.sizeDelta = new Vector2(0f, 900f);
-        field.anchoredPosition = new Vector2(0f, -120f);
+        const float FieldW = 880f;
+        const float FieldH = 940f;
+        const float Stop = 76f;
 
-        // x and y as fractions of the field, then the diameter.
-        float[,] spots =
+        RectTransform field = UIFactory.Rect("Walk", inner);
+        field.anchorMin = new Vector2(0f, 1f);
+        field.anchorMax = new Vector2(0f, 1f);
+        field.pivot = new Vector2(0f, 1f);
+        field.sizeDelta = new Vector2(FieldW, FieldH);
+        field.anchoredPosition = new Vector2(0f, -210f);
+
+        // Where each stop sits, from the top-left of the field. Read bottom to
+        // top: the walk climbs away from the words rather than towards them.
+        Vector2[] stops =
         {
-            { 0.24f, 0.30f, 190f },
-            { 0.68f, 0.54f, 128f },
-            { 0.44f, 0.82f,  92f }
+            new Vector2( 88f, -858f),
+            new Vector2(336f, -726f),
+            new Vector2(238f, -498f),
+            new Vector2(566f, -382f),
+            new Vector2(778f, -150f)
         };
 
-        for (int i = 0; i < spots.GetLength(0); i++)
+        // The line first, so the stops sit on top of their own joins rather than
+        // having a segment drawn across their faces.
+        for (int i = 0; i < stops.Length - 1; i++)
         {
-            float size = spots[i, 2];
+            Vector2 from = stops[i];
+            Vector2 to = stops[i + 1];
+            Vector2 span = to - from;
 
-            RectTransform pin = UIFactory.Rect("Marker" + i, field);
-            pin.anchorMin = new Vector2(spots[i, 0], 1f - spots[i, 1]);
-            pin.anchorMax = pin.anchorMin;
+            RectTransform leg = UIFactory.Rect("Leg" + i, field);
+            leg.anchorMin = new Vector2(0f, 1f);
+            leg.anchorMax = new Vector2(0f, 1f);
+            leg.pivot = new Vector2(0f, 0.5f);
+            leg.sizeDelta = new Vector2(span.magnitude, 5f);
+            leg.anchoredPosition = from;
+            leg.localRotation = Quaternion.Euler(0f, 0f,
+                Mathf.Atan2(span.y, span.x) * Mathf.Rad2Deg);
+
+            UIFactory.Fill(leg, ThemeRole.Accent, 0.20f, UIShape.Pill).raycastTarget = false;
+        }
+
+        for (int i = 0; i < stops.Length; i++)
+        {
+            RectTransform pin = UIFactory.Rect("Stop" + i, field);
+            pin.anchorMin = new Vector2(0f, 1f);
+            pin.anchorMax = new Vector2(0f, 1f);
             pin.pivot = new Vector2(0.5f, 0.5f);
-            pin.sizeDelta = new Vector2(size, size);
-            pin.anchoredPosition = Vector2.zero;
+            pin.sizeDelta = new Vector2(Stop, Stop);
+            pin.anchoredPosition = stops[i];
 
-            // The ring is a real hole rather than a disc in the background colour,
-            // so this reads the same way the map's pins do.
-            Image ring = UIFactory.Fill(pin, ThemeRole.Accent, 0.22f, UIShape.Ring);
-            ring.raycastTarget = false;
+            // A disc in the background colour under the ring, so the leg does not
+            // show through the middle of a stop.
+            UIFactory.Fill(pin, ThemeRole.Background, 1f, UIShape.Circle).raycastTarget = false;
 
-            RectTransform core = UIFactory.Rect("Dot", pin);
-            UIFactory.Corner(core, new Vector2(0.5f, 0.5f),
-                             new Vector2(size * 0.42f, size * 0.42f), Vector2.zero);
-            UIFactory.Fill(core, ThemeRole.Accent, 0.16f, UIShape.Circle).raycastTarget = false;
+            RectTransform ring = UIFactory.Rect("Ring", pin);
+            UIFactory.Stretch(ring);
+            UIFactory.Fill(ring, ThemeRole.Accent, 0.30f, UIShape.Ring).raycastTarget = false;
+
+            // Numbered, because the order is the point. Without them this is four
+            // circles and a squiggle.
+            TextMeshProUGUI number = UIFactory.Text("Number", pin, Secondary, ThemeRole.Accent,
+                                                    TextAlignmentOptions.Center, null,
+                                                    FontStyles.Bold);
+            UIFactory.Stretch(number.rectTransform);
+            number.text = (i + 1).ToString();
+            number.alpha = 0.55f;
+            number.raycastTarget = false;
         }
     }
 
     /// <summary>
-    /// The terms. Six short sections, scrolling, with the button outside the scroll
+    /// The terms. Four short sections, scrolling, with the button outside the scroll
     /// so it is always where the reader left it.
     ///
     /// Not dressed up. A non-skippable screen nobody reads is a dark pattern with
@@ -4337,7 +4396,7 @@ const float ReferenceWidth = 1080f;
 
         RectTransform content = UIFactory.ScrollList("Scroll", scrollHolder, 30f);
 
-        for (int i = 1; i <= 6; i++)
+        for (int i = 1; i <= 4; i++)
         {
             RectTransform section = UIFactory.Rect("Section" + i, content);
             UIFactory.VerticalStack(section, 8f, false);

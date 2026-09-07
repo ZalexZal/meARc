@@ -27,7 +27,7 @@ public class SupabaseConfig : MonoBehaviour
     [Header("Terms")]
     [Tooltip("Bumping this makes every reader accept again. It is written to " +
              "profiles.terms_version, so it is also the record of what they agreed to.")]
-    public string termsVersion = "2026-08-30";
+    public string termsVersion = "2026-09-07";
 
     void Awake()
     {
