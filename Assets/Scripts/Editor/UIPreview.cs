@@ -164,7 +164,30 @@ public static class UIPreview
                 graph.Rebuild();
         }
 
+        // The progress card refreshes in OnEnable, which does not run in the
+        // editor, so every picture of this screen showed it undrawn: no count
+        // beside "markers explored", and a meter filled to the end regardless of
+        // how much of the trail had been walked.
+        DiscoveryProgressCard progress =
+            canvas.GetComponentInChildren<DiscoveryProgressCard>(true);
+
+        if (progress != null)
+            progress.Refresh();
+        else
+            Debug.LogWarning("[Preview] No progress card to draw.");
+
         Shoot(canvas, rig, "03-browse" + t, "BrowsePanel");
+        // Refresh runs in OnEnable, which does not run in the editor, so the
+        // account card was photographed with both of its halves showing at once -
+        // "Signed in as" above "You have no account yet", with two name boxes and
+        // five buttons that belong to two different people.
+        AccountSectionView account = canvas.GetComponentInChildren<AccountSectionView>(true);
+
+        if (account != null)
+            account.Refresh();
+        else
+            Debug.LogWarning("[Preview] No account card to draw.");
+
         Shoot(canvas, rig, "04-settings" + t, "SettingsPanel");
 
         // The sheet and the walkthrough sit over whatever is behind them.
@@ -1423,6 +1446,12 @@ public static class UIPreview
                     : (carriesOn ? AnswerOptionView.State.Idle
                                  : AnswerOptionView.State.Muted));
             }
+
+            // Check goes when there is nothing left to send. This fixture paints
+            // the states straight onto the view rather than answering anything,
+            // so Draw never runs and the button kept whatever it had - which put
+            // a Check button under a question already marked correct.
+            Show(view.checkHolder, carriesOn);
 
             Show(view.ruleHolder, ending == Ending.Lock || ending == Ending.Deduct ||
                                   ending == Ending.Skip);

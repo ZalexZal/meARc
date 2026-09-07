@@ -2845,6 +2845,19 @@ const float ReferenceWidth = 1080f;
         component.countText = count;
         component.labelText = label;
         component.barFill = fill;
+
+        // Built empty, not full.
+        //
+        // A stretched fill is a meter that reads "finished" until something
+        // refreshes it. Refresh runs in OnEnable so nobody would see it for
+        // long - but "not for long" is the wrong answer for the one control on
+        // the screen whose whole job is to say how far you have got, and it is
+        // how every picture of this screen came out showing a completed walk.
+        fill.anchorMin = new Vector2(0f, 0f);
+        fill.anchorMax = new Vector2(0f, 1f);
+        fill.offsetMin = Vector2.zero;
+        fill.offsetMax = Vector2.zero;
+
         return component;
     }
 
