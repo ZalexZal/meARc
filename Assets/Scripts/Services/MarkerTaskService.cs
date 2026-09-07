@@ -172,6 +172,109 @@ public class MarkerTaskService : MonoBehaviour
         }
     }
 
+    // ------------------------------------------------------------- the record
+
+    /// <summary>
+    /// Fills the store from the server's record of what this team has solved.
+    ///
+    /// Until now every screen counted from DiscoveryTracker, which is this
+    /// handset's own note of what it has opened. That is wrong twice on a game:
+    /// a walker who reinstalls loses a walk their team still has, and two phones
+    /// on one team show two different lines - one of them says a marker is done
+    /// and the other offers it as next.
+    ///
+    /// my_progress has been on the server since 0007 and nothing had ever called
+    /// it. Answers still land here through check_answer as they always did; this
+    /// only fills in what happened before the app was opened.
+    /// </summary>
+    public void LoadProgress(string worldId, Action done = null)
+    {
+        if (!string.IsNullOrEmpty(worldId))
+            StartCoroutine(Fetch(worldId, done));
+        else if (done != null)
+            done();
+    }
+
+    IEnumerator Fetch(string worldId, Action done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+        {
+            if (done != null) done();
+            yield break;
+        }
+
+        string body = "{\"p_world\":\"" + worldId.Replace("\"", "\\\"") + "\"}";
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/my_progress"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                // The local record is still there and is better than nothing:
+                // this adds the team's history, it does not replace the walk.
+                Debug.LogWarning("[Task] my_progress failed (" + request.responseCode + "): " +
+                                 request.error);
+
+                if (done != null) done();
+                yield break;
+            }
+
+            Solved[] rows = ReadRows(request.downloadHandler.text);
+
+            if (rows != null)
+            {
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    if (rows[i] == null || string.IsNullOrEmpty(rows[i].marker_id))
+                        continue;
+
+                    MarkerProgress row = Progress(rows[i].marker_id);
+                    row.solved = true;
+                    row.points = rows[i].points;
+                }
+
+                SaveCache();
+            }
+        }
+
+        if (OnProgressChanged != null)
+            OnProgressChanged();
+
+        if (done != null)
+            done();
+    }
+
+    /// <summary>JsonUtility cannot read a top-level array, so it is wrapped.</summary>
+    static Solved[] ReadRows(string json)
+    {
+        try
+        {
+            return JsonUtility.FromJson<SolvedList>("{\"items\":" + json + "}").items;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Task] Unreadable progress: " + exception.Message);
+            return null;
+        }
+    }
+
+    [Serializable]
+    class Solved
+    {
+        public string marker_id;
+        public int points;
+    }
+
+    [Serializable]
+    class SolvedList
+    {
+        public Solved[] items;
+    }
+
     // ------------------------------------------------------------------ asking
 
     public void CheckAnswer(string markerId, string answer, Action<Result> done)

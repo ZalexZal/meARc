@@ -81,6 +81,16 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
         BuildingDatabase.OnBuildingsChanged += Rebuild;
         AppStrings.OnLanguageChanged += Rebuild;
         ThemeManager.OnThemeChanged += Paint;
+        MarkerTaskService.OnProgressChanged += Rebuild;
+
+        // The team's record, not this handset's. Rebuild runs again when it
+        // lands, so the line is drawn twice and is right the second time rather
+        // than blank until the server answers.
+        TrailService trails = TrailService.Instance;
+        MarkerTaskService tasks = MarkerTaskService.Instance;
+
+        if (tasks != null && trails != null && !string.IsNullOrEmpty(trails.SelectedId))
+            tasks.LoadProgress(trails.SelectedId);
 
         Rebuild();
     }
@@ -91,6 +101,7 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
         BuildingDatabase.OnBuildingsChanged -= Rebuild;
         AppStrings.OnLanguageChanged -= Rebuild;
         ThemeManager.OnThemeChanged -= Paint;
+        MarkerTaskService.OnProgressChanged -= Rebuild;
     }
 
     // ------------------------------------------------------------------ layout
@@ -158,7 +169,7 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
 
             int at = i;
 
-            node.Bind(captured, i + 1, DiscoveryTracker.IsDiscovered(captured), Shut(at),
+            node.Bind(captured, i + 1, Done(captured), Shut(at),
                       () => { if (onOpen != null) onOpen(captured); });
 
             RectTransform rt = (RectTransform)node.transform;
@@ -236,11 +247,35 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
     {
         for (int i = 0; i < _ordered.Count; i++)
         {
-            if (!DiscoveryTracker.IsDiscovered(_ordered[i]))
+            if (!Done(_ordered[i]))
                 return i;
         }
 
         return Mathf.Max(0, _ordered.Count - 1);
+    }
+
+    /// <summary>
+    /// Whether the team has finished this marker, from the server's record.
+    ///
+    /// DiscoveryTracker is this handset's own note of what it has opened, which
+    /// is the wrong answer twice on a game: a walker who reinstalls loses a walk
+    /// their team still has, and two phones on one team disagree about which
+    /// marker is next. It stays as the fallback for a walk, where there is no
+    /// team and no server record to be had.
+    /// </summary>
+    static bool Done(BuildingData marker)
+    {
+        MarkerTaskService tasks = MarkerTaskService.Instance;
+
+        if (tasks != null && marker != null)
+        {
+            MarkerTaskService.MarkerProgress row = tasks.Progress(marker.buildingId);
+
+            if (row.solved || row.skipped)
+                return true;
+        }
+
+        return DiscoveryTracker.IsDiscovered(marker);
     }
 
     RectTransform MakeEdge()
@@ -318,7 +353,7 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
 
             BuildingData captured = _ordered[i];
 
-            _nodes[i].Bind(captured, i + 1, DiscoveryTracker.IsDiscovered(captured), Shut(i),
+            _nodes[i].Bind(captured, i + 1, Done(captured), Shut(i),
                            () => { if (onOpen != null) onOpen(captured); });
         }
     }
