@@ -684,6 +684,9 @@ const float ReferenceWidth = 1080f;
         Wire(closeButton.onClick, controller.ClosePanel, "Marker sheet close");
         Icon(close, AppIcon.Close, 44f, ThemeRole.TextSecondary);
 
+        // Handed to the page controller, which takes it away while a page is open.
+        pieces.closeMark = close.gameObject;
+
         // The animator hides the sheet by moving it, not by disabling it, so this
         // object stays enabled or ShowPanel would have nothing to reveal.
         //
@@ -3724,7 +3727,17 @@ const float ReferenceWidth = 1080f;
                                               out TextMeshProUGUI placeholder);
         view.openPlaceholder = placeholder;
 
-        RectTransform check = UIFactory.Rect("Check", open);
+        open.gameObject.SetActive(false);
+
+        // --- and sending it ---
+        //
+        // A child of content, not of the typed-answer block it used to live in.
+        // It was built inside Open because only a typed answer needed sending - a
+        // tap on an option sent itself - so when choosing stopped being sending,
+        // the button existed, was asked for, and was hidden along with the field
+        // it was nested in. It belongs under both kinds of answer, because it is
+        // now the only way either of them travels.
+        RectTransform check = UIFactory.Rect("Check", content);
         UIFactory.Size(check.gameObject, Tap);
         view.checkHolder = check.gameObject;
         view.checkButton = UIFactory.Button(check, ThemeRole.Accent, 1f, UIShape.Rounded);
@@ -3733,7 +3746,17 @@ const float ReferenceWidth = 1080f;
                                          TextAlignmentOptions.Center, "task.check",
                                          FontStyles.Bold);
         UIFactory.Stretch(view.checkLabel.rectTransform);
-        open.gameObject.SetActive(false);
+        view.checkLabel.raycastTarget = false;
+
+        // The dim for "nothing chosen yet", said in alpha and only in alpha.
+        //
+        // A Selectable's colour tint is a timed transition. Nothing ticks in a
+        // batch render, so a button switched back to interactable photographs in
+        // whatever colour it was last left in - which is how this button came out
+        // half-faded in the shot where it had just become pressable. Two things
+        // saying the same thing, one of them a frame behind, is worse than one.
+        view.checkButton.transition = Selectable.Transition.None;
+        check.gameObject.AddComponent<CanvasGroup>();
 
         // --- help, and what it costs ---
         //
@@ -4072,6 +4095,18 @@ const float ReferenceWidth = 1080f;
         // state, and a ThemedElement would repaint over it on every theme event.
         view.background = UIFactory.Plain(rt, ThemeManager.Get(ThemeRole.SurfaceAlt),
                                           UIShape.Rounded);
+
+        // The border, drawn over the fill rather than under it, so the chosen
+        // option keeps its edge instead of the accent bleeding to the corner.
+        // Plain and not Fill for the same reason as the background: the view
+        // paints it from the state and a ThemedElement would paint over that.
+        RectTransform edge = UIFactory.Rect("Edge", rt);
+        UIFactory.Stretch(edge);
+        view.edge = UIFactory.Plain(edge, ThemeManager.Get(ThemeRole.Line));
+        view.edge.sprite = UISprites.RoundedOutline;
+        view.edge.type = Image.Type.Sliced;
+        view.edge.pixelsPerUnitMultiplier = 1f;
+        view.edge.raycastTarget = false;
 
         Button button = temp.AddComponent<Button>();
         button.targetGraphic = view.background;

@@ -251,6 +251,13 @@ public static class UIPreview
         Pieces.ClearVerdict(canvas.transform);
         Shoot(canvas, rig, "20-question" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
 
+        // And with one picked but not yet sent, which is the whole of what
+        // changed: the option filled, and Check now pressable under it.
+        Pieces.Choose(canvas.transform, 1);
+        Shoot(canvas, rig, "29-question-chosen" + t, "MapPanel", SheetPath,
+              "InfoSheet/InfoScrim");
+        Pieces.ClearVerdict(canvas.transform);
+
         // The four endings a creator can choose between, and the one they cannot:
         // the server not answering at all.
         Pieces.Verdict(canvas.transform, Pieces.Ending.Retry);
@@ -1246,14 +1253,19 @@ public static class UIPreview
             Show(_controller.overview, false);
             Show(_controller.page, true);
 
+            // The mark in the corner goes away with the page, as it does in the
+            // app. Bind puts it back, which is why nothing here has to.
+            Show(_controller.closeMark, false);
+
             bool question = which == Which.Question;
             Show(_controller.media != null ? _controller.media.gameObject : null, !question);
             Show(_controller.question != null ? _controller.question.gameObject : null, question);
 
             if (question)
             {
+                // No heading: the question is the heading.
                 if (_controller.pageTitle != null)
-                    _controller.pageTitle.text = AppStrings.Get("piece.answer");
+                    _controller.pageTitle.text = string.Empty;
 
                 _controller.question.Show(_marker);
                 return;
@@ -1297,6 +1309,33 @@ public static class UIPreview
 
             if (card != null && _marker != null)
                 card.Open(_marker);
+        }
+
+        /// <summary>
+        /// Picks an option without sending it.
+        ///
+        /// The state that did not exist until choosing stopped being sending, and
+        /// the one worth looking at: a filled option, and a Check button that has
+        /// just become pressable. Reached by reflection because Choose is the
+        /// view's own business and a harness is not a reason to widen it.
+        /// </summary>
+        public static void Choose(Transform root, int index)
+        {
+            if (_controller == null || _controller.question == null)
+                return;
+
+            System.Reflection.MethodInfo choose = typeof(MarkerQuestionView).GetMethod(
+                "Choose", System.Reflection.BindingFlags.Instance |
+                          System.Reflection.BindingFlags.NonPublic);
+
+            if (choose == null)
+            {
+                Debug.LogWarning("[Preview] MarkerQuestionView.Choose has moved.");
+                return;
+            }
+
+            choose.Invoke(_controller.question, new object[] { index });
+
         }
 
         /// <summary>Takes the answer bubble away, so a question can be shown unasked.</summary>

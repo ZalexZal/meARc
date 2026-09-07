@@ -32,6 +32,11 @@ public class MarkerPieceController : MonoBehaviour
     public GameObject page;
 
     public TextMeshProUGUI pageTitle;
+
+    [Tooltip("The sheet's close mark. Taken away while a page is open, because " +
+             "Back is the way out of a page and two ways out of one screen is " +
+             "one of them for the reader to wonder about.")]
+    public GameObject closeMark;
     public Button backButton;
 
     public MediaPlayerView media;
@@ -90,6 +95,7 @@ public class MarkerPieceController : MonoBehaviour
 
         Set(page, false);
         Set(overview, true);
+        Set(closeMark, true);
 
         int count = marker != null ? marker.PieceCount : 0;
 
@@ -116,6 +122,7 @@ public class MarkerPieceController : MonoBehaviour
 
         Set(page, false);
         Set(overview, true);
+        Set(closeMark, true);
     }
 
     void Fill()
@@ -186,10 +193,20 @@ public class MarkerPieceController : MonoBehaviour
         Set(media != null ? media.gameObject : null, !isQuestion);
         Set(question != null ? question.gameObject : null, isQuestion);
 
+        // Back is the way out of a page; the mark in the corner is the way out
+        // of the sheet. On a page they are the same door twice.
+        Set(closeMark, false);
+
         if (isQuestion)
         {
+            // No heading. The rule two comments down - the heading says what kind
+            // of thing this is, the page says which one - has no work to do here,
+            // because a question has no name apart from itself. It printed
+            // "Answer" in the title face and then the question in the title face
+            // directly underneath, one line apart, which is the fault that
+            // comment was written about.
             if (pageTitle != null)
-                pageTitle.text = AppStrings.Get("piece.answer");
+                pageTitle.text = string.Empty;
 
             if (question != null)
                 question.Show(_marker);
@@ -223,6 +240,7 @@ public class MarkerPieceController : MonoBehaviour
 
         Set(page, false);
         Set(overview, true);
+        Set(closeMark, true);
 
         // Redrawn on the way back, so a tick or a solved question appears without
         // the reader closing the sheet and opening it again.

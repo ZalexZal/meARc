@@ -93,6 +93,7 @@ public class MarkerQuestionView : MonoBehaviour
     BuildingData _marker;
     MarkerTask _task;
     int _chosen = -1;
+    CanvasGroup _checkFade;
     bool _waiting;
     float _tick;
 
@@ -103,6 +104,8 @@ public class MarkerQuestionView : MonoBehaviour
     {
         if (checkButton != null)
             checkButton.onClick.AddListener(Submit);
+
+
 
         if (finishedButton != null)
             finishedButton.onClick.AddListener(Finish);
@@ -225,9 +228,18 @@ public class MarkerQuestionView : MonoBehaviour
                           : AnswerOptionView.State.Idle);
         }
 
-        // A tap on an option is the answer. Making somebody then find a Check
-        // button underneath is a second decision they did not ask to make.
-        Submit();
+        // Choosing is not sending.
+        //
+        // A tap used to be the answer, on the argument that a Check button
+        // underneath is a second decision nobody asked to make. That holds on a
+        // guided walk, where a wrong answer costs nothing. It does not hold on a
+        // trail whose creator set a deduction and a cooldown: there a mis-tap on
+        // a slab the width of the screen costs real points before the reader has
+        // finished reading the option below it, and there is nothing to be said
+        // to them afterwards.
+        //
+        // So the tap marks, and Check sends.
+        Draw();
     }
 
     public void Submit()
@@ -475,15 +487,46 @@ public class MarkerQuestionView : MonoBehaviour
 
         bool answerable = !locked && !solved;
 
-        Set(checkHolder, answerable && _task.Kind == MarkerTaskKind.Open);
+        // Shown for both kinds now. It was only ever drawn for a typed answer,
+        // because a tap on an option was the answer.
+        Set(checkHolder, answerable);
 
         if (checkLabel != null)
         {
             checkLabel.text = AppStrings.Get(_waiting ? "task.checking" : "task.check");
         }
 
+        // Nothing picked, nothing to send. Dimmed rather than missing: a button
+        // that appears when you choose is a button you have to notice appearing.
+        bool something = _task.Kind == MarkerTaskKind.Open
+            ? (openField != null && !string.IsNullOrWhiteSpace(openField.text))
+            : _chosen >= 0;
+
+        bool canSend = answerable && !_waiting && something;
+
         if (checkButton != null)
-            checkButton.interactable = answerable && !_waiting;
+            checkButton.interactable = canSend;
+
+        // Found here rather than in Awake, which does not run in the editor - the
+        // harness draws this screen without ever playing it, and a fade that only
+        // exists at runtime is a fade nobody can review.
+        if (_checkFade == null && checkHolder != null)
+        {
+            _checkFade = checkHolder.GetComponent<CanvasGroup>();
+
+            if (_checkFade == null)
+                _checkFade = checkHolder.AddComponent<CanvasGroup>();
+        }
+
+        // Said in alpha, not in interactable.
+        //
+        // The button has no disabled tint - its colour comes from the theme, and
+        // a colour written here would be painted over on the next theme event -
+        // so switching interactable off changed nothing anybody could see. A
+        // solid green Check under an untouched question is a button that looks
+        // ready and does nothing, which is worse than no button at all.
+        if (_checkFade != null)
+            _checkFade.alpha = canSend ? 1f : 0.4f;
 
         if (openField != null)
             openField.interactable = answerable && !_waiting;

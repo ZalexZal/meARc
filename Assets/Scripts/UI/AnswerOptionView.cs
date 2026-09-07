@@ -18,7 +18,7 @@ public class AnswerOptionView : MonoBehaviour
     {
         Idle,
 
-        /// <summary>Picked, and the check is in flight.</summary>
+        /// <summary>Picked, and not yet sent.</summary>
         Chosen,
 
         /// <summary>Picked, and the server said no.</summary>
@@ -33,6 +33,11 @@ public class AnswerOptionView : MonoBehaviour
 
     public Button button;
     public Image background;
+
+    [Tooltip("The border. Carries the state on an unchosen option, where the " +
+             "background carries nothing.")]
+    public Image edge;
+
     public Image marker;
     public TextMeshProUGUI label;
 
@@ -62,22 +67,38 @@ public class AnswerOptionView : MonoBehaviour
         Color bad = ThemeManager.Get(ThemeRole.StatusPoor);
         Color good = ThemeManager.Get(ThemeRole.StatusGood);
 
-        Color edge = state == State.Wrong ? bad
-                   : state == State.Right ? good
-                   : state == State.Chosen ? accent
-                   : line;
+        Color border = state == State.Wrong ? bad
+                     : state == State.Right ? good
+                     : state == State.Chosen ? accent
+                     : state == State.Muted ? Fade(line, 0.5f)
+                     : line;
 
+        // Outlined, not filled.
+        //
+        // Four grey slabs stacked down a white sheet are heavy, and being chosen
+        // showed up as a small ring changing colour inside one of them. Now an
+        // unchosen option is a thin border on the sheet's own ground and the
+        // chosen one is filled in the accent, which makes the choice the loudest
+        // thing on the screen rather than the quietest.
+        //
+        // The background keeps its raycast either way: it is the button's target
+        // graphic, and an invisible one still has to be pressable.
         if (background != null)
-            background.color = ThemeManager.Get(ThemeRole.SurfaceAlt);
+            background.color = state == State.Chosen ? accent : Fade(accent, 0f);
+
+        if (edge != null)
+            edge.color = border;
+
+        bool onAccent = state == State.Chosen;
 
         if (marker != null)
-            marker.color = state == State.Muted ? Fade(line, 0.5f) : edge;
+            marker.color = onAccent ? ThemeManager.Get(ThemeRole.OnAccent) : border;
 
         if (label != null)
         {
-            label.color = state == State.Muted
-                ? ThemeManager.Get(ThemeRole.TextMuted)
-                : ThemeManager.Get(ThemeRole.TextPrimary);
+            label.color = onAccent ? ThemeManager.Get(ThemeRole.OnAccent)
+                        : state == State.Muted ? ThemeManager.Get(ThemeRole.TextMuted)
+                        : ThemeManager.Get(ThemeRole.TextPrimary);
         }
 
         bool judged = state == State.Wrong || state == State.Right;
@@ -91,8 +112,10 @@ public class AnswerOptionView : MonoBehaviour
             verdictImage.color = state == State.Right ? good : bad;
         }
 
+        // Chosen stays pressable, because choosing is no longer sending: a
+        // reader who picks the wrong line has to be able to pick another one.
         if (button != null)
-            button.interactable = state == State.Idle;
+            button.interactable = state == State.Idle || state == State.Chosen;
     }
 
     static Color Fade(Color colour, float alpha)
