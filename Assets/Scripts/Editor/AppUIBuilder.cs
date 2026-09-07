@@ -67,6 +67,7 @@ const float ReferenceWidth = 1080f;
     const string MapPinPrefabPath = PrefabFolder + "/MapPin.prefab";
     const string TrailRowPrefabPath = PrefabFolder + "/TrailRow.prefab";
     const string PieceRowPrefabPath = PrefabFolder + "/PieceRow.prefab";
+    const string GraphNodePrefabPath = PrefabFolder + "/TrailGraphNode.prefab";
     const string OptionPrefabPath = PrefabFolder + "/AnswerOption.prefab";
 
     // Everything the builder owns under the Canvas. Removed and rebuilt every run.
@@ -181,6 +182,7 @@ const float ReferenceWidth = 1080f;
         MapPinView pinPrefab = CreateMapPinPrefab();
         TrailRowView trailRowPrefab = CreateTrailRowPrefab();
         PieceRowView pieceRowPrefab = CreatePieceRowPrefab();
+        TrailGraphNodeView graphNodePrefab = CreateGraphNodePrefab();
         AnswerOptionView optionPrefab = CreateOptionPrefab();
 
         UserLocationService location = BuildServices();
@@ -196,7 +198,8 @@ const float ReferenceWidth = 1080f;
 
         MapTabController mapTab = BuildMapTab(mapPanel, location, pinPrefab, info);
         CameraTabController cameraTab = BuildCameraTab(cameraPanel, location, rowPrefab, info);
-        SearchTabController browseTab = BuildBrowseTab(browsePanel, location, rowPrefab);
+        SearchTabController browseTab = BuildBrowseTab(browsePanel, location, rowPrefab,
+                                                       graphNodePrefab);
         SettingsTabController settingsTab = BuildSettingsTab(settingsPanel);
 
         // BuildNav returns the padded row the buttons go in. The bar itself is its
@@ -2289,7 +2292,8 @@ const float ReferenceWidth = 1080f;
     // ---------------------------------------------------------------- browse tab
 
     static SearchTabController BuildBrowseTab(RectTransform panel, UserLocationService location,
-                                              BuildingRowView rowPrefab)
+                                              BuildingRowView rowPrefab,
+                                              TrailGraphNodeView graphNodePrefab)
     {
         RectTransform rt = UIFactory.Rect("BrowseContent", SafeContent(panel));
         UIFactory.Stretch(rt);
@@ -2335,6 +2339,58 @@ const float ReferenceWidth = 1080f;
 
         controller.progressCard = BuildProgressCard(content);
         controller.discoverySection = controller.progressCard.gameObject;
+
+        // The whole walk, on its own coordinates. Under the summary, because it
+        // answers the same question at a different resolution: the card says how
+        // many, this says which ones and where.
+        RectTransform graphCard = UIFactory.Rect("TrailGraph", content);
+        LayoutElement graphSize = UIFactory.Size(graphCard.gameObject, 900f);
+        graphSize.flexibleHeight = 0f;
+        UIFactory.Fill(graphCard, ThemeRole.Surface, 1f, UIShape.Rounded).raycastTarget = true;
+        Outline(graphCard);
+
+        controller.graphSection = graphCard.gameObject;
+
+        TrailGraphView graph = graphCard.gameObject.AddComponent<TrailGraphView>();
+        graph.nodePrefab = graphNodePrefab;
+        controller.graph = graph;
+
+        // The window clips; the thing inside it moves. RectMask2D rather than a
+        // Mask, because a stencil mask is a hard alpha test and every disc in
+        // here has a soft edge.
+        RectTransform window = UIFactory.Rect("Window", graphCard);
+        UIFactory.Stretch(window);
+        window.offsetMin = new Vector2(6f, 6f);
+        window.offsetMax = new Vector2(-6f, -6f);
+        window.gameObject.AddComponent<RectMask2D>();
+        graph.viewport = window;
+
+        RectTransform pannable = UIFactory.Rect("Content", window);
+        pannable.anchorMin = pannable.anchorMax = new Vector2(0.5f, 0.5f);
+        pannable.sizeDelta = Vector2.zero;
+        graph.content = pannable;
+
+        // Nothing to draw. Its own words rather than the map's, because "no trail
+        // open" on a screen with a progress bar above it needs no second button.
+        RectTransform graphEmpty = UIFactory.Rect("Empty", window);
+        UIFactory.Stretch(graphEmpty);
+        graph.emptyGroup = graphEmpty.gameObject;
+
+        TextMeshProUGUI graphEmptyText = UIFactory.Text("Label", graphEmpty, Secondary,
+                                                        ThemeRole.TextMuted,
+                                                        TextAlignmentOptions.Center,
+                                                        "graph.empty");
+        UIFactory.Stretch(graphEmptyText.rectTransform);
+        graphEmptyText.textWrappingMode = TextWrappingModes.Normal;
+
+        // Back to seeing all of it, for anybody who has dragged themselves lost.
+        RectTransform fit = UIFactory.Rect("Fit", graphCard);
+        UIFactory.Corner(fit, new Vector2(1f, 0f), new Vector2(Tap, Tap),
+                         new Vector2(-16f, 16f));
+        Button fitButton = UIFactory.Button(fit, ThemeRole.Surface, 0.92f, UIShape.Circle);
+        Outline(fit);
+        Icon(fit, AppIcon.MyLocation, 40f, ThemeRole.TextSecondary);
+        Wire(fitButton.onClick, graph.Fit, "Trail graph fit");
 
         RectTransform fieldRect = UIFactory.Rect("SearchField", content);
         UIFactory.Size(fieldRect.gameObject, Tap);
@@ -3675,6 +3731,69 @@ const float ReferenceWidth = 1080f;
         Object.DestroyImmediate(temp);
 
         return saved.GetComponent<TrailRowView>();
+    }
+
+    /// <summary>
+    /// One node: a numbered disc with its name and distance under it.
+    ///
+    /// The rect is wider than the disc so the name has somewhere to go, and the
+    /// button is on the disc alone - overlapping name labels are expected on a
+    /// tight trail, and a tap should land on the marker somebody aimed at rather
+    /// than on whichever label happened to be on top.
+    /// </summary>
+    static TrailGraphNodeView CreateGraphNodePrefab()
+    {
+        GameObject temp = new GameObject("TrailGraphNode", typeof(RectTransform));
+        RectTransform rt = (RectTransform)temp.transform;
+        rt.sizeDelta = new Vector2(260f, 190f);
+
+        TrailGraphNodeView view = temp.AddComponent<TrailGraphNodeView>();
+
+        // The ring is a sibling of the disc, not a child of it.
+        //
+        // A child draws after its parent, so a "ring" inside the disc is a filled
+        // circle painted straight over it - which is exactly what happened: every
+        // node came out as a flat disc of the ring's colour, dark for some markers
+        // and white-on-white for others. Behind it, and larger, is a halo.
+        RectTransform ring = UIFactory.Rect("Ring", rt);
+        UIFactory.Corner(ring, new Vector2(0.5f, 1f), new Vector2(102f, 102f),
+                         new Vector2(0f, 7f));
+        view.ring = UIFactory.Plain(ring, Color.white, UIShape.Circle);
+        view.ring.raycastTarget = false;
+
+        RectTransform disc = UIFactory.Rect("Disc", rt);
+        UIFactory.Corner(disc, new Vector2(0.5f, 1f), new Vector2(88f, 88f), Vector2.zero);
+        view.button = UIFactory.Button(disc, ThemeRole.Surface, 1f, UIShape.Circle);
+        view.disc = disc.GetComponent<Image>();
+
+        RectTransform fill = UIFactory.Rect("Fill", disc);
+        UIFactory.Stretch(fill);
+        view.fill = UIFactory.Plain(fill, Color.white, UIShape.Circle);
+        view.fill.raycastTarget = false;
+        fill.gameObject.SetActive(false);
+
+        view.numberLabel = UIFactory.Text("Number", disc, Secondary, ThemeRole.TextPrimary,
+                                          TextAlignmentOptions.Center, null, FontStyles.Bold);
+        UIFactory.Stretch(view.numberLabel.rectTransform);
+
+        view.nameLabel = UIFactory.Text("Name", rt, Caption, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Top, null, FontStyles.Bold);
+        UIFactory.Corner(view.nameLabel.rectTransform, new Vector2(0.5f, 1f),
+                         new Vector2(260f, 60f), new Vector2(0f, -96f));
+        view.nameLabel.textWrappingMode = TextWrappingModes.Normal;
+        view.nameLabel.overflowMode = TextOverflowModes.Ellipsis;
+        view.nameLabel.raycastTarget = false;
+
+        view.distanceLabel = UIFactory.Text("Distance", rt, Caption, ThemeRole.TextMuted,
+                                            TextAlignmentOptions.Top);
+        UIFactory.Corner(view.distanceLabel.rectTransform, new Vector2(0.5f, 1f),
+                         new Vector2(260f, 36f), new Vector2(0f, -158f));
+        view.distanceLabel.raycastTarget = false;
+
+        GameObject saved = PrefabUtility.SaveAsPrefabAsset(temp, GraphNodePrefabPath);
+        Object.DestroyImmediate(temp);
+
+        return saved.GetComponent<TrailGraphNodeView>();
     }
 
     static PieceRowView CreatePieceRowPrefab()

@@ -141,8 +141,29 @@ public static class UIPreview
         string t = "-" + theme;
 
         Pieces.Strip(canvas.transform, "Mid");
+        SeedTrail();
+
         Shoot(canvas, rig, "01-map" + t, "MapPanel");
         Shoot(canvas, rig, "02-camera" + t, "CameraPanel");
+        // The graph builds itself in OnEnable, and OnEnable does not run in the
+        // editor for a component that is not ExecuteAlways. Rather than making it
+        // one - its Update reads touches, which has no business running here - the
+        // preview enables the panel, lets layout settle so the fit has a real
+        // viewport to measure, and asks it to build.
+        Transform browse = canvas.transform.Find("BrowsePanel");
+
+        if (browse != null)
+        {
+            browse.gameObject.SetActive(true);
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)browse);
+
+            TrailGraphView graph = browse.GetComponentInChildren<TrailGraphView>(true);
+
+            if (graph != null)
+                graph.Rebuild();
+        }
+
         Shoot(canvas, rig, "03-browse" + t, "BrowsePanel");
         Shoot(canvas, rig, "04-settings" + t, "SettingsPanel");
 
@@ -757,6 +778,48 @@ public static class UIPreview
         Transform found = root.Find(path);
         if (found != null)
             found.gameObject.SetActive(false);
+    }
+
+
+    /// <summary>
+    /// Six markers in the database, on their real coordinates in Yambol.
+    ///
+    /// The graph places nodes by projecting these, so invented numbers would test
+    /// the projection against nothing. These are the same places the website's
+    /// route section names, which is also why the shape it draws is checkable
+    /// against a real map.
+    /// </summary>
+    static void SeedTrail()
+    {
+        (string bg, string en, double lat, double lng, string colour)[] places =
+        {
+            ("Безистенът", "The Bezisten", 42.48412d, 26.50598d, "#45C4B0"),
+            ("Общината", "The Town Hall", 42.48397d, 26.50340d, "#0033FF"),
+            ("Часовниковата кула", "The Clock Tower", 42.48657d, 26.50654d, "#72007A"),
+            ("Градската градина", "The City Garden", 42.48520d, 26.50890d, "#2E7D32"),
+            ("Театърът", "The Theatre", 42.48290d, 26.50720d, "#C2410C"),
+            // No colour: what a marker placed in the web builder actually looks
+            // like, since nothing there sets one. It should still be legible.
+            ("Мостът", "The Bridge", 42.48180d, 26.50470d, null),
+        };
+
+        List<BuildingData> made = new List<BuildingData>();
+
+        for (int i = 0; i < places.Length; i++)
+        {
+            BuildingData b = ScriptableObject.CreateInstance<BuildingData>();
+            b.buildingId = "preview-" + (i + 1);
+            b.step = i + 1;
+            b.buildingNameBg = places[i].bg;
+            b.buildingName = places[i].en;
+            b.latitude = places[i].lat;
+            b.longitude = places[i].lng;
+            b.markerColourHex = places[i].colour;
+            b.isPublished = true;
+            made.Add(b);
+        }
+
+        BuildingDatabase.SetBuildings(made);
     }
 
     /// <summary>

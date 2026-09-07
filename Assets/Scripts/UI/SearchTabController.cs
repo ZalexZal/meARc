@@ -48,6 +48,12 @@ public class SearchTabController : MonoBehaviour
     public GameObject discoverySection;
     public DiscoveryProgressCard progressCard;
 
+    [Tooltip("The whole trail as a picture. Shown alongside the summary and put " +
+             "away while somebody is searching, because a search is a question " +
+             "about one marker and the graph is the answer about all of them.")]
+    public GameObject graphSection;
+    public TrailGraphView graph;
+
     [Header("Results only")]
     public GameObject resultsSection;
     public RectTransform resultsParent;
@@ -117,6 +123,11 @@ public class SearchTabController : MonoBehaviour
         if (locationService == null)
             locationService = UserLocationService.Instance;
 
+        // Tapping a node does what tapping a result does: back to the map, with
+        // that marker selected and its sheet open.
+        if (graph != null)
+            graph.onOpen = OpenBuilding;
+
         AppStrings.OnLanguageChanged += RebuildAll;
         BuildingDatabase.OnBuildingsChanged += RebuildAll;
         RebuildAll();
@@ -167,6 +178,7 @@ public class SearchTabController : MonoBehaviour
         ClearSpawned();
 
         if (discoverySection != null) discoverySection.SetActive(browsing);
+        if (graphSection != null) graphSection.SetActive(browsing);
         if (resultsSection != null) resultsSection.SetActive(!browsing);
 
         if (browsing)
