@@ -848,6 +848,8 @@ public static class UIPreview
     }
 
     /// <summary>
+    const string BREAK = "\n";
+
     /// A team on a board, written straight onto the card.
     ///
     /// Four names, six teams ranked, and this one lying third - the state worth
@@ -878,6 +880,20 @@ public static class UIPreview
         if (view.teamMeta != null) view.teamMeta.text = "5 стъпки · 210 точки";
         if (view.inviteCode != null) view.inviteCode.text = "MKRA3C";
         if (view.capacityLabel != null) view.capacityLabel.text = "4 от 6 души";
+
+        // A moderator has been at them, which is the state worth looking at:
+        // when nothing has happened this block is off and there is nothing to
+        // review. Three lines, because a deduction, a correction and the
+        // arithmetic underneath is the busiest this ever gets.
+        if (view.movedGroup != null) view.movedGroup.SetActive(true);
+        if (view.movedTitle != null) view.movedTitle.text = "Модератор промени точките ви";
+        if (view.movedBody != null)
+        {
+            view.movedBody.text =
+                "+20 — маркерът беше паднал" + BREAK +
+                "-30 — подсказка от друг отбор" + BREAK +
+                "220 извървени, -10 от модератора";
+        }
 
         string[] members = { "Мира  (ти)", "Тодор", "Ели", "Крис" };
 

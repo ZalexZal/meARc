@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -53,6 +54,12 @@ public class TeamDoorView : MonoBehaviour
     [Tooltip("Says how many a team here holds, which is the trail's number and " +
              "not this app's.")]
     public TextMeshProUGUI capacityLabel;
+
+    [Tooltip("What a moderator did to this team, and why. Switched off when " +
+             "nobody has touched them, which is nearly always.")]
+    public GameObject movedGroup;
+    public TextMeshProUGUI movedTitle;
+    public TextMeshProUGUI movedBody;
 
     [Header("The board")]
     public GameObject boardEmpty;
@@ -198,6 +205,8 @@ public class TeamDoorView : MonoBehaviour
                                               team.solved, team.points);
             }
 
+            DrawMoved(team);
+
             if (inviteCode != null)
                 inviteCode.text = team.invite_code;
 
@@ -250,6 +259,61 @@ public class TeamDoorView : MonoBehaviour
                 statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
             }
         }
+    }
+
+    /// <summary>
+    /// What a moderator did to this team, on the team's own card.
+    ///
+    /// Being disqualified is said here too, and not because it was asked for.
+    /// A disqualified team opens this card, looks at the standings beside it,
+    /// and cannot find themselves. Without a line saying why, that reads as the
+    /// app being broken - and on the day it turns into an argument about
+    /// whether the phone is lying, which the phone would lose.
+    /// </summary>
+    void DrawMoved(TeamService.Detail team)
+    {
+        if (movedGroup == null)
+            return;
+
+        bool anything = team != null && (team.Moved || team.disqualified);
+        movedGroup.SetActive(anything);
+
+        if (!anything)
+            return;
+
+        if (movedTitle != null)
+        {
+            movedTitle.text = AppStrings.Get(team.disqualified ? "team.out" : "team.moved");
+            movedTitle.color = ThemeManager.Get(ThemeRole.StatusPoor);
+        }
+
+        if (movedBody == null)
+            return;
+
+        List<string> lines = new List<string>();
+
+        if (team.disqualified && !string.IsNullOrEmpty(team.disqualified_reason))
+            lines.Add(team.disqualified_reason);
+
+        if (team.Moved)
+        {
+            for (int i = 0; i < team.adjustments.Length; i++)
+            {
+                TeamService.Adjustment moved = team.adjustments[i];
+
+                // The sign is written out, because "20" and "-20" one under the
+                // other differ by one character and mean opposite things.
+                string amount = (moved.points > 0 ? "+" : "") + moved.points;
+                lines.Add(string.Format(AppStrings.Get("team.movedRow"), amount, moved.reason));
+            }
+
+            // The arithmetic, so the number at the top of the card is one they
+            // can check rather than one they have to accept.
+            lines.Add(string.Format(AppStrings.Get("team.earned"),
+                                    team.earned, team.points - team.earned));
+        }
+
+        movedBody.text = string.Join("\n", lines.ToArray());
     }
 
     void DrawBoard(TeamService teams)

@@ -33,6 +33,20 @@ public class TeamService : MonoBehaviour
         public bool is_me;
     }
 
+    /// <summary>
+    /// One pull of a moderator's lever, as the team sees it.
+    ///
+    /// The row has been readable by the team it was written about since 0032 -
+    /// the policy allows it - and until 0033 nothing asked. A deduction nobody
+    /// can see the reason for is just a score that went wrong.
+    /// </summary>
+    [Serializable]
+    public class Adjustment
+    {
+        public int points;
+        public string reason;
+    }
+
     [Serializable]
     public class Detail
     {
@@ -42,7 +56,27 @@ public class TeamService : MonoBehaviour
         public string invite_code;
         public Member[] members;
         public int solved;
+
+        /// <summary>
+        /// What the standings say: walked for, plus whatever a moderator moved,
+        /// never below nothing. Deliberately the same arithmetic as the board,
+        /// because a card reading 100 beside a board reading 75 is worse than
+        /// either number on its own.
+        /// </summary>
         public int points;
+
+        /// <summary>The part of it they actually walked for.</summary>
+        public int earned;
+
+        public Adjustment[] adjustments;
+
+        public bool disqualified;
+        public string disqualified_reason;
+
+        public bool Moved
+        {
+            get { return adjustments != null && adjustments.Length > 0; }
+        }
 
         /// <summary>
         /// The trail's own cap, since 0027 - the creator sets it, so this class

@@ -4566,6 +4566,36 @@ const float ReferenceWidth = 1080f;
                                        TextAlignmentOptions.Left);
         UIFactory.Size(view.teamMeta.gameObject, 40f);
 
+        // What a moderator did to them, directly under the score it explains.
+        //
+        // Off unless something has been done, which is nearly always. When it is
+        // on it is the only thing on this card in the warning colour, because a
+        // team looking for why their points moved should find it without
+        // reading the card.
+        RectTransform moved = UIFactory.Rect("Moved", who);
+        UIFactory.Fill(moved, ThemeRole.SurfaceAlt, 0f, UIShape.Rounded);
+        Outline(moved);
+
+        ContentSizeFitter movedFit = moved.gameObject.AddComponent<ContentSizeFitter>();
+        movedFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        VerticalLayoutGroup movedStack = UIFactory.VerticalStack(moved, 6f, false);
+        movedStack.padding = new RectOffset(24, 24, 20, 20);
+
+        view.movedGroup = moved.gameObject;
+
+        view.movedTitle = UIFactory.Text("Title", moved, Secondary, ThemeRole.StatusPoor,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        view.movedTitle.textWrappingMode = TextWrappingModes.Normal;
+        view.movedTitle.raycastTarget = false;
+
+        view.movedBody = UIFactory.Text("Body", moved, Caption, ThemeRole.TextSecondary,
+                                        TextAlignmentOptions.TopLeft);
+        view.movedBody.textWrappingMode = TextWrappingModes.Normal;
+        view.movedBody.raycastTarget = false;
+
+        moved.gameObject.SetActive(false);
+
         for (int i = 0; i < TeamDoorView.MaxMembers; i++)
         {
             view.memberRows[i] = UIFactory.Text("Member" + i, who, Body,
