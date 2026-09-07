@@ -626,6 +626,32 @@ public static class UIPreview
             child.gameObject.SetActive(on);
         }
 
+        // One door at a time, here as in the app.
+        //
+        // DoorFlow shows exactly one, so nothing in the app ever needed to switch
+        // the others off - and this harness never did either. It switches off the
+        // top-level panels it was not asked for and stops there, which leaves
+        // every child of Doors exactly as the builder left it. The team card is
+        // built active, so every picture of the welcome and the terms screens,
+        // for as long as this harness has existed, was taken with the team card
+        // standing on top of them. The two screens a tester meets first are the
+        // two nobody had ever seen.
+        //
+        // Not restored afterwards: shut is the right state for a door nobody
+        // asked for, and the shot that wants one raises it below.
+        Transform doors = canvas.transform.Find("Doors");
+
+        if (doors != null)
+        {
+            for (int i = 0; i < doors.childCount; i++)
+            {
+                Transform door = doors.GetChild(i);
+
+                if (!wanted.Contains("Doors/" + door.name))
+                    door.gameObject.SetActive(false);
+            }
+        }
+
         // Overlays, addressed by path.
         var raised = new List<GameObject>();
         for (int i = 0; i < visible.Length; i++)
