@@ -62,6 +62,10 @@ public class InfoPanelController : MonoBehaviour
              "then stays hidden rather than doing nothing when tapped.")]
     public ReportSheetView reportSheet;
 
+    [Tooltip("The hint ladder. Handed to the question view, which is what opens " +
+             "it - the button lives beside the question, not on this sheet.")]
+    public HintSheetView hintSheet;
+
     /// <summary>Raised before the sheet opens, so the Camera tab can close Nearby.</summary>
     public Action onWillOpen;
 

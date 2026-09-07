@@ -47,6 +47,16 @@ public class MarkerQuestionView : MonoBehaviour
     public TextMeshProUGUI checkLabel;
 
     [Header("The answer")]
+    [Header("Hints")]
+    [Tooltip("Shown only when the marker has hints and the trail scores. A walk " +
+             "has none at all, and marker_detail returns none there.")]
+    public GameObject hintsHolder;
+    public Button hintsButton;
+    public TextMeshProUGUI hintsLabel;
+
+    [Tooltip("The card the button opens. Set by whoever builds the sheet.")]
+    public HintSheetView hintSheet;
+
     public GameObject bubbleHolder;
     public Image bubbleFill;
     public Image bubbleEdge;
@@ -113,6 +123,12 @@ public class MarkerQuestionView : MonoBehaviour
     public void Show(BuildingData marker)
     {
         _marker = marker;
+
+        if (hintsButton != null)
+        {
+            hintsButton.onClick.RemoveAllListeners();
+            hintsButton.onClick.AddListener(OpenHints);
+        }
         _task = marker != null ? marker.task : null;
         _chosen = -1;
         _waiting = false;
@@ -382,9 +398,41 @@ public class MarkerQuestionView : MonoBehaviour
     /// Puts the page into whichever of its endings applies. Called after every
     /// answer and every second while a lock runs down.
     /// </summary>
+    /// <summary>
+    /// The hints button, and whether there is anything behind it.
+    ///
+    /// Hidden on a walk and on a marker with no hints. A walk is not a matter of
+    /// drawing: marker_detail returns an empty list there, so the count is zero
+    /// and this hides itself without needing to know why.
+    ///
+    /// Also hidden once the marker is solved. A hint for a question already
+    /// answered is an offer to spend points on nothing.
+    /// </summary>
+    void DrawHints(MarkerTaskService.MarkerProgress progress)
+    {
+        int count = HintSheetView.CountFor(_marker);
+        bool worth = count > 0 && !progress.solved && !progress.skipped;
+
+        Set(hintsHolder, worth);
+
+        if (!worth)
+            return;
+
+        if (hintsLabel != null)
+            hintsLabel.text = string.Format(AppStrings.Get("hint.button"), count);
+    }
+
+    void OpenHints()
+    {
+        if (hintSheet != null && _marker != null)
+            hintSheet.Open(_marker);
+    }
+
     void Draw()
     {
         MarkerTaskService.MarkerProgress progress = State();
+
+        DrawHints(progress);
 
         bool finished = progress.skipped;
         bool locked = progress.IsLocked;

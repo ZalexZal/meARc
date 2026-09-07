@@ -263,6 +263,15 @@ public static class UIPreview
         Pieces.Verdict(canvas.transform, Pieces.Ending.Right);
         Shoot(canvas, rig, "25-correct" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
 
+        // The hint ladder. Opened by hand: the card builds itself off the marker
+        // and OnEnable does not run in the editor.
+        Pieces.Page(canvas.transform, Pieces.Which.Question);
+        Pieces.ClearVerdict(canvas.transform);
+        Pieces.Hints(canvas.transform);
+
+        Shoot(canvas, rig, "28-hints" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim",
+              "InfoSheet/Safe/HintCard");
+
         // The chooser sits over the sheet, so both are named. It ships switched
         // off, which is why it has to be asked for by name here.
         Pieces.Page(canvas.transform, Pieces.Which.Overview);
@@ -1026,6 +1035,23 @@ public static class UIPreview
                 }
             };
 
+            // A ladder: free, then dearer, then dearest - and only the first one
+            // open, which is the state a walker is in when they first look.
+            _marker.hints = new[]
+            {
+                new MarkerHint
+                {
+                    id = "preview-hint-1", ord = 1, cost = 0, revealed = true,
+                    body = new LocalisedText
+                    {
+                        en = "It is older than the clock tower.",
+                        bg = "По-стар е от часовниковата кула."
+                    }
+                },
+                new MarkerHint { id = "preview-hint-2", ord = 2, cost = 5 },
+                new MarkerHint { id = "preview-hint-3", ord = 3, cost = 10 },
+            };
+
             _marker.task = new MarkerTask
             {
                 kind = "choice",
@@ -1108,6 +1134,15 @@ public static class UIPreview
         /// <summary>
         /// One of the endings, drawn as the server would have left it.
         /// </summary>
+        /// <summary>Opens the hint ladder on the preview's marker.</summary>
+        public static void Hints(Transform root)
+        {
+            HintSheetView card = root.GetComponentInChildren<HintSheetView>(true);
+
+            if (card != null && _marker != null)
+                card.Open(_marker);
+        }
+
         /// <summary>Takes the answer bubble away, so a question can be shown unasked.</summary>
         public static void ClearVerdict(Transform root)
         {

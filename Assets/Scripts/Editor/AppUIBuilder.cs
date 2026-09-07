@@ -697,6 +697,12 @@ const float ReferenceWidth = 1080f;
         // underneath: choosing a reason for a stop whose name has just been taken
         // off the screen is a worse question than the one being asked.
         controller.reportSheet = BuildReportChooser(sheetSafe);
+        controller.hintSheet = BuildHintCard(sheetSafe);
+
+        // The question view is what opens it, since the button sits beside the
+        // question rather than on the sheet's own footer.
+        if (controller.pieces != null && controller.pieces.question != null)
+            controller.pieces.question.hintSheet = controller.hintSheet;
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -810,6 +816,123 @@ const float ReferenceWidth = 1080f;
         UIFactory.Stretch(label.rectTransform);
 
         return rt;
+    }
+
+    /// <summary>
+    /// The hint ladder, over the marker sheet.
+    ///
+    /// A card rather than a page, because opening a hint is a decision made
+    /// while looking at the question - taking the question off the screen to
+    /// show the price of help would be hiding the thing being weighed.
+    /// </summary>
+    static HintSheetView BuildHintCard(Transform parent)
+    {
+        RectTransform panel = Door(parent, "HintCard", plain: false,
+                                   inner: out RectTransform inner);
+
+        inner.offsetMin = new Vector2(inner.offsetMin.x, Nav + Margin);
+
+        HintSheetView view = panel.gameObject.AddComponent<HintSheetView>();
+
+        Button away = panel.gameObject.AddComponent<Button>();
+        away.targetGraphic = panel.GetComponent<Image>();
+        away.transition = Selectable.Transition.None;
+        Wire(away.onClick, view.Close, "Hint card scrim");
+
+        RectTransform card = Card(inner, "Card", 16f);
+
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.Size(head.gameObject, 70f);
+        HorizontalLayoutGroup headRow = UIFactory.HorizontalStack(head, 14f);
+        headRow.childAlignment = TextAnchor.MiddleLeft;
+
+        Icon(head, AppIcon.Question, 44f, ThemeRole.Accent);
+
+        view.titleLabel = UIFactory.Text("Title", head, Title, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.Left, "hint.title",
+                                         FontStyles.Bold);
+        UIFactory.Flexible(view.titleLabel.gameObject);
+
+        view.emptyLabel = UIFactory.Text("Empty", card, Secondary, ThemeRole.TextMuted,
+                                         TextAlignmentOptions.Left, "hint.none");
+        UIFactory.Size(view.emptyLabel.gameObject, 60f);
+
+        for (int i = 0; i < HintSheetView.MaxRows; i++)
+        {
+            RectTransform row = UIFactory.Rect("Hint" + i, card);
+            UIFactory.Fill(row, ThemeRole.Surface, 0f, UIShape.Rounded);
+            Outline(row);
+
+            ContentSizeFitter fit = row.gameObject.AddComponent<ContentSizeFitter>();
+            fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            VerticalLayoutGroup rowStack = UIFactory.VerticalStack(row, 8f, false);
+            rowStack.padding = new RectOffset(26, 26, 22, 22);
+
+            view.rows[i] = row;
+
+            // Name and price on the left, the button that opens it on the right.
+            RectTransform top = UIFactory.Rect("Top", row);
+            UIFactory.Size(top.gameObject, 68f);
+            HorizontalLayoutGroup topRow = UIFactory.HorizontalStack(top, 12f);
+            topRow.childAlignment = TextAnchor.MiddleLeft;
+
+            view.rowTitles[i] = UIFactory.Text("Name", top, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, null,
+                                               FontStyles.Bold);
+            LayoutElement nameSize = UIFactory.Size(view.rowTitles[i].gameObject, 60f, 280f);
+            nameSize.flexibleWidth = 0f;
+            view.rowTitles[i].raycastTarget = false;
+
+            RectTransform chip = UIFactory.Rect("Chip", top);
+            UIFactory.Size(chip.gameObject, 52f, 210f);
+            UIFactory.Fill(chip, ThemeRole.SurfaceAlt, 1f, UIShape.Pill).raycastTarget = false;
+            view.rowChipHolders[i] = chip.gameObject;
+
+            view.rowChips[i] = UIFactory.Text("Label", chip, Caption, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.Center);
+            UIFactory.Stretch(view.rowChips[i].rectTransform);
+            view.rowChips[i].raycastTarget = false;
+
+            RectTransform spacer = UIFactory.Rect("Spacer", top);
+            UIFactory.Flexible(spacer.gameObject);
+
+            RectTransform open = UIFactory.Rect("Unlock", top);
+            LayoutElement openSize = UIFactory.Size(open.gameObject, 68f, 220f);
+            openSize.flexibleWidth = 0f;
+            view.rowButtons[i] = UIFactory.Button(open, ThemeRole.Surface, 0f, UIShape.Rounded);
+            Outline(open);
+
+            view.rowActions[i] = UIFactory.Text("Label", open, Secondary, ThemeRole.TextPrimary,
+                                                TextAlignmentOptions.Center, "hint.unlock",
+                                                FontStyles.Bold);
+            UIFactory.Stretch(view.rowActions[i].rectTransform);
+            view.rowActions[i].raycastTarget = false;
+
+            // The hint itself once it is paid for, and why it is shut until then.
+            view.rowBodies[i] = UIFactory.Text("Body", row, Secondary, ThemeRole.TextMuted,
+                                               TextAlignmentOptions.TopLeft);
+            view.rowBodies[i].textWrappingMode = TextWrappingModes.Normal;
+            view.rowBodies[i].raycastTarget = false;
+
+            row.gameObject.SetActive(false);
+        }
+
+        view.spentLabel = UIFactory.Text("Spent", card, Caption, ThemeRole.TextMuted,
+                                         TextAlignmentOptions.Left);
+        UIFactory.Size(view.spentLabel.gameObject, 46f);
+        view.spentLabel.gameObject.SetActive(false);
+
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left);
+        UIFactory.Size(view.statusLabel.gameObject, 50f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        view.closeButton = FullWidthButton(card, "Close", "team.close",
+                                           ThemeRole.SurfaceAlt, ThemeRole.TextSecondary);
+
+        panel.gameObject.SetActive(false);
+        return view;
     }
 
     /// <summary>
@@ -3596,6 +3719,31 @@ const float ReferenceWidth = 1080f;
                                          FontStyles.Bold);
         UIFactory.Stretch(view.checkLabel.rectTransform);
         open.gameObject.SetActive(false);
+
+        // --- help, and what it costs ---
+        //
+        // Under the question rather than behind a menu: the decision to spend
+        // points on help is part of answering, and a walker weighing it should
+        // not have to go looking for the price first.
+        RectTransform hints = UIFactory.Rect("Hints", content);
+        UIFactory.Size(hints.gameObject, Tap);
+        view.hintsHolder = hints.gameObject;
+        view.hintsButton = UIFactory.Button(hints, ThemeRole.Surface, 0f, UIShape.Rounded);
+        Outline(hints);
+
+        RectTransform hintsRow = UIFactory.Rect("Row", hints);
+        UIFactory.Stretch(hintsRow);
+        HorizontalLayoutGroup hintsLayout = UIFactory.HorizontalStack(hintsRow, 14f);
+        hintsLayout.childAlignment = TextAnchor.MiddleCenter;
+
+        Icon(hintsRow, AppIcon.Question, 38f, ThemeRole.TextSecondary);
+
+        view.hintsLabel = UIFactory.Text("Label", hintsRow, Secondary, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.hintsLabel.gameObject, Tap, 420f);
+        view.hintsLabel.raycastTarget = false;
+
+        hints.gameObject.SetActive(false);
 
         // --- what came back ---
         RectTransform bubble = UIFactory.Rect("Bubble", content);
