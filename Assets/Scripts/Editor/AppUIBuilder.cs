@@ -2297,26 +2297,42 @@ const float ReferenceWidth = 1080f;
 
         // Back first. Browse has no tab of its own, so without this the only way out
         // is the nav bar - and a screen whose exit is somewhere else is a trap.
+        // An arrow, then the title, reading left to right the way every other
+        // titled screen in this app does. It was a filled slab on the left and
+        // the title pushed to the right, which reads as two unrelated things.
         RectTransform back = UIFactory.Rect("BackButton", rt);
-        UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(280f, Tap), Vector2.zero);
+        UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(Tap, Tap), Vector2.zero);
+        controller.backButton = UIFactory.Button(back, ThemeRole.Surface, 0f, UIShape.Circle);
+        Icon(back, AppIcon.Back, 44f, ThemeRole.TextSecondary);
 
-        // Transparent, with an edge. A filled slab in the top corner is the
-        // heaviest thing on a screen whose job is to list other things.
-        controller.backButton = UIFactory.Button(back, ThemeRole.Surface, 0f, UIShape.Pill);
-        Outline(back);
+        // Kept and hidden: the controller writes to it, and the button still
+        // needs a name for anything reading the screen out loud.
         controller.backLabel = UIFactory.Text("Label", back, Secondary, ThemeRole.TextPrimary,
                                               TextAlignmentOptions.Center, "map.backToMap",
                                               FontStyles.Bold);
         UIFactory.Stretch(controller.backLabel.rectTransform);
+        controller.backLabel.gameObject.SetActive(false);
 
-        TextMeshProUGUI heading = UIFactory.Text("Heading", rt, Title, ThemeRole.TextPrimary,
-                                                 TextAlignmentOptions.Right, "tab.search",
+        TextMeshProUGUI heading = UIFactory.Text("Heading", rt, Display, ThemeRole.TextPrimary,
+                                                 TextAlignmentOptions.Left, "search.title",
                                                  FontStyles.Bold);
-        UIFactory.Corner(heading.rectTransform, new Vector2(1f, 1f), new Vector2(460f, Tap),
-                         Vector2.zero);
+        UIFactory.Corner(heading.rectTransform, new Vector2(0f, 1f), new Vector2(700f, Tap),
+                         new Vector2(Tap + 20f, 0f));
 
-        RectTransform fieldRect = UIFactory.Rect("SearchField", rt);
-        UIFactory.TopStretch(fieldRect, Tap, Tap + 20f);
+        // One scroll for everything under the title, so the summary can lead and
+        // the search box can follow it rather than sitting above it in a fixed
+        // slot. This screen answers "how am I doing" first and "where is X"
+        // second, which is the order somebody opens it in.
+        RectTransform body = UIFactory.Rect("Body", rt);
+        UIFactory.Stretch(body);
+        body.offsetMax = new Vector2(0f, -(Tap + 24f));
+        RectTransform content = UIFactory.ScrollList("Scroll", body, 28f);
+
+        controller.progressCard = BuildProgressCard(content);
+        controller.discoverySection = controller.progressCard.gameObject;
+
+        RectTransform fieldRect = UIFactory.Rect("SearchField", content);
+        UIFactory.Size(fieldRect.gameObject, Tap);
         controller.searchField = UIFactory.InputField("Field", fieldRect, "search.placeholder",
                                                       out TextMeshProUGUI placeholder);
         UIFactory.Stretch((RectTransform)controller.searchField.transform);
@@ -2335,19 +2351,6 @@ const float ReferenceWidth = 1080f;
             controller.searchField.textViewport.offsetMin = new Vector2(96f, 8f);
             controller.searchField.textViewport.offsetMax = new Vector2(-30f, -8f);
         }
-
-        // One scroll for the whole screen. The filter rows live inside it alongside
-        // the results, so choosing a filter never takes the pills off screen.
-        RectTransform body = UIFactory.Rect("Body", rt);
-        UIFactory.Stretch(body);
-        body.offsetMax = new Vector2(0f, -(Tap * 2f + 40f));
-        RectTransform content = UIFactory.ScrollList("Scroll", body, 28f);
-
-        // The summary first. It is the answer to "how am I doing", which is the
-        // question somebody opens this screen with - and it was under two filter
-        // headings and a list, where it read as a footnote.
-        controller.progressCard = BuildProgressCard(content);
-        controller.discoverySection = controller.progressCard.gameObject;
 
         RectTransform closest = UIFactory.Rect("ClosestSection", content);
         UIFactory.VerticalStack(closest, 14f, false);
@@ -2568,6 +2571,44 @@ const float ReferenceWidth = 1080f;
         UIFactory.Stretch(fill);
         UIFactory.Fill(fill, ThemeRole.Accent, 1f, UIShape.Pill);
 
+        // Points and standing, side by side under the bar. Scored on another
+        // screen entirely, which is exactly why they belong on the one somebody
+        // opens to ask how it is going.
+        RectTransform stats = UIFactory.Rect("Stats", card);
+        UIFactory.Size(stats.gameObject, 96f);
+        HorizontalLayoutGroup statsRow = UIFactory.HorizontalStack(stats, 24f, true);
+        statsRow.childAlignment = TextAnchor.LowerLeft;
+
+        RectTransform pointsCell = UIFactory.Rect("Points", stats);
+        UIFactory.VerticalStack(pointsCell, 0f, false);
+
+        TextMeshProUGUI pointsValue = UIFactory.Text("Value", pointsCell, Title,
+                                                     ThemeRole.TextPrimary,
+                                                     TextAlignmentOptions.Left, null,
+                                                     FontStyles.Bold);
+        UIFactory.Size(pointsValue.gameObject, 58f);
+
+        TextMeshProUGUI pointsCaption = UIFactory.Text("Caption", pointsCell, Caption,
+                                                       ThemeRole.TextMuted,
+                                                       TextAlignmentOptions.Left);
+        UIFactory.Size(pointsCaption.gameObject, 34f);
+
+        RectTransform standingCell = UIFactory.Rect("Standing", stats);
+        UIFactory.VerticalStack(standingCell, 0f, false);
+
+        TextMeshProUGUI standingValue = UIFactory.Text("Value", standingCell, Title,
+                                                       ThemeRole.TextPrimary,
+                                                       TextAlignmentOptions.Left, null,
+                                                       FontStyles.Bold);
+        UIFactory.Size(standingValue.gameObject, 58f);
+
+        TextMeshProUGUI standingCaption = UIFactory.Text("Caption", standingCell, Caption,
+                                                         ThemeRole.TextMuted,
+                                                         TextAlignmentOptions.Left);
+        UIFactory.Size(standingCaption.gameObject, 34f);
+
+        stats.gameObject.SetActive(false);
+
         TextMeshProUGUI note = UIFactory.Text("Note", card, Caption, ThemeRole.TextMuted,
                                               TextAlignmentOptions.TopLeft,
                                               "search.discoveredNote");
@@ -2575,6 +2616,11 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(note.gameObject, 104f);
 
         DiscoveryProgressCard component = card.gameObject.AddComponent<DiscoveryProgressCard>();
+        component.statsRow = stats.gameObject;
+        component.pointsText = pointsValue;
+        component.pointsLabel = pointsCaption;
+        component.standingText = standingValue;
+        component.standingLabel = standingCaption;
         component.noteText = note;
         component.countText = count;
         component.labelText = label;
