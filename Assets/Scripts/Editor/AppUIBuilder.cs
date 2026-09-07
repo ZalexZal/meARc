@@ -3810,6 +3810,14 @@ const float ReferenceWidth = 1080f;
         view.nameLabel.overflowMode = TextOverflowModes.Ellipsis;
         view.nameLabel.raycastTarget = false;
 
+        // Right-aligned at the end of the row, the way a fare or a platform
+        // number sits at the end of a station's line.
+        view.pointsLabel = UIFactory.Text("Points", rt, Secondary, ThemeRole.Accent,
+                                          TextAlignmentOptions.Right, null, FontStyles.Bold);
+        UIFactory.Corner(view.pointsLabel.rectTransform, new Vector2(0.5f, 0.5f),
+                         new Vector2(180f, 50f), new Vector2(350f, 0f));
+        view.pointsLabel.raycastTarget = false;
+
         view.distanceLabel = UIFactory.Text("Distance", rt, Caption, ThemeRole.TextMuted,
                                             TextAlignmentOptions.Left);
         UIFactory.Corner(view.distanceLabel.rectTransform, new Vector2(0.5f, 0.5f),

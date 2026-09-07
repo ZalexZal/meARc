@@ -156,7 +156,9 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
             TrailGraphNodeView node = Instantiate(nodePrefab, content);
             BuildingData captured = _ordered[i];
 
-            node.Bind(captured, i + 1, DiscoveryTracker.IsDiscovered(captured),
+            int at = i;
+
+            node.Bind(captured, i + 1, DiscoveryTracker.IsDiscovered(captured), Shut(at),
                       () => { if (onOpen != null) onOpen(captured); });
 
             RectTransform rt = (RectTransform)node.transform;
@@ -178,6 +180,26 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
 
         ApplyZoom();
         Paint();
+    }
+
+    /// <summary>
+    /// Whether this marker is one a guided trail has not opened yet.
+    ///
+    /// Guided trails run in order, so everything past the next one is shut. Every
+    /// other mode lets a walker take them in any order and never shuts anything -
+    /// a CTF board where half the markers are greyed out would be a bug, not a
+    /// rule.
+    /// </summary>
+    bool Shut(int index)
+    {
+        TrailService trails = TrailService.Instance;
+        TrailService.Trail trail = trails != null ? trails.Selected : null;
+
+        // Blank means a row written before the column existed, which the rest of
+        // the app treats as guided.
+        bool guided = trail == null || string.IsNullOrEmpty(trail.mode) || trail.mode == "guide";
+
+        return guided && index > FirstAhead();
     }
 
     /// <summary>
@@ -298,7 +320,7 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
 
             BuildingData captured = _ordered[i];
 
-            _nodes[i].Bind(captured, i + 1, DiscoveryTracker.IsDiscovered(captured),
+            _nodes[i].Bind(captured, i + 1, DiscoveryTracker.IsDiscovered(captured), Shut(i),
                            () => { if (onOpen != null) onOpen(captured); });
         }
     }

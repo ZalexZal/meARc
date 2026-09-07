@@ -28,6 +28,11 @@ public class TrailGraphNodeView : MonoBehaviour
     public TextMeshProUGUI nameLabel;
     public TextMeshProUGUI distanceLabel;
 
+    [Tooltip("Points already scored here. Blank until something has been - a " +
+             "line that says what every marker is worth before the walk is a " +
+             "list of which ones to bother with.")]
+    public TextMeshProUGUI pointsLabel;
+
     Action _onClick;
 
     void Awake()
@@ -44,24 +49,67 @@ public class TrailGraphNodeView : MonoBehaviour
 
     public void Bind(BuildingData data, int number, bool found, Action onClick)
     {
+        Bind(data, number, found, false, onClick);
+    }
+
+    /// <summary>
+    /// <paramref name="shut"/> is a guided trail's doing: its markers run in
+    /// order, so the ones past the next are drawn closed and say so. A trail
+    /// where any marker can be taken at any time never passes true.
+    /// </summary>
+    public void Bind(BuildingData data, int number, bool found, bool shut, Action onClick)
+    {
         _onClick = onClick;
+
+        if (button != null)
+            button.interactable = !shut;
 
         if (numberLabel != null)
             numberLabel.text = number.ToString();
 
         if (nameLabel != null)
+        {
             nameLabel.text = data != null ? data.DisplayName : string.Empty;
+
+            // A closed marker keeps its name and loses its weight, so the line
+            // still reads as a plan of the walk rather than a row of gaps.
+            nameLabel.color = ThemeManager.Get(shut
+                ? ThemeRole.TextMuted
+                : ThemeRole.TextPrimary);
+        }
+
+        if (pointsLabel != null)
+        {
+            MarkerTaskService tasks = MarkerTaskService.Instance;
+            MarkerTaskService.MarkerProgress got = tasks != null && data != null
+                ? tasks.Progress(data.buildingId)
+                : null;
+
+            // Only what was actually scored. Nothing on a marker not yet
+            // answered, and nothing on one skipped, which earns nothing.
+            bool scored = got != null && got.solved && !got.skipped && got.points > 0;
+
+            pointsLabel.gameObject.SetActive(scored);
+
+            if (scored)
+                pointsLabel.text = string.Format(AppStrings.Get("graph.scored"), got.points);
+        }
 
         if (distanceLabel != null)
         {
             // Hidden rather than zero when there is no fix. A graph that claims
             // every marker is nought metres away indoors reads as broken.
+            //
+            // A closed marker says why instead of how far: on a guided trail the
+            // distance to something you cannot open yet is not the useful fact.
             UserLocationService here = UserLocationService.Instance;
-            bool known = here != null && here.HasValidPose && data != null;
+            bool known = !shut && here != null && here.HasValidPose && data != null;
 
-            distanceLabel.gameObject.SetActive(known);
+            distanceLabel.gameObject.SetActive(known || shut);
 
-            if (known)
+            if (shut)
+                distanceLabel.text = AppStrings.Get("graph.shut");
+            else if (known)
                 distanceLabel.text = AppStrings.FormatDistance(here.DistanceMetresTo(data));
         }
 
@@ -76,7 +124,8 @@ public class TrailGraphNodeView : MonoBehaviour
             // picks whichever of black or white contrasts with the MARKER, so a
             // dark blue marker got a white ring and disappeared into a white
             // card. This way every node carries its colour whatever the theme.
-            fill.color = found ? colour : new Color(colour.r, colour.g, colour.b, 0.22f);
+            float weight = found ? 1f : shut ? 0.10f : 0.22f;
+            fill.color = new Color(colour.r, colour.g, colour.b, weight);
             fill.gameObject.SetActive(true);
         }
 
