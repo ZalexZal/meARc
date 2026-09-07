@@ -85,6 +85,12 @@ public class SearchTabController : MonoBehaviour
 
     void GoBack()
     {
+        // Found if it was never wired. This is the only way off this screen
+        // besides the nav bar, and a null reference here is a reader stuck on a
+        // list with no exit - which is worth one lookup to make impossible.
+        if (tabs == null)
+            tabs = FindAnyObjectByType<TabNavigationController>();
+
         if (tabs != null)
             tabs.ShowMap();
     }

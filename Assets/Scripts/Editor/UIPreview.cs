@@ -150,6 +150,19 @@ public static class UIPreview
         Shoot(canvas, rig, "05-marker-sheet" + t, "MapPanel", "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim");
         Shoot(canvas, rig, "06-tutorial" + t, "MapPanel", "Tutorial/Overlay");
         Shoot(canvas, rig, "07-toast" + t, "MapPanel", "ProximityToast/Safe/CardHolder");
+        // Told which state to be in first. Its copy is written by Show(), which
+        // only runs while the app does, so this shot had been three placeholders
+        // reading Title, Body and Label - and that is the screen somebody sees
+        // when nothing has loaded, which is exactly when copy matters most.
+        StateCardView state = canvas.transform.Find("MapPanel/Safe/StateCard")
+            ?.GetComponent<StateCardView>();
+
+        if (state != null)
+        {
+            state.radiusMetres = 500d;
+            state.Show(StateCardView.Kind.Empty);
+        }
+
         Shoot(canvas, rig, "08-state-card" + t, "MapPanel", "MapPanel/Safe/StateCard");
 
         // The map with the strip at the start of a trail, where the previous row

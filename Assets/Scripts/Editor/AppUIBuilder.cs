@@ -1212,6 +1212,11 @@ const float ReferenceWidth = 1080f;
         // First child, so anything the card puts inside it draws over the border
         // rather than under it.
         rt.SetAsFirstSibling();
+
+        // And never an item in its own card's stack. A card with a vertical
+        // layout on it was laying this out as a row, which drew an empty
+        // rounded box above the content of every card built this way.
+        Ignore(rt);
     }
 
     /// <summary>A coloured disc, or the ring that separates one from its background.</summary>

@@ -163,9 +163,15 @@ public class MapTabController : MonoBehaviour
         if (stateCard == null)
             return;
 
+        // Empty means there are no markers at all - not "none within the radius".
+        // Sending somebody to Browse from here handed them a second empty screen
+        // and called it browsing everything. What actually fixes it is joining a
+        // trail, so that is what the button does.
         if (stateCard.Current == StateCardView.Kind.Empty)
         {
-            OpenBrowse();
+            if (DoorFlow.Instance != null)
+                DoorFlow.Instance.OpenTrails();
+
             return;
         }
 
