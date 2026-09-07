@@ -238,7 +238,12 @@ public static class UIPreview
         Pieces.Page(canvas.transform, Pieces.Which.Audio);
         Shoot(canvas, rig, "19-audio" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
 
+        // Asked, not yet answered. The shots run once per theme in one scene, so
+        // without this the second pass photographed the question with the last
+        // pass's "Correct" bubble still under it - a screenshot of a state that
+        // does not exist.
         Pieces.Page(canvas.transform, Pieces.Which.Question);
+        Pieces.ClearVerdict(canvas.transform);
         Shoot(canvas, rig, "20-question" + t, "MapPanel", SheetPath, "InfoSheet/InfoScrim");
 
         // The four endings a creator can choose between, and the one they cannot:
@@ -1103,6 +1108,17 @@ public static class UIPreview
         /// <summary>
         /// One of the endings, drawn as the server would have left it.
         /// </summary>
+        /// <summary>Takes the answer bubble away, so a question can be shown unasked.</summary>
+        public static void ClearVerdict(Transform root)
+        {
+            Page(root, Which.Question);
+
+            MarkerQuestionView view = _controller != null ? _controller.question : null;
+
+            if (view != null)
+                Show(view.bubbleHolder, false);
+        }
+
         public static void Verdict(Transform root, Ending ending)
         {
             Page(root, Which.Question);
