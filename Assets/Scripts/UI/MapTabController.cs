@@ -256,7 +256,19 @@ public class MapTabController : MonoBehaviour
 
         if (BuildingDatabase.LoadState == BuildingDatabase.State.Ready)
         {
-            stateCard.Show(StateCardView.Kind.Empty);
+            // AllBuildings holds what markers_near returned, so an empty list
+            // means "none within the radius" and not "none exist". Which of the
+            // two it is depends on whether a trail is open at all: without one
+            // there is nothing to be near, and with one the markers are simply
+            // somewhere else and the walker needs telling that, not offered a
+            // trail list they have already used.
+            TrailService trails = TrailService.Instance;
+            bool onATrail = trails != null && !string.IsNullOrEmpty(trails.SelectedId);
+
+            stateCard.Show(onATrail
+                ? StateCardView.Kind.FarAway
+                : StateCardView.Kind.Empty);
+
             return;
         }
 

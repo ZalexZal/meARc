@@ -19,8 +19,15 @@ public class StateCardView : MonoBehaviour
     {
         Hidden,
 
-        /// <summary>Position and markers are both fine; nothing is near.</summary>
+        /// <summary>No trail joined, so there is nothing to be near.</summary>
         Empty,
+
+        /// <summary>
+        /// On a trail, standing away from it. Not the same thing as Empty at all:
+        /// the markers exist, they are simply somewhere else, and offering to open
+        /// a trail list to somebody who has already opened one is no help.
+        /// </summary>
+        FarAway,
 
         /// <summary>Still waiting for a first fix.</summary>
         Locating,
@@ -138,6 +145,17 @@ public class StateCardView : MonoBehaviour
                 glyph = offlineIcon;
                 break;
 
+            case Kind.FarAway:
+                title = "state.far.title";
+                body = "state.far.body";
+                // Nothing to press. The card below already points at the next
+                // marker, and a button here would be a second thing to read
+                // before doing the one thing that helps: walking.
+                action = null;
+                tint = ThemeRole.TextMuted;
+                glyph = emptyIcon;
+                break;
+
             default:
                 title = "state.empty.title";
                 body = "state.empty.body";
@@ -156,7 +174,7 @@ public class StateCardView : MonoBehaviour
 
             // The empty state names the radius it actually searched, so "nothing
             // here" is a fact the reader can check rather than a shrug.
-            bodyText.text = _kind == Kind.Empty
+            bodyText.text = _kind == Kind.FarAway
                 ? string.Format(text, AppStrings.FormatDistance(radiusMetres))
                 : text;
         }
