@@ -209,6 +209,11 @@ public static class UIPreview
 
         // The team card as somebody sees it before they have a team, which is
         // the state every walker starts in.
+        // Filled by hand. TeamDoorView draws itself from TeamService, which only
+        // exists while the app runs, so without this the card is photographed
+        // showing both of its states at once and none of its numbers.
+        TeamFixture(canvas.transform);
+
         Shoot(canvas, rig, "26-team" + t, "MapPanel", "Doors/Backdrop", "Doors/Team");
 
         // The two states of the list that are not a list. The third, waiting, is
@@ -840,6 +845,90 @@ public static class UIPreview
         }
 
         BuildingDatabase.SetBuildings(made);
+    }
+
+    /// <summary>
+    /// A team on a board, written straight onto the card.
+    ///
+    /// Four names, six teams ranked, and this one lying third - the state worth
+    /// looking at, because a card that only ever shows the winner hides what
+    /// second and third look like.
+    ///
+    /// The component is switched off at the end. Shoot re-enables the door, and
+    /// on a build where TeamDoorView runs in the editor its Refresh would find no
+    /// TeamService and blank everything written here.
+    /// </summary>
+    static void TeamFixture(Transform root)
+    {
+        TeamDoorView view = root.GetComponentInChildren<TeamDoorView>(true);
+
+        if (view == null)
+        {
+            Debug.LogWarning("[Preview] No team card to fill.");
+            return;
+        }
+
+        view.enabled = true;
+
+        if (view.noTeamGroup != null) view.noTeamGroup.SetActive(false);
+        if (view.teamGroup != null) view.teamGroup.SetActive(true);
+        if (view.boardEmpty != null) view.boardEmpty.SetActive(false);
+
+        if (view.teamName != null) view.teamName.text = "Северняците";
+        if (view.teamMeta != null) view.teamMeta.text = "5 стъпки · 210 точки";
+        if (view.inviteCode != null) view.inviteCode.text = "MKRA3C";
+        if (view.capacityLabel != null) view.capacityLabel.text = "4 от 6 души";
+
+        string[] members = { "Мира  (ти)", "Тодор", "Ели", "Крис" };
+
+        for (int i = 0; i < view.memberRows.Length; i++)
+        {
+            if (view.memberRows[i] == null) continue;
+
+            view.memberRows[i].gameObject.SetActive(i < members.Length);
+
+            if (i < members.Length)
+                view.memberRows[i].text = members[i];
+        }
+
+        string[] teams =
+        {
+            "Пътеводителите", "Бързите",
+            "Северняците", "Лъвовете",
+            "Осмокласниците", "Приятелите"
+        };
+
+        int[] score = { 320, 265, 210, 180, 95, 40 };
+
+        for (int i = 0; i < view.boardRows.Length; i++)
+        {
+            if (view.boardRows[i] == null) continue;
+
+            bool used = i < teams.Length;
+            view.boardRows[i].gameObject.SetActive(used);
+
+            if (!used) continue;
+
+            if (view.boardRank[i] != null) view.boardRank[i].text = (i + 1).ToString();
+            if (view.boardName[i] != null) view.boardName[i].text = teams[i];
+            if (view.boardPoints[i] != null) view.boardPoints[i].text = score[i].ToString();
+
+            // Third is ours, so the wash has somewhere to be.
+            if (view.boardHighlight[i] != null)
+            {
+                view.boardHighlight[i].gameObject.SetActive(i == 2);
+
+                Color accent = ThemeManager.Get(ThemeRole.Accent);
+                accent.a = 0.14f;
+                view.boardHighlight[i].color = accent;
+            }
+        }
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)view.transform);
+
+        // Nothing may repaint over this before the shutter.
+        view.enabled = false;
     }
 
     /// <summary>
