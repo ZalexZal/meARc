@@ -2383,6 +2383,29 @@ const float ReferenceWidth = 1080f;
         UIFactory.Stretch(graphEmptyText.rectTransform);
         graphEmptyText.textWrappingMode = TextWrappingModes.Normal;
 
+        // The walker's own place on the line, between the last stop found and the
+        // one ahead. Built here rather than in the node prefab because it is not
+        // a stop: it moves as the walk does, and nothing about it is tappable.
+        RectTransform here = UIFactory.Rect("Here", pannable);
+        here.anchorMin = here.anchorMax = new Vector2(0.5f, 0.5f);
+        here.sizeDelta = new Vector2(560f, 60f);
+        graph.herePip = here;
+
+        // The pip is already put on the line by the view, so its own parts sit at
+        // its centre. Offsetting them again by the knob's distance pushed both
+        // off the left edge of the card.
+        RectTransform hereDot = UIFactory.Rect("Dot", here);
+        UIFactory.Corner(hereDot, new Vector2(0.5f, 0.5f), new Vector2(38f, 38f),
+                         Vector2.zero);
+        UIFactory.Fill(hereDot, ThemeRole.Accent, 1f, UIShape.Circle).raycastTarget = false;
+
+        graph.hereLabel = UIFactory.Text("Label", here, Caption, ThemeRole.Accent,
+                                         TextAlignmentOptions.Left, "strip.here",
+                                         FontStyles.Bold);
+        UIFactory.Corner(graph.hereLabel.rectTransform, new Vector2(0.5f, 0.5f),
+                         new Vector2(420f, 40f), new Vector2(240f, 0f));
+        graph.hereLabel.raycastTarget = false;
+
         // Back to seeing all of it, for anybody who has dragged themselves lost.
         RectTransform fit = UIFactory.Rect("Fit", graphCard);
         UIFactory.Corner(fit, new Vector2(1f, 0f), new Vector2(Tap, Tap),
@@ -3745,7 +3768,7 @@ const float ReferenceWidth = 1080f;
     {
         GameObject temp = new GameObject("TrailGraphNode", typeof(RectTransform));
         RectTransform rt = (RectTransform)temp.transform;
-        rt.sizeDelta = new Vector2(260f, 190f);
+        rt.sizeDelta = new Vector2(880f, 150f);
 
         TrailGraphNodeView view = temp.AddComponent<TrailGraphNodeView>();
 
@@ -3755,14 +3778,17 @@ const float ReferenceWidth = 1080f;
         // circle painted straight over it - which is exactly what happened: every
         // node came out as a flat disc of the ring's colour, dark for some markers
         // and white-on-white for others. Behind it, and larger, is a halo.
+        // The stop sits on the line, which runs through the middle of the row,
+        // and its name reads off to the right the way a station's does.
         RectTransform ring = UIFactory.Rect("Ring", rt);
-        UIFactory.Corner(ring, new Vector2(0.5f, 1f), new Vector2(102f, 102f),
-                         new Vector2(0f, 7f));
+        UIFactory.Corner(ring, new Vector2(0.5f, 0.5f), new Vector2(102f, 102f),
+                         new Vector2(-330f, 0f));
         view.ring = UIFactory.Plain(ring, Color.white, UIShape.Circle);
         view.ring.raycastTarget = false;
 
         RectTransform disc = UIFactory.Rect("Disc", rt);
-        UIFactory.Corner(disc, new Vector2(0.5f, 1f), new Vector2(88f, 88f), Vector2.zero);
+        UIFactory.Corner(disc, new Vector2(0.5f, 0.5f), new Vector2(88f, 88f),
+                         new Vector2(-330f, 0f));
         view.button = UIFactory.Button(disc, ThemeRole.Surface, 1f, UIShape.Circle);
         view.disc = disc.GetComponent<Image>();
 
@@ -3776,18 +3802,18 @@ const float ReferenceWidth = 1080f;
                                           TextAlignmentOptions.Center, null, FontStyles.Bold);
         UIFactory.Stretch(view.numberLabel.rectTransform);
 
-        view.nameLabel = UIFactory.Text("Name", rt, Caption, ThemeRole.TextPrimary,
-                                        TextAlignmentOptions.Top, null, FontStyles.Bold);
-        UIFactory.Corner(view.nameLabel.rectTransform, new Vector2(0.5f, 1f),
-                         new Vector2(260f, 60f), new Vector2(0f, -96f));
+        view.nameLabel = UIFactory.Text("Name", rt, Body, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Corner(view.nameLabel.rectTransform, new Vector2(0.5f, 0.5f),
+                         new Vector2(500f, 52f), new Vector2(-10f, 20f));
         view.nameLabel.textWrappingMode = TextWrappingModes.Normal;
         view.nameLabel.overflowMode = TextOverflowModes.Ellipsis;
         view.nameLabel.raycastTarget = false;
 
         view.distanceLabel = UIFactory.Text("Distance", rt, Caption, ThemeRole.TextMuted,
-                                            TextAlignmentOptions.Top);
-        UIFactory.Corner(view.distanceLabel.rectTransform, new Vector2(0.5f, 1f),
-                         new Vector2(260f, 36f), new Vector2(0f, -158f));
+                                            TextAlignmentOptions.Left);
+        UIFactory.Corner(view.distanceLabel.rectTransform, new Vector2(0.5f, 0.5f),
+                         new Vector2(500f, 38f), new Vector2(-10f, -24f));
         view.distanceLabel.raycastTarget = false;
 
         GameObject saved = PrefabUtility.SaveAsPrefabAsset(temp, GraphNodePrefabPath);

@@ -5,24 +5,32 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
-/// The trail as a picture you can move around in.
+/// The trail as a station map.
 ///
-/// The nodes are not laid out by a force between them. A trail is a sequence -
-/// marker one joins two joins three and nothing else - so a force-directed
-/// layout would spend its effort destroying the one relationship the data has,
-/// and hand back a wiggly line with the numbers in the wrong places. They sit on
-/// their real coordinates instead, projected flat, which means the shape on
-/// screen is the shape of the walk: a loop looks like a loop, and a straight
-/// street looks like a straight street.
+/// A metro map throws the real geography away on purpose. What a passenger needs
+/// is the order, which stop is next, and where they are along the line - and a
+/// schematic gives all three at a glance, where a picture drawn to scale gives
+/// none of them and puts two stops on top of each other whenever the walk
+/// doubles back.
 ///
-/// Drag to move, pinch to zoom, and it fits itself to the trail whenever it
-/// opens. The fit matters more than the gestures - most people will look at it
-/// and never touch it, and what they should see is the whole walk.
+/// So: one line, the markers evenly spaced along it in trail order, and a mark
+/// between the last one found and the one ahead saying you are here. Drag to
+/// move along it. The map screen holds the geography; this holds the sequence.
 /// </summary>
 public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
 {
-    /// <summary>Metres per degree of latitude. Good enough for a town.</summary>
-    const double MetresPerDegree = 111320d;
+    /// <summary>Distance between one stop and the next, down the line.</summary>
+    const float Spacing = 190f;
+
+    /// <summary>
+    /// How far the stop's disc sits left of its row's centre.
+    ///
+    /// The row is disc-then-name, so its middle is somewhere in the name. The
+    /// line has to run through the discs, so the places are the discs and the
+    /// rows are hung off them - not the other way round, which drew the line
+    /// straight down the middle of the text.
+    /// </summary>
+    const float KnobOffsetX = -330f;
 
     [Header("Parts")]
     [Tooltip("The window. Clips, and receives the drag.")]
@@ -35,6 +43,13 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
 
     [Header("Empty")]
     public GameObject emptyGroup;
+
+    [Header("You are here")]
+    [Tooltip("The mark on the line between the last stop found and the one " +
+             "ahead. Telling you which way you are facing along the line is a " +
+             "station map's whole job.")]
+    public RectTransform herePip;
+    public TMPro.TextMeshProUGUI hereLabel;
 
     [Header("Feel")]
     [Tooltip("Screen pixels per metre at the fitted zoom is worked out; this is " +
@@ -120,48 +135,21 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
         if (!any || nodePrefab == null || content == null)
             return;
 
-        // --- where each one sits, in metres from the middle of the trail
-        double minLat = double.MaxValue, maxLat = double.MinValue;
-        double minLng = double.MaxValue, maxLng = double.MinValue;
-
-        for (int i = 0; i < _ordered.Count; i++)
-        {
-            minLat = Math.Min(minLat, _ordered[i].latitude);
-            maxLat = Math.Max(maxLat, _ordered[i].latitude);
-            minLng = Math.Min(minLng, _ordered[i].longitude);
-            maxLng = Math.Max(maxLng, _ordered[i].longitude);
-        }
-
-        double centreLat = (minLat + maxLat) * 0.5d;
-        double centreLng = (minLng + maxLng) * 0.5d;
-
-        // Longitude degrees shrink towards the poles. Without this a trail in
-        // Bulgaria comes out stretched sideways by about a quarter.
-        double lngScale = Math.Cos(centreLat * Math.PI / 180d);
-
+        // --- evenly down the line, oldest at the top
         _places = new Vector2[_ordered.Count];
-        Vector2[] places = _places;
-        float spanX = 0f, spanY = 0f;
 
+        float run = (_ordered.Count - 1) * Spacing;
+
+        // The line runs down the left of the card so the names have the width to
+        // the right of it, the way a station's name reads off its stop.
         for (int i = 0; i < _ordered.Count; i++)
-        {
-            places[i] = new Vector2(
-                (float)((_ordered[i].longitude - centreLng) * lngScale * MetresPerDegree),
-                (float)((_ordered[i].latitude - centreLat) * MetresPerDegree));
+            _places[i] = new Vector2(KnobOffsetX, run * 0.5f - i * Spacing);
 
-            spanX = Mathf.Max(spanX, Mathf.Abs(places[i].x) * 2f);
-            spanY = Mathf.Max(spanY, Mathf.Abs(places[i].y) * 2f);
-        }
-
-        // A trail of one, or several markers on the same doorstep, would divide
-        // by nothing. Twenty metres is an arbitrary floor that keeps the fit sane.
-        spanX = Mathf.Max(spanX, 20f);
-        spanY = Mathf.Max(spanY, 20f);
-
-        Rect window = viewport != null ? viewport.rect : new Rect(0f, 0f, 900f, 900f);
-
-        _fitted = Mathf.Min(window.width / spanX, window.height / spanY) * fitMargin;
-        _zoom = _fitted;
+        // Nothing to fit: the spacing is fixed and the line is scrolled rather
+        // than scaled. Zoom stays at one so a stop is always the same size,
+        // which is the whole point of a schematic.
+        _fitted = 1f;
+        _zoom = 1f;
 
         for (int i = 0; i < _ordered.Count; i++)
         {
@@ -182,9 +170,57 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
         for (int i = 1; i < _ordered.Count; i++)
             _edges.Add(MakeEdge());
 
-        content.anchoredPosition = Vector2.zero;
+        PlaceHere();
+
+        // Opened at the walker rather than at the beginning. On a trail half
+        // walked, the top of the line is the part they no longer need.
+        content.anchoredPosition = OpenedAt();
+
         ApplyZoom();
         Paint();
+    }
+
+    /// <summary>
+    /// Puts the "you are here" mark on the line.
+    ///
+    /// Halfway between the last stop found and the one ahead, because that is
+    /// where somebody walking actually is - and above the first stop before
+    /// anything has been found, since the walk has not started.
+    /// </summary>
+    void PlaceHere()
+    {
+        if (herePip == null)
+            return;
+
+        bool any = _places.Length > 0;
+        herePip.gameObject.SetActive(any);
+
+        if (!any)
+            return;
+
+        if (hereLabel != null)
+            hereLabel.text = AppStrings.Get("strip.here");
+
+        int ahead = FirstAhead();
+
+        herePip.anchoredPosition = ahead > 0
+            ? (_places[ahead - 1] + _places[ahead]) * 0.5f
+            : _places[0] + new Vector2(0f, Spacing * 0.5f);
+    }
+
+    /// <summary>
+    /// The first marker not yet found, which is where "you are here" goes and
+    /// what the line opens at. The end of the line once everything is found.
+    /// </summary>
+    int FirstAhead()
+    {
+        for (int i = 0; i < _ordered.Count; i++)
+        {
+            if (!DiscoveryTracker.IsDiscovered(_ordered[i]))
+                return i;
+        }
+
+        return Mathf.Max(0, _ordered.Count - 1);
     }
 
     RectTransform MakeEdge()
@@ -290,48 +326,15 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
         content.anchoredPosition = _grabbed;
     }
 
-    void Update()
-    {
-        // Two fingers, and only while this screen is the one being touched.
-        if (Input.touchCount != 2 || content == null)
-        {
-            _pinchStart = 0f;
-            return;
-        }
-
-        Touch a = Input.GetTouch(0);
-        Touch b = Input.GetTouch(1);
-        float gap = Vector2.Distance(a.position, b.position);
-
-        if (_pinchStart <= 0f)
-        {
-            _pinchStart = gap;
-            _zoomAtPinchStart = _zoom;
-            return;
-        }
-
-        if (_pinchStart > 1f)
-        {
-            _zoom = Mathf.Clamp(_zoomAtPinchStart * (gap / _pinchStart),
-                                _fitted * minZoom, _fitted * maxZoom);
-            ApplyZoom();
-        }
-    }
-
-    /// <summary>
-    /// Zoom spreads the markers out; it does not scale them.
-    ///
-    /// Scaling the whole picture is one line and is wrong here: a trail across a
-    /// town fits at about a third, and a third of this type is unreadable. The
-    /// discs and their names stay the size a thumb and an eye need, and the
-    /// distances between them are what changes.
-    /// </summary>
     void ApplyZoom()
     {
         for (int i = 0; i < _nodes.Count && i < _places.Length; i++)
         {
             if (_nodes[i] != null)
-                ((RectTransform)_nodes[i].transform).anchoredPosition = _places[i] * _zoom;
+            {
+                ((RectTransform)_nodes[i].transform).anchoredPosition =
+                    _places[i] - new Vector2(KnobOffsetX, 0f);
+            }
         }
 
         for (int i = 0; i < _edges.Count; i++)
@@ -339,25 +342,40 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
             if (_edges[i] == null || i + 1 >= _places.Length)
                 continue;
 
-            Vector2 from = _places[i] * _zoom;
-            Vector2 to = _places[i + 1] * _zoom;
+            Vector2 from = _places[i];
+            Vector2 to = _places[i + 1];
             Vector2 along = to - from;
 
             _edges[i].anchoredPosition = (from + to) * 0.5f;
-            _edges[i].sizeDelta = new Vector2(along.magnitude, 3f);
+            _edges[i].sizeDelta = new Vector2(along.magnitude, 7f);
             _edges[i].localRotation =
                 Quaternion.Euler(0f, 0f, Mathf.Atan2(along.y, along.x) * Mathf.Rad2Deg);
         }
     }
 
-    /// <summary>Back to seeing the whole walk. Wired to a button.</summary>
+    /// <summary>Back to where the walker is on the line. Wired to a button.</summary>
     public void Fit()
     {
-        _zoom = _fitted;
+        if (content != null && _places.Length > 0)
+            content.anchoredPosition = OpenedAt();
+    }
 
-        if (content != null)
-            content.anchoredPosition = Vector2.zero;
+    /// <summary>
+    /// Where the line sits when it opens, and where Fit puts it back.
+    ///
+    /// The stop goes a third of the way down rather than in the middle: what
+    /// somebody wants to see is the one ahead and the two after it, and centring
+    /// it spends half the card on the walk already done.
+    /// </summary>
+    Vector2 OpenedAt()
+    {
+        if (_places.Length == 0)
+            return Vector2.zero;
 
-        ApplyZoom();
+        float height = viewport != null ? viewport.rect.height : 900f;
+
+        // Plus, not minus. Raising content.y lifts the line, which brings the
+        // stop UP the card; subtracting pushed it to the bottom edge.
+        return new Vector2(0f, -_places[FirstAhead()].y + height * 0.30f);
     }
 }
