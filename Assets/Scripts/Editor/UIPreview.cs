@@ -186,6 +186,12 @@ public static class UIPreview
 
         Shoot(canvas, rig, "08-state-card" + t, "MapPanel", "MapPanel/Safe/StateCard");
 
+        // Put it away again. The shots run once per theme in one scene, so a
+        // card left showing leaked into the next pass's map, camera and toast -
+        // three screenshots of screens that were not in that state.
+        if (state != null)
+            state.Hide();
+
         // The map with the strip at the start of a trail, where the previous row
         // is switched off and the card is at its shortest.
         Pieces.Strip(canvas.transform, "Start");

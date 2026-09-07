@@ -47,6 +47,26 @@ public class TrailService : MonoBehaviour
         return mode == "ctf" || mode == "freefall";
     }
 
+    /// <summary>
+    /// Ordered trails are walked marker after marker: ctf and guide. The other
+    /// two are markers scattered with no sequence between them. Mirrors
+    /// mode_is_ordered, which is where the rule is actually enforced.
+    /// </summary>
+    public static bool IsOrdered(string mode)
+    {
+        return string.IsNullOrEmpty(mode) || mode == "ctf" || mode == "guide";
+    }
+
+    /// <summary>Whether the trail being walked runs in order.</summary>
+    public bool SelectedIsOrdered
+    {
+        get
+        {
+            Trail trail = Selected;
+            return trail == null || IsOrdered(trail.mode);
+        }
+    }
+
     /// <summary>Whether the trail being walked keeps a score.</summary>
     public bool SelectedIsGame
     {

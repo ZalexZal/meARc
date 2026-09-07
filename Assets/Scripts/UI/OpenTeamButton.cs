@@ -12,13 +12,38 @@ public class OpenTeamButton : MonoBehaviour
 {
     public Button button;
 
+    [Tooltip("Hidden on a walk. Shown, it offers a screen the server will " +
+             "refuse - a guide has no teams at all.")]
+    public GameObject holder;
+
     void OnEnable()
     {
+        TrailService.OnTrailsChanged += Apply;
+        Apply();
+
         if (button == null)
             return;
 
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(Open);
+    }
+
+    void OnDisable()
+    {
+        TrailService.OnTrailsChanged -= Apply;
+    }
+
+    /// <summary>
+    /// A walk has no teams. Offering the button anyway is offering a door into a
+    /// room that does not exist: create_team refuses on a guide, so the only
+    /// thing behind it would be an error.
+    /// </summary>
+    void Apply()
+    {
+        GameObject target = holder != null ? holder : gameObject;
+        TrailService trails = TrailService.Instance;
+
+        target.SetActive(trails != null && trails.SelectedIsGame);
     }
 
     void Open()

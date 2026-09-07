@@ -85,7 +85,13 @@ public class DiscoveryProgressCard : MonoBehaviour
     {
         TeamService teams = TeamService.Instance;
         TeamService.Detail team = teams != null ? teams.Team : null;
-        bool onTeam = team != null && team.on_team;
+        TrailService trails = TrailService.Instance;
+
+        // A walk scores nothing, and ensure_team still makes a silent team of
+        // one to hang progress on - so without the mode test this card would
+        // show a guide's walker a rank and a total of zero, both meaningless.
+        bool scored = trails != null && trails.SelectedIsGame;
+        bool onTeam = scored && team != null && team.on_team;
 
         if (statsRow != null)
             statsRow.SetActive(onTeam);

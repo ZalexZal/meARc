@@ -192,14 +192,12 @@ public class TrailGraphView : MonoBehaviour, IBeginDragHandler, IDragHandler
     /// </summary>
     bool Shut(int index)
     {
+        // ctf and guide, not guide alone. A competition runs in order too, and
+        // was the one mode drawing its markers as open while the server refused
+        // to score them out of order.
         TrailService trails = TrailService.Instance;
-        TrailService.Trail trail = trails != null ? trails.Selected : null;
 
-        // Blank means a row written before the column existed, which the rest of
-        // the app treats as guided.
-        bool guided = trail == null || string.IsNullOrEmpty(trail.mode) || trail.mode == "guide";
-
-        return guided && index > FirstAhead();
+        return (trails == null || trails.SelectedIsOrdered) && index > FirstAhead();
     }
 
     /// <summary>

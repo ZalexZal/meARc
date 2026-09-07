@@ -1144,8 +1144,13 @@ const float ReferenceWidth = 1080f;
         // Wired at runtime, not here: the doors are built after the map, so
         // there is no DoorFlow to point at yet. TrailChipView solves the same
         // problem the same way.
-        OpenTeamButton opener = team.gameObject.AddComponent<OpenTeamButton>();
+        // The component goes on the row, not on the button it hides. A component
+        // that deactivates its own GameObject never reaches OnEnable again, so it
+        // could hide the Team button on a walk and never bring it back for a
+        // game. The row stays alive; the button is what disappears.
+        OpenTeamButton opener = dockRow.gameObject.AddComponent<OpenTeamButton>();
         opener.button = teamButton;
+        opener.holder = team.gameObject;
 
         RectTransform teamRow = UIFactory.Rect("Row", team);
         UIFactory.Stretch(teamRow);
