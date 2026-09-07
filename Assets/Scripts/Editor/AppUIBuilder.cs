@@ -4424,10 +4424,12 @@ const float ReferenceWidth = 1080f;
         // Everything below the heading scrolls. The head and the footer are
         // pinned, so Close is always reachable - a card whose only way out has
         // scrolled off the bottom is a trap.
+        // Nearly the whole screen. This is the card ten people crowd around, and
+        // a board that has to be scrolled to be read is a board nobody reads.
         RectTransform body = UIFactory.Rect("Body", card);
         LayoutElement bodySize = UIFactory.Size(body.gameObject, 260f);
         bodySize.flexibleHeight = 1f;
-        bodySize.preferredHeight = 900f;
+        bodySize.preferredHeight = 1500f;
 
         RectTransform scroll = UIFactory.ScrollList("Scroll", body, 16f);
 
@@ -4460,30 +4462,19 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(mine, 12f);
         view.teamGroup = mine.gameObject;
 
-        view.teamName = UIFactory.Text("Name", mine, Title, ThemeRole.TextPrimary,
-                                       TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(view.teamName.gameObject, 60f);
-
-        view.teamMeta = UIFactory.Text("Meta", mine, Caption, ThemeRole.TextMuted,
-                                       TextAlignmentOptions.Left);
-        UIFactory.Size(view.teamMeta.gameObject, 40f);
-
-        for (int i = 0; i < TeamDoorView.MaxMembers; i++)
-        {
-            view.memberRows[i] = UIFactory.Text("Member" + i, mine, Body,
-                                                ThemeRole.TextPrimary,
-                                                TextAlignmentOptions.Left);
-            UIFactory.Size(view.memberRows[i].gameObject, 52f);
-            view.memberRows[i].gameObject.SetActive(false);
-        }
-
+        // The code first, and large.
+        //
+        // It is the thing somebody reads out across a room while three people
+        // type it, so it goes above everything except the heading and it is set
+        // at display size. It used to sit under the member list, which is the
+        // one part of this card nobody reads aloud.
         UIFactory.Text("InviteLabel", mine, Caption, ThemeRole.TextMuted,
                        TextAlignmentOptions.Left, "team.invite");
 
-        view.inviteCode = UIFactory.Text("Invite", mine, Title, ThemeRole.Accent,
+        view.inviteCode = UIFactory.Text("Invite", mine, Display, ThemeRole.Accent,
                                          TextAlignmentOptions.Left, null, FontStyles.Bold);
-        view.inviteCode.characterSpacing = 10f;
-        UIFactory.Size(view.inviteCode.gameObject, 64f);
+        view.inviteCode.characterSpacing = 14f;
+        UIFactory.Size(view.inviteCode.gameObject, 92f);
 
         // Said plainly, because this is the code people confuse with the trail's
         // and then wonder why nobody can join them.
@@ -4493,9 +4484,6 @@ const float ReferenceWidth = 1080f;
                                                     "team.inviteHint");
         inviteHint.textWrappingMode = TextWrappingModes.Normal;
         UIFactory.Size(inviteHint.gameObject, 68f);
-
-        view.leaveButton = FullWidthButton(mine, "Leave", "team.leave",
-                                           ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
 
         // ------------------------------------------------------ the board
         RectTransform board = UIFactory.Rect("Board", scroll);
@@ -4561,6 +4549,34 @@ const float ReferenceWidth = 1080f;
             view.boardRows[i] = row;
             row.gameObject.SetActive(false);
         }
+
+        // --------------------------------------- who is on it, and the way out
+        //
+        // Under the board rather than over it. A team looks at its own name once
+        // and at the standings all afternoon.
+        RectTransform who = UIFactory.Rect("Who", scroll);
+        UIFactory.VerticalStack(who, 10f);
+        view.teamGroupTail = who.gameObject;
+
+        view.teamName = UIFactory.Text("Name", who, Title, ThemeRole.TextPrimary,
+                                       TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.teamName.gameObject, 60f);
+
+        view.teamMeta = UIFactory.Text("Meta", who, Caption, ThemeRole.TextMuted,
+                                       TextAlignmentOptions.Left);
+        UIFactory.Size(view.teamMeta.gameObject, 40f);
+
+        for (int i = 0; i < TeamDoorView.MaxMembers; i++)
+        {
+            view.memberRows[i] = UIFactory.Text("Member" + i, who, Body,
+                                                ThemeRole.TextPrimary,
+                                                TextAlignmentOptions.Left);
+            UIFactory.Size(view.memberRows[i].gameObject, 52f);
+            view.memberRows[i].gameObject.SetActive(false);
+        }
+
+        view.leaveButton = FullWidthButton(who, "Leave", "team.leave",
+                                           ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
 
         // ---------------------------------------------------------- status
         view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,

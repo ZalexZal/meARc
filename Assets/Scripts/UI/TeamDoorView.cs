@@ -38,6 +38,10 @@ public class TeamDoorView : MonoBehaviour
 
     [Header("On a team")]
     public GameObject teamGroup;
+
+    [Tooltip("The half that sits under the board - the team's own name, who is " +
+             "on it, and Leave. Shown and hidden with teamGroup.")]
+    public GameObject teamGroupTail;
     public TextMeshProUGUI teamName;
     public TextMeshProUGUI teamMeta;
     public TextMeshProUGUI inviteCode;
@@ -177,6 +181,11 @@ public class TeamDoorView : MonoBehaviour
 
         if (teamGroup != null)
             teamGroup.SetActive(onTeam);
+
+        // The board sits between the two halves, so being on a team switches
+        // both of them rather than one block.
+        if (teamGroupTail != null)
+            teamGroupTail.SetActive(onTeam);
 
         if (onTeam)
         {
