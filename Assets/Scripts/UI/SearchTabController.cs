@@ -41,9 +41,14 @@ public class SearchTabController : MonoBehaviour
     public TMP_InputField searchField;
     public TextMeshProUGUI searchPlaceholder;
 
-    [Header("Filters - always visible")]
+    [Header("Filters - shown only when they have something in them")]
+    [Tooltip("The whole section, heading included. A heading with no pills under " +
+             "it is a promise the screen does not keep.")]
+    public GameObject eraSection;
     public TextMeshProUGUI eraLabel;
     public RectTransform eraPillParent;
+
+    public GameObject typeSection;
     public TextMeshProUGUI typeLabel;
     public RectTransform typePillParent;
 
@@ -203,6 +208,15 @@ public class SearchTabController : MonoBehaviour
             _typePills.Add(pill);
             _typeOrder.Add(captured);
         }
+
+        // A trail whose stops carry no era and no kind - which is every trail
+        // built in the web builder, since neither field is offered there - was
+        // showing two headings with nothing underneath them.
+        if (eraSection != null)
+            eraSection.SetActive(_eraPills.Count > 0);
+
+        if (typeSection != null)
+            typeSection.SetActive(_typePills.Count > 0);
     }
 
     /// <summary>Tapping a pill that is already on turns it off.</summary>

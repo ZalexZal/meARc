@@ -2301,8 +2301,12 @@ const float ReferenceWidth = 1080f;
         // Back first. Browse has no tab of its own, so without this the only way out
         // is the nav bar - and a screen whose exit is somewhere else is a trap.
         RectTransform back = UIFactory.Rect("BackButton", rt);
-        UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(300f, Tap), Vector2.zero);
-        controller.backButton = UIFactory.Button(back, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+        UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(280f, Tap), Vector2.zero);
+
+        // Transparent, with an edge. A filled slab in the top corner is the
+        // heaviest thing on a screen whose job is to list other things.
+        controller.backButton = UIFactory.Button(back, ThemeRole.Surface, 0f, UIShape.Pill);
+        Outline(back);
         controller.backLabel = UIFactory.Text("Label", back, Secondary, ThemeRole.TextPrimary,
                                               TextAlignmentOptions.Center, "map.backToMap",
                                               FontStyles.Bold);
@@ -2342,15 +2346,29 @@ const float ReferenceWidth = 1080f;
         body.offsetMax = new Vector2(0f, -(Tap * 2f + 40f));
         RectTransform content = UIFactory.ScrollList("Scroll", body, 28f);
 
+        // The summary first. It is the answer to "how am I doing", which is the
+        // question somebody opens this screen with - and it was under two filter
+        // headings and a list, where it read as a footnote.
+        controller.progressCard = BuildProgressCard(content);
+        controller.discoverySection = controller.progressCard.gameObject;
+
         RectTransform eras = UIFactory.Rect("EraSection", content);
         UIFactory.VerticalStack(eras, 14f, false);
+        controller.eraSection = eras.gameObject;
         controller.eraLabel = SectionLabel(eras, "search.byEra");
         controller.eraPillParent = PillRow(eras);
 
+        // Off until BuildPills has something to put in them. On for one frame
+        // is still a heading over nothing, and the first frame of a screen is
+        // the one somebody judges it by.
+        eras.gameObject.SetActive(false);
+
         RectTransform types = UIFactory.Rect("TypeSection", content);
         UIFactory.VerticalStack(types, 14f, false);
+        controller.typeSection = types.gameObject;
         controller.typeLabel = SectionLabel(types, "search.byType");
         controller.typePillParent = PillRow(types);
+        types.gameObject.SetActive(false);
 
         RectTransform closest = UIFactory.Rect("ClosestSection", content);
         UIFactory.VerticalStack(closest, 14f, false);
@@ -2361,8 +2379,9 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(closestList, 0f, false);
         controller.closestParent = closestList;
 
-        controller.progressCard = BuildProgressCard(content);
-        controller.discoverySection = controller.progressCard.gameObject;
+        // Same reason as the other two: the controller hides it once it knows
+        // there is nothing near, and until then it is a heading over nothing.
+        closest.gameObject.SetActive(false);
 
         RectTransform results = UIFactory.Rect("ResultsSection", content);
         UIFactory.VerticalStack(results, 0f, false);
@@ -2542,31 +2561,49 @@ const float ReferenceWidth = 1080f;
         RectTransform card = UIFactory.Rect("DiscoveryCard", parent);
         UIFactory.Card(card, 32f, 16f);
 
-        TextMeshProUGUI count = UIFactory.Text("Count", card, 76f, ThemeRole.TextPrimary,
-                                               TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(count.gameObject, 92f);
+        // The number and what it counts, on one line. They were stacked with a
+        // twenty-pixel bar between them, so the figure read as a headline and the
+        // words under the bar read as a caption for the bar.
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.Size(head.gameObject, 88f);
+        HorizontalLayoutGroup headRow = UIFactory.HorizontalStack(head, 16f);
+        headRow.childAlignment = TextAnchor.LowerLeft;
 
-        // A number, or a dash until there is one. Text() falls back to the object's
-        // name, so before the first count arrived this card announced "Count" in
+        TextMeshProUGUI count = UIFactory.Text("Count", head, Display, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.BottomLeft, null,
+                                               FontStyles.Bold);
+        // No fixed width: the label should sit against the number, not across a
+        // gap sized for the largest number this card will ever hold.
+        LayoutElement countSize = UIFactory.Size(count.gameObject, 88f);
+        countSize.flexibleWidth = 0f;
+        count.enableAutoSizing = false;
+
+        // A dash until there is a number. Text() falls back to the object's name,
+        // so before the first count arrived this card announced "Count" in
         // seventy-six point type.
         count.text = "—";
 
+        TextMeshProUGUI label = UIFactory.Text("Label", head, Secondary, ThemeRole.TextMuted,
+                                               TextAlignmentOptions.BottomLeft,
+                                               "search.discovered");
+        UIFactory.Size(label.gameObject, 62f);
+        UIFactory.Flexible(label.gameObject);
+
+        // Ten, not twenty. At twenty it was a rounded slab the width of the card
+        // and read as a divider rather than as a measure of anything.
         RectTransform bar = UIFactory.Rect("Bar", card);
-        UIFactory.Size(bar.gameObject, 20f);
+        UIFactory.Size(bar.gameObject, 10f);
         UIFactory.Fill(bar, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
 
         RectTransform fill = UIFactory.Rect("Fill", bar);
         UIFactory.Stretch(fill);
         UIFactory.Fill(fill, ThemeRole.Accent, 1f, UIShape.Pill);
 
-        TextMeshProUGUI label = UIFactory.Text("Label", card, Secondary, ThemeRole.TextMuted,
-                                               TextAlignmentOptions.Left, "search.discovered");
-        UIFactory.Size(label.gameObject, 46f);
-
         TextMeshProUGUI note = UIFactory.Text("Note", card, Caption, ThemeRole.TextMuted,
                                               TextAlignmentOptions.TopLeft,
                                               "search.discoveredNote");
-        UIFactory.Size(note.gameObject, 72f);
+        note.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(note.gameObject, 104f);
 
         DiscoveryProgressCard component = card.gameObject.AddComponent<DiscoveryProgressCard>();
         component.noteText = note;
