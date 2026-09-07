@@ -1115,7 +1115,12 @@ const float ReferenceWidth = 1080f;
         // inches below it. Once a reader can hold more than one trail, the name of
         // the one they are standing in is the thing the screen cannot otherwise
         // tell them - and it doubles as the way to swap.
-        BuildTrailChip(top, out RectTransform chipRect);
+        TrailChipView chip = BuildTrailChip(top, out RectTransform chipRect);
+
+        // The same chooser the marker sheet uses. One card, two things it can be
+        // opened about - there is no reason for a second copy of six reasons.
+        if (info != null)
+            chip.reportSheet = info.reportSheet;
         UIFactory.Corner(chipRect, new Vector2(0f, 0.5f),
                          new Vector2(800f, 84f), new Vector2(Margin - 18f, -14f));
 
@@ -3428,7 +3433,7 @@ const float ReferenceWidth = 1080f;
     /// Returns the name label, because MapTabController still holds it as its
     /// title - it is the same piece of text doing a better job, not a new one.
     /// </summary>
-    static TextMeshProUGUI BuildTrailChip(Transform parent, out RectTransform rect)
+    static TrailChipView BuildTrailChip(Transform parent, out RectTransform rect)
     {
         rect = UIFactory.Rect("TrailChip", parent);
 
@@ -3448,7 +3453,9 @@ const float ReferenceWidth = 1080f;
         RectTransform row = UIFactory.Rect("Row", rect);
         UIFactory.Stretch(row);
         row.offsetMin = new Vector2(20f, 0f);
-        row.offsetMax = new Vector2(-16f, 0f);
+        // Room at the right for the report button, which is a second hit area
+        // on top of the chip's own - the chip opens the trail list.
+        row.offsetMax = new Vector2(-88f, 0f);
         HorizontalLayoutGroup layout = UIFactory.HorizontalStack(row, 12f);
         layout.childAlignment = TextAnchor.MiddleLeft;
 
@@ -3508,7 +3515,15 @@ const float ReferenceWidth = 1080f;
         Icon(row, AppIcon.List, 34f, ThemeRole.Accent, out RectTransform chevron);
         view.chevron = chevron.gameObject;
 
-        return view.nameLabel;
+        // After the row, so its own graphic is on top and takes the tap that
+        // would otherwise open the trail list.
+        RectTransform flag = UIFactory.Rect("Report", rect);
+        UIFactory.Corner(flag, new Vector2(1f, 0.5f), new Vector2(72f, 72f),
+                         new Vector2(-14f, 0f));
+        view.reportButton = UIFactory.Button(flag, ThemeRole.Surface, 0.01f, UIShape.Circle);
+        Icon(flag, AppIcon.Warning, 32f, ThemeRole.TextMuted);
+
+        return view;
     }
 
 

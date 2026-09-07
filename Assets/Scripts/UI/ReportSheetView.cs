@@ -38,8 +38,9 @@ public class ReportSheetView : MonoBehaviour
     public TextMeshProUGUI statusLabel;
     public Button cancelButton;
 
-    /// <summary>The marker being reported. Set by whoever opens this.</summary>
+    /// <summary>What is being reported. One of these is set, never both.</summary>
     string _markerId;
+    string _worldId;
     bool _busy;
 
     /// <summary>
@@ -86,7 +87,31 @@ public class ReportSheetView : MonoBehaviour
         if (string.IsNullOrEmpty(markerId))
             return;
 
+        _worldId = null;
         _markerId = markerId;
+        _busy = false;
+        _generation++;
+
+        Say(null);
+        SetInteractable(true);
+        gameObject.SetActive(true);
+    }
+
+    /// <summary>
+    /// Opens it for a whole trail.
+    ///
+    /// report_world has been there since 0020 and nothing has ever called it: a
+    /// walker could report one marker in somebody's garden and not a trail that
+    /// was entirely somewhere it should not be. The reviewer's queue has always
+    /// been able to show these and remove_world to act on them.
+    /// </summary>
+    public void OpenTrail(string worldId)
+    {
+        if (string.IsNullOrEmpty(worldId))
+            return;
+
+        _markerId = null;
+        _worldId = worldId;
         _busy = false;
         _generation++;
 
@@ -103,7 +128,11 @@ public class ReportSheetView : MonoBehaviour
     void Relabel()
     {
         if (titleLabel != null)
-            titleLabel.text = AppStrings.Get("report.title");
+        {
+            titleLabel.text = AppStrings.Get(string.IsNullOrEmpty(_markerId)
+                ? "report.titleTrail"
+                : "report.title");
+        }
 
         for (int i = 0; i < reasonLabels.Length && i < Reasons.Length; i++)
         {
@@ -114,7 +143,9 @@ public class ReportSheetView : MonoBehaviour
 
     void Send(int index)
     {
-        if (_busy || index < 0 || index >= Reasons.Length || string.IsNullOrEmpty(_markerId))
+        bool haveSomething = !string.IsNullOrEmpty(_markerId) || !string.IsNullOrEmpty(_worldId);
+
+        if (_busy || index < 0 || index >= Reasons.Length || !haveSomething)
             return;
 
         _busy = true;
@@ -134,11 +165,18 @@ public class ReportSheetView : MonoBehaviour
             yield break;
         }
 
-        string body = "{\"p_marker\":\"" + Escape(_markerId) + "\"," +
-                      "\"p_reason\":\"" + Escape(reason) + "\"}";
+        bool whole = string.IsNullOrEmpty(_markerId);
+
+        string body = whole
+            ? "{\"p_world\":\"" + Escape(_worldId) + "\"," +
+              "\"p_reason\":\"" + Escape(reason) + "\"}"
+            : "{\"p_marker\":\"" + Escape(_markerId) + "\"," +
+              "\"p_reason\":\"" + Escape(reason) + "\"}";
+
+        string rpc = whole ? "report_world" : "report_marker";
 
         using (UnityWebRequest request =
-               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/report_marker"), body, null))
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/" + rpc), body, null))
         {
             yield return request.SendWebRequest();
 

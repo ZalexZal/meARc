@@ -24,10 +24,34 @@ public class TrailChipView : MonoBehaviour
     [Tooltip("The chevron that says this is a control rather than a heading.")]
     public GameObject chevron;
 
+    [Tooltip("Reports the whole trail. Its own hit area on top of the chip's, " +
+             "because the chip itself opens the trail list.")]
+    public Button reportButton;
+
+    [Tooltip("The chooser it opens. Shared with the one on a marker's sheet.")]
+    public ReportSheetView reportSheet;
+
     void Awake()
     {
         if (button != null)
             button.onClick.AddListener(Open);
+
+        if (reportButton != null)
+            reportButton.onClick.AddListener(Report);
+    }
+
+    /// <summary>
+    /// Reports the trail rather than a marker on it.
+    ///
+    /// Hidden when no trail is open, since there would be nothing to report -
+    /// Refresh handles that alongside everything else the chip shows.
+    /// </summary>
+    void Report()
+    {
+        TrailService trails = TrailService.Instance;
+
+        if (reportSheet != null && trails != null && !string.IsNullOrEmpty(trails.SelectedId))
+            reportSheet.OpenTrail(trails.SelectedId);
     }
 
     void OnEnable()
@@ -61,6 +85,10 @@ public class TrailChipView : MonoBehaviour
         // a reader holding no trail nothing about the single thing left to do.
         if (nameLabel != null)
             nameLabel.text = hasName ? trail.name : AppStrings.Get("trails.choose");
+
+        // Nothing open, nothing to report.
+        if (reportButton != null)
+            reportButton.gameObject.SetActive(hasName);
 
         // Guide is the default and needs no label. A chip on every trail would be a
         // chip that means nothing.
