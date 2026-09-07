@@ -4516,9 +4516,20 @@ const float ReferenceWidth = 1080f;
 
             // The wash that marks your own row, behind the text rather than in
             // it: a board is read from across a room.
-            view.boardHighlight[i] = UIFactory.Plain(row, Color.clear, UIShape.Rounded);
+            //
+            // Its own child, not an Image on the row.
+            //
+            // Plain() adds the Image to whatever it is given, so passing the row
+            // made boardHighlight[i].gameObject the row itself - and DrawBoard
+            // switches the highlight off for every team that is not yours, which
+            // switched the whole row off with it. The board could only ever draw
+            // one line: your own. Six teams went in and one came out, and it did
+            // that in every build since the board was written.
+            RectTransform wash = UIFactory.Rect("Highlight", row);
+            UIFactory.Stretch(wash);
+            view.boardHighlight[i] = UIFactory.Plain(wash, Color.clear, UIShape.Rounded);
             view.boardHighlight[i].raycastTarget = false;
-            view.boardHighlight[i].gameObject.SetActive(false);
+            wash.gameObject.SetActive(false);
 
             RectTransform line = UIFactory.Rect("Line", row);
             UIFactory.Stretch(line);
@@ -4540,7 +4551,12 @@ const float ReferenceWidth = 1080f;
             view.boardPoints[i] = UIFactory.Text("Points", line, Body, ThemeRole.Accent,
                                                  TextAlignmentOptions.Right, null,
                                                  FontStyles.Bold);
-            UIFactory.Size(view.boardPoints[i].gameObject, 100f, 56f).flexibleWidth = 0f;
+
+            // Size takes height then width, and this had them the other way
+            // round: a hundred tall and fifty-six wide, so any score of three
+            // digits wrapped down its own column. 320 read as 32 above a 0.
+            UIFactory.Size(view.boardPoints[i].gameObject, 56f, 150f).flexibleWidth = 0f;
+            view.boardPoints[i].textWrappingMode = TextWrappingModes.NoWrap;
 
             view.boardRows[i] = row;
             row.gameObject.SetActive(false);
