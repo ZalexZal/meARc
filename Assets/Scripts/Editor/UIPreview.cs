@@ -169,7 +169,21 @@ public static class UIPreview
 
         // The sheet and the walkthrough sit over whatever is behind them.
         Shoot(canvas, rig, "05-marker-sheet" + t, "MapPanel", "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim");
+        // Driven, not merely switched on.
+        //
+        // Nothing here ever called the flow's own drawing, so the guide was
+        // photographed in the state the builder left it in: every page's text at
+        // once and six identical dots. The app widens the current dot and paints
+        // it in the accent - a reader can always tell how far through they are -
+        // and no picture of this screen had ever shown that.
+        Tutorial(canvas.transform, 0);
         Shoot(canvas, rig, "06-tutorial" + t, "MapPanel", "Tutorial/Overlay");
+
+        // A middle card, where Back exists and Next is not yet Done.
+        Tutorial(canvas.transform, 3);
+        Shoot(canvas, rig, "30-tutorial-mid" + t, "MapPanel", "Tutorial/Overlay");
+
+        Tutorial(canvas.transform, 0);
         Shoot(canvas, rig, "07-toast" + t, "MapPanel", "ProximityToast/Safe/CardHolder");
         // Told which state to be in first. Its copy is written by Show(), which
         // only runs while the app does, so this shot had been three placeholders
@@ -777,6 +791,39 @@ public static class UIPreview
             if (!wanted.Contains(stackPath + "/" + child.name))
                 child.gameObject.SetActive(false);
         }
+    }
+
+    /// <summary>
+    /// Puts the guide on one of its cards and lets it draw itself.
+    ///
+    /// Open() would do it, but it also writes "seen" into the preferences, which
+    /// is a side effect a screenshot has no business having. The page number and
+    /// the redraw, and nothing else.
+    /// </summary>
+    static void Tutorial(Transform canvas, int page)
+    {
+        TutorialFlow flow = canvas.GetComponentInChildren<TutorialFlow>(true);
+
+        if (flow == null)
+        {
+            Debug.LogWarning("[Preview] No tutorial to drive.");
+            return;
+        }
+
+        System.Reflection.BindingFlags where =
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+
+        System.Reflection.FieldInfo at = typeof(TutorialFlow).GetField("_page", where);
+        System.Reflection.MethodInfo draw = typeof(TutorialFlow).GetMethod("Render", where);
+
+        if (at == null || draw == null)
+        {
+            Debug.LogWarning("[Preview] TutorialFlow has moved its page or its Render.");
+            return;
+        }
+
+        at.SetValue(flow, page);
+        draw.Invoke(flow, null);
     }
 
     static bool IsDoorShot(string[] visible)

@@ -3488,7 +3488,22 @@ const float ReferenceWidth = 1080f;
         view.nameLabel = UIFactory.Text("Name", row, Title, ThemeRole.TextPrimary,
                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
         LayoutElement nameSize = UIFactory.Size(view.nameLabel.gameObject, 84f, 400f);
-        nameSize.flexibleWidth = 0f;
+
+        // The name is the part that gives.
+        //
+        // Size sets a minimum as well as a preferred width, so every item in this
+        // row had a floor and not one of them could shrink. Add the floors up -
+        // the eyebrow, the name, the mode chip, the chevron and three gaps - and
+        // they come to more than the row is wide on a phone. A horizontal layout
+        // that cannot meet its minimums does not shrink anything; it runs the
+        // tail of the row out past its own right edge, which is where the report
+        // button is parked. That is why the mode chip on the busiest screen in
+        // the app had a warning triangle sitting on top of it.
+        //
+        // A trail name is the one thing here that can lose characters and still
+        // be read - it already ellipsises - so it is the one that gives.
+        nameSize.minWidth = 140f;
+        nameSize.flexibleWidth = 1f;
 
         // One line, cut with an ellipsis. Autosizing alone was not enough: a name
         // that will not fit at the smallest size wraps instead, and the chip is one
