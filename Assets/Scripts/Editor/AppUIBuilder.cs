@@ -3713,6 +3713,27 @@ const float ReferenceWidth = 1080f;
         view.promptLabel = UIFactory.Text("Prompt", content, Title, ThemeRole.TextPrimary,
                                           TextAlignmentOptions.TopLeft, null, FontStyles.Bold);
 
+        // A chip under the question, in the same shape the hint prices use, so
+        // the prize and the cost read as two numbers of one kind.
+        RectTransform worth = UIFactory.Rect("Worth", content);
+        HorizontalLayoutGroup worthRow = UIFactory.HorizontalStack(worth, 0f);
+        worthRow.childAlignment = TextAnchor.MiddleLeft;
+        worthRow.childForceExpandWidth = false;
+        UIFactory.Size(worth.gameObject, 56f);
+        view.worthHolder = worth.gameObject;
+
+        RectTransform chip = UIFactory.Rect("Chip", worth);
+        LayoutElement chipSize = UIFactory.Size(chip.gameObject, 52f, 260f);
+        chipSize.flexibleWidth = 0f;
+        UIFactory.Fill(chip, ThemeRole.SurfaceAlt, 1f, UIShape.Pill).raycastTarget = false;
+
+        view.worthLabel = UIFactory.Text("Label", chip, Caption, ThemeRole.TextSecondary,
+                                         TextAlignmentOptions.Center);
+        UIFactory.Stretch(view.worthLabel.rectTransform);
+        view.worthLabel.raycastTarget = false;
+
+        worth.gameObject.SetActive(false);
+
 
         RectTransform options = UIFactory.Rect("Options", content);
         UIFactory.VerticalStack(options, 12f, false);

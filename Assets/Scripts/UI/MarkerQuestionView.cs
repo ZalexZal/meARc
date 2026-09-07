@@ -32,6 +32,11 @@ public class MarkerQuestionView : MonoBehaviour
     public TextMeshProUGUI ruleLabel;
     public TextMeshProUGUI promptLabel;
 
+    [Tooltip("What a correct answer is worth. Off on a guide, and off on a " +
+             "question the creator priced at nothing.")]
+    public GameObject worthHolder;
+    public TextMeshProUGUI worthLabel;
+
     [Header("Choice")]
     public RectTransform optionsParent;
     public AnswerOptionView optionPrefab;
@@ -484,6 +489,23 @@ public class MarkerQuestionView : MonoBehaviour
         {
             scoreLabel.text = progress.points + " " + AppStrings.Get("task.points");
         }
+
+        // What it is worth, beside what it is.
+        //
+        // The hints under this question have been priced in points since 0015 and
+        // the question itself never was, so a walker could read "-5 points" and
+        // have nothing to weigh it against. Both halves of the trade, or neither.
+        //
+        // Not on a guide: a guide asks questions and scores none of them, and a
+        // number there would be a promise the server does not keep.
+        TrailService trails = TrailService.Instance;
+        bool scored = trails == null || trails.SelectedIsGame;
+        bool worthSaying = scored && _task.points > 0;
+
+        Set(worthHolder, worthSaying);
+
+        if (worthSaying && worthLabel != null)
+            worthLabel.text = string.Format(AppStrings.Get("task.worth"), _task.points);
 
         bool answerable = !locked && !solved;
 
