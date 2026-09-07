@@ -37,6 +37,26 @@ public class TrailService : MonoBehaviour
         public string mode;
     }
 
+    /// <summary>
+    /// Games keep score, walks do not. The same pair the database calls
+    /// mode_is_scored, repeated here because the app has to decide what to draw
+    /// before it has asked the server anything.
+    /// </summary>
+    public static bool IsGame(string mode)
+    {
+        return mode == "ctf" || mode == "freefall";
+    }
+
+    /// <summary>Whether the trail being walked keeps a score.</summary>
+    public bool SelectedIsGame
+    {
+        get
+        {
+            Trail trail = Selected;
+            return trail != null && IsGame(trail.mode);
+        }
+    }
+
     public List<Trail> Mine { get; private set; } = new List<Trail>();
 
     public string SelectedId { get; private set; }

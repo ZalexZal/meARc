@@ -4268,12 +4268,14 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(none, 14f);
         view.noTeamGroup = none.gameObject;
 
-        UIFactory.Text("None", none, Body, ThemeRole.TextPrimary,
-                       TextAlignmentOptions.Left, "team.none", FontStyles.Bold);
+        view.noneTitle = UIFactory.Text("None", none, Body, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Left, "team.none",
+                                        FontStyles.Bold);
 
         TextMeshProUGUI noneBody = UIFactory.Text("NoneBody", none, Secondary,
                                                   ThemeRole.TextSecondary,
                                                   TextAlignmentOptions.Left, "team.noneBody");
+        view.noneBody = noneBody;
         noneBody.textWrappingMode = TextWrappingModes.Normal;
         UIFactory.Size(noneBody.gameObject, 96f);
 

@@ -25,6 +25,12 @@ public class TeamDoorView : MonoBehaviour
 
     [Header("No team yet")]
     public GameObject noTeamGroup;
+
+    [Tooltip("The two lines above the name box. They say something different " +
+             "when a game is waiting for a team than when somebody simply has " +
+             "not made one.")]
+    public TextMeshProUGUI noneTitle;
+    public TextMeshProUGUI noneBody;
     public TMP_InputField nameField;
     public Button createButton;
     public TMP_InputField codeField;
@@ -149,8 +155,25 @@ public class TeamDoorView : MonoBehaviour
         TeamService.Detail team = teams != null ? teams.Team : null;
         bool onTeam = team != null && team.on_team;
 
+        // On a game with no team there is no way out of this card except making
+        // one or joining one, because there is nothing useful to do behind it:
+        // the server will not score a game for somebody who is on no team.
+        bool gated = !onTeam && TrailService.Instance != null
+                     && TrailService.Instance.SelectedIsGame;
+
+        if (closeButton != null)
+            closeButton.gameObject.SetActive(!gated);
+
         if (noTeamGroup != null)
             noTeamGroup.SetActive(!onTeam);
+
+        // Gated, the card is a question rather than an observation about being
+        // by yourself, so it asks one.
+        if (noneTitle != null)
+            noneTitle.text = AppStrings.Get(gated ? "team.needed" : "team.none");
+
+        if (noneBody != null)
+            noneBody.text = AppStrings.Get(gated ? "team.neededBody" : "team.noneBody");
 
         if (teamGroup != null)
             teamGroup.SetActive(onTeam);

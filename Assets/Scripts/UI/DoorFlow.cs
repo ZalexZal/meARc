@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -262,6 +263,50 @@ public class DoorFlow : MonoBehaviour
         _reopened = false;
         _dismissed = false;
         Show(Door.None);
+
+        StartCoroutine(TeamGate());
+    }
+
+    /// <summary>
+    /// A game is played in a team, so joining one asks for a team before it asks
+    /// for anything else.
+    ///
+    /// Not politeness: since 0029 the server refuses to score a game for
+    /// somebody with no team, so without this the first question a walker
+    /// answered would come back "make or join a team first" with no obvious way
+    /// to do either. A walk never sees this - it has no teams at all.
+    ///
+    /// The team is loaded before deciding. Asking somebody who is already on a
+    /// team to make one is the kind of thing that makes an app feel like it has
+    /// not been paying attention.
+    /// </summary>
+    IEnumerator TeamGate()
+    {
+        TrailService trails = TrailService.Instance;
+
+        if (trails == null || !trails.SelectedIsGame)
+            yield break;
+
+        TeamService teams = TeamService.Instance;
+
+        if (teams == null)
+            yield break;
+
+        teams.Load(trails.SelectedId);
+
+        // Bounded. A server that never answers should not leave somebody staring
+        // at a map they are not allowed to score on with no explanation, but it
+        // should not hold the screen for ever either.
+        float waited = 0f;
+
+        while (teams.Busy && waited < 8f)
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
+
+        if (teams.Team == null || !teams.Team.on_team)
+            Show(Door.Team);
     }
 
     // ------------------------------------------------------------------ showing
