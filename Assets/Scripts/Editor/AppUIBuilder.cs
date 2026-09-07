@@ -2394,6 +2394,45 @@ const float ReferenceWidth = 1080f;
         return flow;
     }
 
+    /// <summary>
+    /// The drawing for a tutorial card, if one has been made for it.
+    ///
+    /// Named from the card's own key, so adding a picture is dropping a file into
+    /// a folder rather than editing this list. Missing is a normal answer - two of
+    /// the six cards are about typing a code and are better off without one.
+    /// </summary>
+    static Sprite TutorialArt(string key)
+    {
+        string number = key.Substring(key.IndexOf('.') + 1);
+        string path = "Assets/Art/Tutorial/tutorial-" + number + ".png";
+
+        if (!System.IO.File.Exists(path))
+            return null;
+
+        // A PNG imports as a plain texture, and LoadAssetAtPath<Sprite> returns
+        // null for one of those. Set once, here, so the folder is the only thing
+        // anybody has to remember.
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+
+        // Single, not just Sprite. This project's default sprite mode is Multiple -
+        // a sheet to be sliced - and the main asset of one of those is the texture,
+        // so LoadAssetAtPath<Sprite> comes back null and the card draws nothing at
+        // all. Setting the type without the mode gets you a picture that imports
+        // correctly, reports no error, and is invisible.
+        if (importer != null &&
+            (importer.textureType != TextureImporterType.Sprite ||
+             importer.spriteImportMode != SpriteImportMode.Single))
+        {
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.SaveAndReimport();
+        }
+
+        return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+    }
+
     static TutorialFlow.Page TutorialPage(RectTransform parent, string key, bool first)
     {
         RectTransform rt = UIFactory.Rect(key, parent);
@@ -2406,9 +2445,40 @@ const float ReferenceWidth = 1080f;
         page.root = rt.gameObject;
         page.key = key;
 
-        RectTransform spacer = UIFactory.Rect("Spacer", rt);
-        LayoutElement spacerSize = spacer.gameObject.AddComponent<LayoutElement>();
-        spacerSize.flexibleHeight = 1f;
+        // A picture where the card has one, and the empty space it used to be
+        // where it does not.
+        //
+        // The guide explains an app you look through a camera at, in six screens
+        // of nothing but words with more than half of each one blank. Four of the
+        // six are about places - where a marker stands, the map against the
+        // camera, being led somewhere, taking one off your map - and those are
+        // drawn. The other two are about typing a code, which no drawing explains
+        // better than the sentence does, so those keep the space.
+        Sprite art = TutorialArt(key);
+
+        if (art != null)
+        {
+            RectTransform picture = UIFactory.Rect("Art", rt);
+            LayoutElement pictureSize = picture.gameObject.AddComponent<LayoutElement>();
+            pictureSize.flexibleHeight = 1f;
+            pictureSize.minHeight = 300f;
+
+            Image image = picture.gameObject.AddComponent<Image>();
+            image.sprite = art;
+
+            // The drawing carries its own colours and its own transparency, so it
+            // is not tinted and not themed: the paper was keyed out of it, which
+            // leaves line work and one green ring, and both read on either ground.
+            image.color = Color.white;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+        }
+        else
+        {
+            RectTransform spacer = UIFactory.Rect("Spacer", rt);
+            LayoutElement spacerSize = spacer.gameObject.AddComponent<LayoutElement>();
+            spacerSize.flexibleHeight = 1f;
+        }
 
         // Keyed rather than blank, so this screen can be looked at before it is
         // ever run - and so the first frame is the first card rather than a gap.

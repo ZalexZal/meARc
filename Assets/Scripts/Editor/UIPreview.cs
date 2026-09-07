@@ -206,6 +206,10 @@ public static class UIPreview
         Tutorial(canvas.transform, 3);
         Shoot(canvas, rig, "30-tutorial-mid" + t, "MapPanel", "Tutorial/Overlay");
 
+        // The last card, where Next becomes Start exploring and the guide ends.
+        Tutorial(canvas.transform, 5);
+        Shoot(canvas, rig, "31-tutorial-last" + t, "MapPanel", "Tutorial/Overlay");
+
         Tutorial(canvas.transform, 0);
         Shoot(canvas, rig, "07-toast" + t, "MapPanel", "ProximityToast/Safe/CardHolder");
         // Told which state to be in first. Its copy is written by Show(), which
