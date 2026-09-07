@@ -4857,10 +4857,16 @@ const float ReferenceWidth = 1080f;
                                         "Join with code");
         door.joinLabel = door.joinButton.GetComponentInChildren<TextMeshProUGUI>();
 
+        // Cancel is the way out, and it is the only one.
+        //
+        // There was a mark in the corner as well, doing the same job by a
+        // different route. Two controls for one action on a card with three
+        // controls on it, and the mark is the one that has to be guessed at while
+        // the word says what it does - and it sits where the thumb already is,
+        // next to Join. The trails card still has its mark; its worded exit says
+        // "Not now", which is a different sentence from "close this".
         door.cancelButton = QuietAction(actions, "Cancel", "code.cancel", door.Cancel,
                                         "Cancel code entry");
-
-        CardClose(card, door.Cancel, "Close code entry");
 
         // Six characters in means there is nothing left to decide.
         UnityEventTools.AddVoidPersistentListener(boxes.onComplete, door.Join);

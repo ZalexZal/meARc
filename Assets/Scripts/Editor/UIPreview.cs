@@ -626,31 +626,33 @@ public static class UIPreview
             child.gameObject.SetActive(on);
         }
 
-        // One door at a time, here as in the app.
+        // One at a time, here as in the app.
         //
-        // DoorFlow shows exactly one, so nothing in the app ever needed to switch
-        // the others off - and this harness never did either. It switches off the
-        // top-level panels it was not asked for and stops there, which leaves
-        // every child of Doors exactly as the builder left it. The team card is
-        // built active, so every picture of the welcome and the terms screens,
-        // for as long as this harness has existed, was taken with the team card
-        // standing on top of them. The two screens a tester meets first are the
-        // two nobody had ever seen.
+        // Two stacks in this UI hold things that are shown one at a time and
+        // never together, and the harness knew about neither. It switches off the
+        // top-level panels it was not asked for and stops there, so the children
+        // of those two stayed exactly as they were last left.
         //
-        // Not restored afterwards: shut is the right state for a door nobody
-        // asked for, and the shot that wants one raises it below.
-        Transform doors = canvas.transform.Find("Doors");
-
-        if (doors != null)
-        {
-            for (int i = 0; i < doors.childCount; i++)
-            {
-                Transform door = doors.GetChild(i);
-
-                if (!wanted.Contains("Doors/" + door.name))
-                    door.gameObject.SetActive(false);
-            }
-        }
+        // It cost two different pictures two different ways:
+        //
+        //   Doors           the team card is built active, so every picture of
+        //                   the welcome and terms screens, for as long as this
+        //                   harness has existed, was taken with the team card
+        //                   standing on top of them - in both themes, which is
+        //                   why it never looked like a theme bug. The two screens
+        //                   a tester meets first were the two nobody had seen.
+        //
+        //   InfoSheet/Safe  Pieces.Hints opens the hint card by calling Open on
+        //                   it, so the card was already active when Shoot got
+        //                   there; Shoot only puts away what it raised itself, so
+        //                   nothing ever put it away. It stayed up through the
+        //                   whole of the next pass, which is why the question
+        //                   screen is clean in dark and buried in light.
+        //
+        // Not restored afterwards: shut is the right state for one of these that
+        // nobody asked for, and the shot that wants one raises it below.
+        OnlyAsked(canvas.transform, "Doors", wanted);
+        OnlyAsked(canvas.transform, "InfoSheet/Safe", wanted);
 
         // Overlays, addressed by path.
         var raised = new List<GameObject>();
@@ -745,6 +747,29 @@ public static class UIPreview
         _parked.Clear();
 
         Debug.Log("[Preview] " + name);
+    }
+
+    /// <summary>
+    /// Shuts every child of a one-at-a-time stack that this shot did not ask for.
+    ///
+    /// The rule the app follows without being told - DoorFlow shows one door, a
+    /// card over the sheet replaces whatever was there - written down for a
+    /// harness that has no flow to follow.
+    /// </summary>
+    static void OnlyAsked(Transform canvas, string stackPath, HashSet<string> wanted)
+    {
+        Transform stack = canvas.Find(stackPath);
+
+        if (stack == null)
+            return;
+
+        for (int i = 0; i < stack.childCount; i++)
+        {
+            Transform child = stack.GetChild(i);
+
+            if (!wanted.Contains(stackPath + "/" + child.name))
+                child.gameObject.SetActive(false);
+        }
     }
 
     static bool IsDoorShot(string[] visible)
