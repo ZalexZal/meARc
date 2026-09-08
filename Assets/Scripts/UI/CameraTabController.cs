@@ -356,22 +356,33 @@ public class CameraTabController : MonoBehaviour
         if (warningBanner == null)
             return;
 
-        bool poor = locationService != null &&
-                    (locationService.Status == VpsStatus.Poor ||
-                     locationService.Status == VpsStatus.Unavailable);
-
-        // A refused camera outranks poor accuracy. There is no picture at all, so
-        // saying the positioning is rough would be answering a question nobody is
-        // asking - and it is the one thing here the reader can actually fix.
-        bool refused = _cameraRefused;
-
-        warningBanner.SetActive((refused || poor) && !_warningDismissed);
+        // Only a refused camera.
+        //
+        // This used to fire on poor or unavailable positioning as well, which is
+        // the exact condition the calibration chip in the other corner is already
+        // reporting - and reporting better, with a title, a sentence saying what
+        // to do about it, and a colour. So on the one screen with no room to
+        // spare, a walker whose positioning was rough got told so twice, in two
+        // places, in two different forms of words.
+        //
+        // The chip keeps that. This keeps the thing the chip has no way to say,
+        // which is also the only thing on this screen the reader can actually
+        // fix: there is no camera picture because permission was refused.
+        warningBanner.SetActive(_cameraRefused && !_warningDismissed);
 
         if (warningLabel != null)
-        {
-            warningLabel.text = AppStrings.Get(refused ? "camera.refused"
-                                                       : "live.warning");
-        }
+            warningLabel.text = AppStrings.Get("camera.refused");
+
+        // And the calibration chip goes with it.
+        //
+        // The same reasoning, one step further than it was taken. Calibration is
+        // a statement about how accurately markers can be placed in the camera
+        // view; with no camera view there is nothing to place them in, and a
+        // walker who has just been told there is nothing to look through does not
+        // also need to know it could not have been calibrated. It is the corner
+        // of the screen answering a question the screen has already closed.
+        if (vpsIndicator != null)
+            vpsIndicator.gameObject.SetActive(!_cameraRefused);
     }
 
     // ------------------------------------------------------------------- overlays

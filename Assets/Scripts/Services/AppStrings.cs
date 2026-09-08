@@ -266,7 +266,6 @@ public static class AppStrings
 
         { "sub.sources.body", "Marker text is written by hand, one entry at a time. Where a fact comes from a published source it is credited here." },
         { "sub.about.body", "Trails in augmented reality: markers left in real places, for other people to find." },
-        { "live.warning", "Marker positions may be inaccurate" },
 
         { "unit.metres", "{0} m" },
         { "unit.kilometres", "{0} km" },
@@ -567,7 +566,6 @@ public static class AppStrings
 
         { "sub.sources.body", "Текстовете на маркерите са написани ръчно, запис по запис. Когато даден факт идва от публикуван източник, той е посочен тук." },
         { "sub.about.body", "Маршрути с добавена реалност: маркери, оставени на истински места, за да ги открият други." },
-        { "live.warning", "Позициите на маркерите може да са неточни" },
 
         { "unit.metres", "{0} м" },
         { "unit.kilometres", "{0} км" },

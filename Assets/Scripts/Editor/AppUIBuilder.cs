@@ -1670,7 +1670,10 @@ const float ReferenceWidth = 1080f;
         UIFactory.Stretch(controller.warningLabel.rectTransform);
         controller.warningLabel.rectTransform.offsetMin = new Vector2(96f, 0f);
         controller.warningLabel.rectTransform.offsetMax = new Vector2(-(Tap + 10f), 0f);
-        controller.warningLabel.text = AppStrings.Get("live.warning");
+        // The one thing this banner ever says now. It used to carry the rough-
+        // positioning message too, which the calibration chip in the other corner
+        // was already saying better.
+        controller.warningLabel.text = AppStrings.Get("camera.refused");
 
         RectTransform dismiss = UIFactory.Rect("Dismiss", banner);
         UIFactory.Corner(dismiss, new Vector2(1f, 0.5f), new Vector2(Tap, Tap),

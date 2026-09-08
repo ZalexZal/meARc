@@ -145,6 +145,40 @@ public static class UIPreview
 
         Shoot(canvas, rig, "01-map" + t, "MapPanel");
         Shoot(canvas, rig, "02-camera" + t, "CameraPanel");
+
+        // The camera screen with something wrong with it.
+        //
+        // Nothing in the app can draw a marker over a camera feed in a batch
+        // render, and no picture will ever settle whether the AR half of this
+        // screen is right - that needs a phone held up at a wall. But the UI over
+        // the feed is ordinary UI, and half of it had never been in a picture at
+        // all: the banner that appears when the camera is refused, and the count
+        // of what is around you.
+        CameraTabController camera = canvas.GetComponentInChildren<CameraTabController>(true);
+
+        if (camera != null)
+        {
+            if (camera.warningBanner != null)
+                camera.warningBanner.SetActive(true);
+
+            // The chip stands down when there is no camera, the way the app
+            // does it, so the picture shows the screen and not a composite of
+            // two states that never occur together.
+            if (camera.vpsIndicator != null)
+                camera.vpsIndicator.gameObject.SetActive(false);
+
+            Shoot(canvas, rig, "32-camera-refused" + t, "CameraPanel");
+
+            if (camera.warningBanner != null)
+                camera.warningBanner.SetActive(false);
+
+            if (camera.vpsIndicator != null)
+                camera.vpsIndicator.gameObject.SetActive(true);
+        }
+        else
+        {
+            Debug.LogWarning("[Preview] No camera tab to draw.");
+        }
         // The graph builds itself in OnEnable, and OnEnable does not run in the
         // editor for a component that is not ExecuteAlways. Rather than making it
         // one - its Update reads touches, which has no business running here - the
