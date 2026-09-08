@@ -111,10 +111,24 @@ public class CodeDoor : MonoBehaviour
         // "unknown" is the reader's mistake and everything else is ours. Saying
         // "no trail with that code" when the server is unreachable sends somebody
         // to argue with whoever gave them a perfectly good code.
-        SetMessage(AppStrings.Get(detail == "unknown" ? "code.unknown" : "code.failed"));
+        bool theirs = detail == "unknown";
 
-        if (boxes != null)
-            boxes.Focus();
+        SetMessage(AppStrings.Get(theirs ? "code.unknown" : "code.failed"));
+
+        if (boxes == null)
+            return;
+
+        // And the same distinction decides whether the boxes are emptied.
+        //
+        // A rejected code has to be retyped, and leaving the wrong six characters
+        // sitting there means deleting them one at a time before you can. But if
+        // the server was simply unreachable then the code was probably right, and
+        // wiping it would make somebody type it again for a fault that was not
+        // theirs - they only need to press Join.
+        if (theirs)
+            boxes.Clear();
+
+        boxes.Focus();
     }
 
     void SetBusyLabel(bool busy)

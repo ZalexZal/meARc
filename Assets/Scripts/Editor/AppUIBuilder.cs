@@ -3657,6 +3657,23 @@ const float ReferenceWidth = 1080f;
         // the frame is switched off.
         UIFactory.VerticalStack(page, 24f, false);
 
+        // The page's heading says what kind of thing this is - Watch, Listen - and
+        // this says which one.
+        //
+        // Above the frame, not below it. One builder makes both pages, and with
+        // the title after the screen in the stack they disagreed: on a recording
+        // the frame is switched off, so the title came first and read as a
+        // heading; on a video it came second, so the reader met an unlabelled
+        // black rectangle and was told afterwards what they had been watching.
+        // The name of the thing goes before the thing.
+        TextMeshProUGUI title = UIFactory.Text("Title", page, Title, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.TopLeft, null,
+                                               FontStyles.Bold);
+        UIFactory.Size(title.gameObject, 70f);
+        title.textWrappingMode = TextWrappingModes.NoWrap;
+        title.overflowMode = TextOverflowModes.Ellipsis;
+        view.titleLabel = title;
+
         // 16:9 at the sheet's inner width. A fixed frame, not one sized from the
         // clip - a portrait video and a landscape one both belong in the same hole,
         // or opening one shuffles the whole page.
@@ -3677,16 +3694,6 @@ const float ReferenceWidth = 1080f;
         // Off until a video has actually been decoded into it. A RawImage with no
         // texture draws a solid white rectangle, and this one is 984 by 553.
         view.screen.enabled = false;
-
-        // The page's heading says what kind of thing this is - Watch, Listen - and
-        // this says which one.
-        TextMeshProUGUI title = UIFactory.Text("Title", page, Title, ThemeRole.TextPrimary,
-                                               TextAlignmentOptions.TopLeft, null,
-                                               FontStyles.Bold);
-        UIFactory.Size(title.gameObject, 70f);
-        title.textWrappingMode = TextWrappingModes.NoWrap;
-        title.overflowMode = TextOverflowModes.Ellipsis;
-        view.titleLabel = title;
 
         // --- loading, or not going to play ---
         RectTransform notice = UIFactory.Rect("Notice", page);
