@@ -4683,7 +4683,18 @@ const float ReferenceWidth = 1080f;
                                                   TextAlignmentOptions.Left, "team.noneBody");
         view.noneBody = noneBody;
         noneBody.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(noneBody.gameObject, 96f);
+
+        // As tall as what it says, which is not a fixed number.
+        //
+        // This asked for 96 pixels through Size, and Size sets the preferred
+        // height as well as the minimum - so the layout gave it 96 whatever was
+        // in it, and TMP drew the rest of the words outside the box. On the
+        // longest of them, the account explanation, that painted the last line
+        // through the standings below and the first line through the heading
+        // above. A minimum and no preference lets the stack ask the text.
+        LayoutElement noneSize = noneBody.gameObject.AddComponent<LayoutElement>();
+        noneSize.minHeight = 96f;
+        noneSize.preferredHeight = -1f;
 
         view.nameField = Field(none, "Name", "team.name");
         view.createButton = FullWidthButton(none, "Create", "team.create",

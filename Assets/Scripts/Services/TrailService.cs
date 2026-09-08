@@ -25,6 +25,18 @@ public class TrailService : MonoBehaviour
     /// <summary>Raised when the list changes or a different trail is chosen.</summary>
     public static event Action OnTrailsChanged;
 
+    /// <summary>
+    /// Whether the open trail refuses an anonymous walker.
+    ///
+    /// Asked of the server rather than worked out here. Today needs_account is
+    /// true for ctf and false for freefall, which is not the same line as
+    /// "keeps a score" - assert_may_play was written when ctf was the only game
+    /// and was never widened. Wherever that line ends up, the server is the one
+    /// that draws it, so this reads its answer instead of keeping a second copy
+    /// of the rule that could disagree.
+    /// </summary>
+    public bool SelectedNeedsAccount { get; private set; }
+
     [Serializable]
     public class Trail
     {
@@ -65,6 +77,84 @@ public class TrailService : MonoBehaviour
             Trail trail = Selected;
             return trail == null || IsOrdered(trail.mode);
         }
+    }
+
+    /// <summary>
+    /// Asks the server whether this trail wants a real account, and remembers it.
+    ///
+    /// One call, when a trail is entered. Quiet on failure: the answer is used
+    /// to warn somebody early, and a warning that could not be fetched is worth
+    /// less than the walk it would interrupt.
+    /// </summary>
+    public void LoadNeedsAccount(string worldId, Action done = null)
+    {
+        if (string.IsNullOrEmpty(worldId))
+        {
+            if (done != null) done();
+            return;
+        }
+
+        StartCoroutine(FetchNeedsAccount(worldId, done));
+    }
+
+    IEnumerator FetchNeedsAccount(string worldId, Action done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+        {
+            if (done != null) done();
+            yield break;
+        }
+
+        string body = "{\"p_world\":\"" + worldId.Replace("\"", "") + "\"}";
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/trail_summary"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string payload = request.downloadHandler != null
+                    ? request.downloadHandler.text : string.Empty;
+
+                // A table-returning function comes back as an array, which
+                // JsonUtility will not parse at the top level.
+                try
+                {
+                    SummaryList list = JsonUtility.FromJson<SummaryList>(
+                        "{\"items\":" + payload + "}");
+
+                    SelectedNeedsAccount = list != null && list.items != null &&
+                                           list.items.Length > 0 &&
+                                           list.items[0].needs_account;
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Trails] Unreadable summary: " + exception.Message);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[Trails] trail_summary failed (" +
+                                 request.responseCode + ")");
+            }
+        }
+
+        if (done != null) done();
+    }
+
+    [Serializable]
+    class Summary
+    {
+        public bool needs_account;
+    }
+
+    [Serializable]
+    class SummaryList
+    {
+        public Summary[] items;
     }
 
     /// <summary>Whether the trail being walked keeps a score.</summary>

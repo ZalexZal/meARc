@@ -178,12 +178,45 @@ public class TeamDoorView : MonoBehaviour
         if (noTeamGroup != null)
             noTeamGroup.SetActive(!onTeam);
 
+        // Before any of that: this trail may not take anonymous walkers at all,
+        // and being told so here beats making a team name, pressing the button
+        // and being refused by the server.
+        bool needsAccount = TrailService.Instance != null
+                            && TrailService.Instance.SelectedNeedsAccount
+                            && SupabaseAuth.Instance != null
+                            && SupabaseAuth.Instance.IsAnonymous;
+
+        // Taken away, not greyed out.
+        //
+        // Two reasons. There is nothing to do with a team name on a trail that
+        // will not take this identity, so a form there is furniture. And a
+        // Selectable's disabled look is a timed colour transition, which is
+        // exactly the thing that made the Check button on the question screen
+        // photograph as live when it was not - a control that is off should not
+        // depend on an animation to say so.
+        if (createButton != null)
+            createButton.gameObject.SetActive(!needsAccount);
+
+        if (joinButton != null)
+            joinButton.gameObject.SetActive(!needsAccount);
+
+        if (nameField != null)
+            nameField.gameObject.SetActive(!needsAccount);
+
+        if (codeField != null)
+            codeField.gameObject.SetActive(!needsAccount);
+
         // Gated, the card is a question rather than an observation about being
         // by yourself, so it asks one.
         if (noneTitle != null)
-            noneTitle.text = AppStrings.Get(gated ? "team.needed" : "team.none");
+        {
+            noneTitle.text = AppStrings.Get(
+                needsAccount ? "team.account" : gated ? "team.needed" : "team.none");
+        }
 
-        if (noneBody != null)
+        if (noneBody != null && needsAccount)
+            noneBody.text = AppStrings.Get("team.accountBody");
+        else if (noneBody != null)
             noneBody.text = AppStrings.Get(gated ? "team.neededBody" : "team.noneBody");
 
         if (teamGroup != null)

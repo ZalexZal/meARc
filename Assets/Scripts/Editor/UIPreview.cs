@@ -362,6 +362,38 @@ public static class UIPreview
 
         Shoot(canvas, rig, "26-team" + t, "MapPanel", "Doors/Backdrop", "Doors/Team");
 
+        // And the state a walker meets on a trail that will not take an
+        // anonymous identity. Drawn by hand for the same reason the rest of this
+        // card is: TeamDoorView reads it off TrailService and SupabaseAuth, and
+        // neither of those exists outside a running app.
+        TeamDoorView door = canvas.GetComponentInChildren<TeamDoorView>(true);
+
+        if (door != null)
+        {
+            if (door.teamGroup != null) door.teamGroup.SetActive(false);
+            if (door.teamGroupTail != null) door.teamGroupTail.SetActive(false);
+            if (door.noTeamGroup != null) door.noTeamGroup.SetActive(true);
+
+            if (door.noneTitle != null)
+                door.noneTitle.text = AppStrings.Get("team.account");
+
+            if (door.noneBody != null)
+                door.noneBody.text = AppStrings.Get("team.accountBody");
+
+            if (door.createButton != null) door.createButton.gameObject.SetActive(false);
+            if (door.joinButton != null) door.joinButton.gameObject.SetActive(false);
+            if (door.nameField != null) door.nameField.gameObject.SetActive(false);
+            if (door.codeField != null) door.codeField.gameObject.SetActive(false);
+
+            Shoot(canvas, rig, "33-team-needs-account" + t,
+                  "MapPanel", "Doors/Backdrop", "Doors/Team");
+
+            if (door.createButton != null) door.createButton.gameObject.SetActive(true);
+            if (door.joinButton != null) door.joinButton.gameObject.SetActive(true);
+            if (door.nameField != null) door.nameField.gameObject.SetActive(true);
+            if (door.codeField != null) door.codeField.gameObject.SetActive(true);
+        }
+
         // The two states of the list that are not a list. The third, waiting, is
         // the empty one with different words.
         Pieces.TrailsState(canvas.transform, "Empty");

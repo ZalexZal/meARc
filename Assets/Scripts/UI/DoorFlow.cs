@@ -264,6 +264,14 @@ public class DoorFlow : MonoBehaviour
         _dismissed = false;
         Show(Door.None);
 
+        // Whether this trail takes anonymous walkers at all, asked once on the
+        // way in so the team card can say so before somebody types a team name
+        // and is refused by the server.
+        TrailService trails = TrailService.Instance;
+
+        if (trails != null)
+            trails.LoadNeedsAccount(trails.SelectedId);
+
         StartCoroutine(TeamGate());
     }
 
