@@ -168,6 +168,13 @@ public class MarkerQuestionView : MonoBehaviour
     /// <summary>
     /// The creator's rule, said up front. Retry says nothing because there is
     /// nothing to warn about.
+    ///
+    /// Said as what happens to the reader, not as what the creator set. It read
+    /// "Creator rule: wait" - which is the schema's word for it, in a sentence
+    /// about whose rule it is, to somebody who only needs to know that getting
+    /// this wrong means waiting. And the deduction now names its number: the
+    /// question above says what it is worth and the hints below say what they
+    /// cost, so the one figure left unsaid was the one for being wrong.
     /// </summary>
     void ShowRule()
     {
@@ -179,9 +186,14 @@ public class MarkerQuestionView : MonoBehaviour
         if (!worth || ruleLabel == null)
             return;
 
+        if (rule == WrongAnswerRule.Deduct)
+        {
+            ruleLabel.text = string.Format(AppStrings.Get("task.dedCap"), _task.deduct);
+            return;
+        }
+
         ruleLabel.text = AppStrings.Get(
-            rule == WrongAnswerRule.Lock ? "task.lockCap" :
-            rule == WrongAnswerRule.Deduct ? "task.dedCap" : "task.skipCap");
+            rule == WrongAnswerRule.Lock ? "task.lockCap" : "task.skipCap");
     }
 
     void BuildOptions()

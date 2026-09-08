@@ -1567,9 +1567,12 @@ public static class UIPreview
 
             if (view.ruleLabel != null)
             {
-                view.ruleLabel.text = AppStrings.Get(
-                    ending == Ending.Lock ? "task.lockCap" :
-                    ending == Ending.Deduct ? "task.dedCap" : "task.skipCap");
+                // The deduction caption takes its number now, so a picture of it
+                // would otherwise read "A wrong answer costs {0} points".
+                view.ruleLabel.text = ending == Ending.Deduct
+                    ? string.Format(AppStrings.Get("task.dedCap"), 5)
+                    : AppStrings.Get(ending == Ending.Lock ? "task.lockCap"
+                                                           : "task.skipCap");
             }
 
             Show(view.lockHolder, ending == Ending.Lock);

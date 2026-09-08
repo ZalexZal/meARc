@@ -3797,24 +3797,37 @@ const float ReferenceWidth = 1080f;
         UIFactory.HorizontalStack(rule, 10f);
         view.ruleHolder = rule.gameObject;
 
+        // The pill hugs its own words.
+        //
+        // It was 430 pixels wide whatever it said, which fitted "Creator rule:
+        // lose points" and nothing longer. The captions say what happens to the
+        // reader now, and the deduction names its number, and in Bulgarian both
+        // run longer again - so the text wrapped inside a pill that could not
+        // grow and spilled out of the top and the bottom of it.
+        //
+        // A fitter on the chip itself rather than a wider fixed number, because
+        // the next language will be longer than this one too.
         RectTransform ruleChip = UIFactory.Rect("Chip", rule);
-        LayoutElement ruleSize = UIFactory.Size(ruleChip.gameObject, 52f, 430f);
+        LayoutElement ruleSize = UIFactory.Size(ruleChip.gameObject, 52f);
         ruleSize.flexibleWidth = 0f;
         UIFactory.Fill(ruleChip, ThemeRole.StatusFair, 0.16f, UIShape.Pill).raycastTarget = false;
 
-        RectTransform ruleRow = UIFactory.Rect("Row", ruleChip);
-        UIFactory.Stretch(ruleRow);
-        ruleRow.offsetMin = new Vector2(18f, 0f);
-        ruleRow.offsetMax = new Vector2(-18f, 0f);
-        HorizontalLayoutGroup ruleLayout = UIFactory.HorizontalStack(ruleRow, 10f);
+        ContentSizeFitter ruleFit = ruleChip.gameObject.AddComponent<ContentSizeFitter>();
+        ruleFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        HorizontalLayoutGroup ruleLayout = UIFactory.HorizontalStack(ruleChip, 10f);
         ruleLayout.childAlignment = TextAnchor.MiddleLeft;
+        ruleLayout.padding = new RectOffset(18, 22, 0, 0);
 
-        Icon(ruleRow, AppIcon.Warning, 28f, ThemeRole.StatusFair);
+        Icon(ruleChip, AppIcon.Warning, 28f, ThemeRole.StatusFair);
 
-        view.ruleLabel = UIFactory.Text("Label", ruleRow, 28f, ThemeRole.StatusFair,
+        view.ruleLabel = UIFactory.Text("Label", ruleChip, 28f, ThemeRole.StatusFair,
                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
         UIFactory.Size(view.ruleLabel.gameObject, 52f);
-        UIFactory.Flexible(view.ruleLabel.gameObject);
+
+        // One line, and it reports its own width to the fitter above. Wrapping
+        // is what put the words outside the pill in the first place.
+        view.ruleLabel.textWrappingMode = TextWrappingModes.NoWrap;
         rule.gameObject.SetActive(false);
 
         // --- the question ---
