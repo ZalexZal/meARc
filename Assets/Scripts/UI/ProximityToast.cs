@@ -50,6 +50,15 @@ public class ProximityToast : MonoBehaviour
     bool _sliding;
     bool _leaving;
 
+    /// <summary>
+    /// Whether an alert is on screen right now.
+    ///
+    /// Asked by the map, which takes the next-stop strip away while this is up.
+    /// A static, because the strip and this live in different top-level panels
+    /// and neither has any business holding a reference to the other.
+    /// </summary>
+    public static bool IsShowing { get; private set; }
+
     void Awake()
     {
         if (openButton != null)
@@ -60,6 +69,8 @@ public class ProximityToast : MonoBehaviour
 
         if (root != null)
             root.SetActive(false);
+
+        IsShowing = false;
     }
 
     void OnEnable()
@@ -73,6 +84,10 @@ public class ProximityToast : MonoBehaviour
 
     void OnDisable()
     {
+        // A static survives this object, so it is put back by hand. Left true,
+        // the map would hide its strip forever after the last alert.
+        IsShowing = false;
+
         ProximityAlerts.OnAlert -= Show;
         AppStrings.OnLanguageChanged -= Render;
     }
@@ -91,6 +106,7 @@ public class ProximityToast : MonoBehaviour
         if (root != null)
             root.SetActive(true);
 
+        IsShowing = true;
         _sliding = true;
         _slideStart = Time.unscaledTime;
         card.anchoredPosition = new Vector2(0f, restY - slideDistance);
@@ -148,6 +164,7 @@ public class ProximityToast : MonoBehaviour
         if (_leaving)
         {
             root.SetActive(false);
+            IsShowing = false;
             _marker = null;
         }
     }

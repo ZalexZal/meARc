@@ -245,7 +245,18 @@ public static class UIPreview
         Shoot(canvas, rig, "31-tutorial-last" + t, "MapPanel", "Tutorial/Overlay");
 
         Tutorial(canvas.transform, 0);
+        // The strip stands down for an alert, as it does in the app now, so the
+        // picture stops showing the alert landing on top of it.
+        NextStopStrip stripForToast = canvas.GetComponentInChildren<NextStopStrip>(true);
+        bool stripUp = stripForToast != null && stripForToast.gameObject.activeSelf;
+
+        if (stripForToast != null)
+            stripForToast.gameObject.SetActive(false);
+
         Shoot(canvas, rig, "07-toast" + t, "MapPanel", "ProximityToast/Safe/CardHolder");
+
+        if (stripForToast != null)
+            stripForToast.gameObject.SetActive(stripUp);
         // Told which state to be in first. Its copy is written by Show(), which
         // only runs while the app does, so this shot had been three placeholders
         // reading Title, Body and Label - and that is the screen somebody sees

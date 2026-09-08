@@ -95,6 +95,15 @@ public class MapTabController : MonoBehaviour
 
     void Update()
     {
+        // Whether the strip is up is checked every frame; what it says is not.
+        //
+        // Refresh runs once a second, and an alert slides in over a fifth of one,
+        // so leaving this on that tick would let the alert sit on top of the strip
+        // for most of a second every time one arrives. Comparing two booleans is
+        // cheap; asking the strip to redraw itself is not, and that still happens
+        // only when the answer changes or the second comes round.
+        RefreshNearestVisible();
+
         _timer += Time.unscaledDeltaTime;
         if (_timer < 1f)
             return;
@@ -207,19 +216,45 @@ public class MapTabController : MonoBehaviour
     /// The guidance banner already names the marker the reader is walking to. A
     /// strip naming a different one underneath it is two answers to one question,
     /// which is the same reason the card it replaced hid here.
+    ///
+    /// And while a proximity alert is up, for the same reason and with a second
+    /// one on top: the alert says "you are near this marker" and the strip says
+    /// "your next stop is that one", which is two answers again - and the alert
+    /// rests forty pixels above the navigation bar, which is where the strip
+    /// already is, so it was landing on top of it and cutting a row in half.
     /// </summary>
     void RefreshNearest()
     {
         if (nextStop == null)
             return;
 
-        bool show = !GuidanceService.IsGuiding;
+        if (RefreshNearestVisible())
+            nextStop.Refresh();
+    }
+
+    /// <summary>
+    /// Puts the strip up or takes it down, and says whether it is up.
+    ///
+    /// Split out so Update can call it every frame without redrawing anything.
+    /// </summary>
+    bool RefreshNearestVisible()
+    {
+        if (nextStop == null)
+            return false;
+
+        bool show = !GuidanceService.IsGuiding && !ProximityToast.IsShowing;
 
         if (nextStop.gameObject.activeSelf != show)
+        {
             nextStop.gameObject.SetActive(show);
 
-        if (show)
-            nextStop.Refresh();
+            // Coming back from behind an alert, it has a second of staleness to
+            // make up for.
+            if (show)
+                nextStop.Refresh();
+        }
+
+        return show;
     }
 
     void RefreshState()
