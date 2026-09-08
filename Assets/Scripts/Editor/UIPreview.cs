@@ -259,7 +259,67 @@ public static class UIPreview
             state.Show(StateCardView.Kind.Empty);
         }
 
+        // And the rest of the screen told the same thing.
+        //
+        // The card was put into "No trail open" and nothing else was, so the
+        // picture had it saying "You have not opened a trail yet" while the chip
+        // above it named a trail, the map drew that trail's markers, and the card
+        // below counted two of nine found. Four parts of one screen, three of
+        // them contradicting the fourth, in a composition the app never draws.
+        TrailChipView chip = canvas.GetComponentInChildren<TrailChipView>(true);
+        string chipWas = null;
+
+        if (chip != null && chip.nameLabel != null)
+        {
+            chipWas = chip.nameLabel.text;
+            chip.nameLabel.text = AppStrings.Get("trails.choose");
+            if (chip.modeChip != null) chip.modeChip.SetActive(false);
+
+            // "Nothing open, nothing to report" - the app's own rule, in
+            // TrailChipView.Refresh. This fixture writes the label directly
+            // rather than going through Refresh, so it has to keep the rule
+            // itself or the picture shows a report button on a trail that,
+            // according to the card in the middle of the same screen, is not
+            // open.
+            if (chip.reportButton != null)
+                chip.reportButton.gameObject.SetActive(false);
+        }
+
+        NextStopStrip strip = canvas.GetComponentInChildren<NextStopStrip>(true);
+        bool stripWas = strip != null && strip.gameObject.activeSelf;
+
+        if (strip != null)
+            strip.gameObject.SetActive(false);
+
+        // The pins go too. They belong to the trail the card says is not open.
+        MapPinView[] pins = canvas.GetComponentsInChildren<MapPinView>(true);
+        var pinsWere = new List<GameObject>();
+
+        for (int i = 0; i < pins.Length; i++)
+        {
+            if (!pins[i].gameObject.activeSelf)
+                continue;
+
+            pinsWere.Add(pins[i].gameObject);
+            pins[i].gameObject.SetActive(false);
+        }
+
         Shoot(canvas, rig, "08-state-card" + t, "MapPanel", "MapPanel/Safe/StateCard");
+
+        if (chip != null && chip.nameLabel != null && chipWas != null)
+        {
+            chip.nameLabel.text = chipWas;
+            if (chip.modeChip != null) chip.modeChip.SetActive(true);
+
+            if (chip.reportButton != null)
+                chip.reportButton.gameObject.SetActive(true);
+        }
+
+        if (strip != null)
+            strip.gameObject.SetActive(stripWas);
+
+        for (int i = 0; i < pinsWere.Count; i++)
+            pinsWere[i].SetActive(true);
 
         // Put it away again. The shots run once per theme in one scene, so a
         // card left showing leaked into the next pass's map, camera and toast -
