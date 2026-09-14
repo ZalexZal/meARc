@@ -43,13 +43,7 @@ public static class DiscoveryTracker
     /// </summary>
     static string Key(string buildingId)
     {
-        SupabaseAuth auth = SupabaseAuth.Instance;
-
-        string who = auth != null && !string.IsNullOrEmpty(auth.UserId)
-            ? auth.UserId
-            : "nobody";
-
-        return KeyPrefix + who + "_" + buildingId;
+        return AccountScope.Key(KeyPrefix + buildingId);
     }
 
     /// <summary>

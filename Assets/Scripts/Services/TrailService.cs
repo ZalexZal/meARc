@@ -252,7 +252,7 @@ public class TrailService : MonoBehaviour
     void Awake()
     {
         Instance = this;
-        SelectedId = PlayerPrefs.GetString(SelectedKey, string.Empty);
+        SelectedId = PlayerPrefs.GetString(AccountScope.Key(SelectedKey), string.Empty);
     }
 
     void OnDestroy()
@@ -273,6 +273,12 @@ public class TrailService : MonoBehaviour
 
     void HandleSession()
     {
+        // Awake read this before there was a session, so it read the "nobody"
+        // drawer and found nothing. Now that the account is known, read that
+        // account's own choice. Without this line, scoping the key would lose
+        // the chosen trail on every single launch.
+        SelectedId = PlayerPrefs.GetString(AccountScope.Key(SelectedKey), string.Empty);
+
         StartCoroutine(RefreshMine());
 
         // The trail carried over from the last run never asked the server about
@@ -296,7 +302,7 @@ public class TrailService : MonoBehaviour
         SelectedNeedsAccount = false;
         SelectedSummaryMode = null;
         SummaryFor = string.Empty;
-        PlayerPrefs.SetString(SelectedKey, worldId ?? string.Empty);
+        PlayerPrefs.SetString(AccountScope.Key(SelectedKey), worldId ?? string.Empty);
         PlayerPrefs.Save();
 
         Raise();
@@ -350,7 +356,7 @@ public class TrailService : MonoBehaviour
             if (SelectedId == worldId)
             {
                 SelectedId = string.Empty;
-                PlayerPrefs.DeleteKey(SelectedKey);
+                PlayerPrefs.DeleteKey(AccountScope.Key(SelectedKey));
                 PlayerPrefs.Save();
             }
 

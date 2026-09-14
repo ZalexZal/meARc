@@ -167,7 +167,7 @@ public class DoorFlow : MonoBehaviour
 
         TermsService terms = TermsService.Instance;
 
-        if (terms != null && !terms.Accepted)
+        if (terms != null && SupabaseAuth.HasSettledYet && !terms.Accepted)
         {
             Show(PlayerPrefs.GetInt(WelcomeSeenKey, 0) == 0 ? Door.Welcome : Door.Terms);
             return;

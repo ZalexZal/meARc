@@ -142,12 +142,12 @@ public class MarkerTaskService : MonoBehaviour
         // A different reader has a different history. Anonymous identities do not
         // survive a reinstall, which is why a CTF world should require a real
         // account - see MARKER-CONTENT.md.
-        SupabaseAuth.OnSessionChanged += Forget;
+        SupabaseAuth.OnSessionChanged += SwitchWalker;
     }
 
     void OnDisable()
     {
-        SupabaseAuth.OnSessionChanged -= Forget;
+        SupabaseAuth.OnSessionChanged -= SwitchWalker;
     }
 
     // ------------------------------------------------------------------- state
@@ -488,10 +488,20 @@ public class MarkerTaskService : MonoBehaviour
 
     // ------------------------------------------------------------------- cache
 
-    void Forget()
+    /// <summary>
+    /// A different person is holding the phone, or the same one signing back in.
+    ///
+    /// This used to delete the stored progress outright, which was the right
+    /// thing while there was one drawer per phone: deleting was the only way to
+    /// stop one reader inheriting another's answers. Now that the key carries
+    /// the account, deleting would throw away the progress of the person who
+    /// has just arrived. Clearing what is in memory and reading their own cache
+    /// does what the delete was for, without the collateral.
+    /// </summary>
+    void SwitchWalker()
     {
         _progress.Clear();
-        PlayerPrefs.DeleteKey(ProgressKey);
+        LoadCache();
 
         if (OnProgressChanged != null)
             OnProgressChanged();
@@ -499,7 +509,7 @@ public class MarkerTaskService : MonoBehaviour
 
     void LoadCache()
     {
-        string stored = PlayerPrefs.GetString(ProgressKey, string.Empty);
+        string stored = PlayerPrefs.GetString(AccountScope.Key(ProgressKey), string.Empty);
         if (string.IsNullOrEmpty(stored))
             return;
 
@@ -526,7 +536,7 @@ public class MarkerTaskService : MonoBehaviour
     {
         ProgressList list = new ProgressList { items = new List<MarkerProgress>(_progress.Values) };
 
-        PlayerPrefs.SetString(ProgressKey, JsonUtility.ToJson(list));
+        PlayerPrefs.SetString(AccountScope.Key(ProgressKey), JsonUtility.ToJson(list));
         PlayerPrefs.Save();
     }
 

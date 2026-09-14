@@ -47,7 +47,7 @@ public class TermsService : MonoBehaviour
 
     public bool Accepted
     {
-        get { return PlayerPrefs.GetString(AcceptedKey, string.Empty) == RequiredVersion; }
+        get { return PlayerPrefs.GetString(AccountScope.Key(AcceptedKey), string.Empty) == RequiredVersion; }
     }
 
     void Awake()
@@ -85,7 +85,7 @@ public class TermsService : MonoBehaviour
         if (!Accepted)
             return;
 
-        if (PlayerPrefs.GetString(RecordedKey, string.Empty) == RequiredVersion)
+        if (PlayerPrefs.GetString(AccountScope.Key(RecordedKey), string.Empty) == RequiredVersion)
             return;
 
         if (SupabaseAuth.Instance == null || !SupabaseAuth.Instance.IsSignedIn)
@@ -103,7 +103,7 @@ public class TermsService : MonoBehaviour
     /// </summary>
     public void Accept()
     {
-        PlayerPrefs.SetString(AcceptedKey, RequiredVersion);
+        PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
         PlayerPrefs.Save();
 
         if (OnAcceptedChanged != null)
@@ -141,7 +141,7 @@ public class TermsService : MonoBehaviour
 
             // Only now. Marking it sent before the response comes back would make a
             // failed request indistinguishable from a successful one.
-            PlayerPrefs.SetString(RecordedKey, version);
+            PlayerPrefs.SetString(AccountScope.Key(RecordedKey), version);
             PlayerPrefs.Save();
         }
     }
