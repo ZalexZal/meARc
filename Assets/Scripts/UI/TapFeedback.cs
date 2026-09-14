@@ -90,6 +90,15 @@ public class TapFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             _group.alpha = 1f;
         }
 
+        // At rest the control is at full strength, whatever it was left at.
+        //
+        // A press that never got its pointer-up - the control hidden and shown
+        // again underneath the finger, a layout switch mid-tap - used to leave it
+        // parked at the pressed opacity for good, and a dim button reads as a
+        // dead one. Cheap: written only when it is wrong.
+        if (!_running && !_held && _group.alpha < 1f)
+            _group.alpha = 1f;
+
         if (!_running)
             return;
 

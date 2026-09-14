@@ -208,6 +208,10 @@ const float ReferenceWidth = 1080f;
         // something the reader opened on purpose.
         BuildProximityToast(root, location, info);
 
+        // The phone's back button. It presses whatever Close or Back is on top,
+        // so back always agrees with the control the reader can see.
+        root.gameObject.AddComponent<BackKey>();
+
         RectTransform navRow = BuildNav(root);
 
         TabNavigationController tabs = WireTabs(
@@ -364,6 +368,10 @@ const float ReferenceWidth = 1080f;
         // the card says it could not reach the server, and nothing invents a
         // team that does not exist.
         go.AddComponent<TeamService>();
+
+        // Your numbers and badges. Harmless before 0038: my_profile 404s once, and
+        // the You tab shows who you are without the numbers.
+        go.AddComponent<ProfileService>();
 
         // Markers come from the Supabase RPC, not from a spreadsheet and not from
         // assets in the build. RemoteBuildingSource is the old path and is
@@ -681,6 +689,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Corner(close, new Vector2(1f, 1f), new Vector2(Tap, Tap),
                          new Vector2(-24f, -6f));
         Button closeButton = UIFactory.Button(close, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
+        closeButton.gameObject.AddComponent<WayOut>();
         Wire(closeButton.onClick, controller.ClosePanel, "Marker sheet close");
         Icon(close, AppIcon.Close, 44f, ThemeRole.TextSecondary);
 
@@ -768,6 +777,7 @@ const float ReferenceWidth = 1080f;
         LayoutElement backSize = UIFactory.Size(back.gameObject, 76f, 190f);
         backSize.flexibleWidth = 0f;
         pieces.backButton = UIFactory.Button(back, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+        pieces.backButton.gameObject.AddComponent<WayOut>();
 
         RectTransform backRow = UIFactory.Rect("Row", back);
         UIFactory.Stretch(backRow);
@@ -933,6 +943,7 @@ const float ReferenceWidth = 1080f;
 
         view.closeButton = FullWidthButton(card, "Close", "team.close",
                                            ThemeRole.SurfaceAlt, ThemeRole.TextSecondary);
+        view.closeButton.gameObject.AddComponent<WayOut>();
 
         panel.gameObject.SetActive(false);
         return view;
@@ -996,6 +1007,7 @@ const float ReferenceWidth = 1080f;
         // colour as the thing it sits on is a button nobody can see.
         view.cancelButton = FullWidthButton(card, "Cancel", "report.cancel",
                                             ThemeRole.SurfaceAlt, ThemeRole.TextSecondary);
+        view.cancelButton.gameObject.AddComponent<WayOut>();
 
         panel.gameObject.SetActive(false);
         return view;
@@ -1125,21 +1137,14 @@ const float ReferenceWidth = 1080f;
         if (info != null)
             chip.reportSheet = info.reportSheet;
         UIFactory.Corner(chipRect, new Vector2(0f, 0.5f),
-                         new Vector2(800f, 84f), new Vector2(Margin - 18f, -14f));
+                         new Vector2(ReferenceWidth - 2f * (Margin - 18f), 84f),
+                         new Vector2(Margin - 18f, -14f));
 
         // Labelled, not icon-only. Recentring has no universally read symbol, and
         // this control only appears once the reader has already lost track of where
         // they are - the worst moment to make them guess.
-        // The gear, at the far end of a row that is already a row of controls.
-        const float GearSize = 96f;
-
-        RectTransform gear = UIFactory.Rect("Settings", top);
-        UIFactory.Corner(gear, new Vector2(1f, 0.5f), new Vector2(GearSize, GearSize),
-                         new Vector2(-Margin, -14f));
-        controller.settingsButton = UIFactory.Button(gear, ThemeRole.Surface, 0.96f,
-                                                     UIShape.Circle);
-        Outline(gear);
-        Icon(gear, AppIcon.Settings, 44f, ThemeRole.TextSecondary);
+        // No gear here any more. Its contents are under You, in the tab bar, and
+        // the trail chip takes the width it left.
 
         // On its own line, under the top bar.
         //
@@ -2193,6 +2198,7 @@ const float ReferenceWidth = 1080f;
         controller.titleText = title;
         controller.emptyText = empty;
         controller.closeButton = close;
+        close.gameObject.AddComponent<WayOut>();
         controller.radiusMetres = 500d;
 
         // Parked offscreen rather than disabled, so the controller keeps running and
@@ -2336,6 +2342,7 @@ const float ReferenceWidth = 1080f;
         RectTransform back = UIFactory.Rect("Back", inner);
         UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(240f, Tap), Vector2.zero);
         flow.backButton = UIFactory.Button(back, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+        flow.backButton.gameObject.AddComponent<WayOut>();
         flow.backLabel = UIFactory.Text("Label", back, Secondary, ThemeRole.TextPrimary,
                                         TextAlignmentOptions.Center, "settings.back",
                                         FontStyles.Bold);
@@ -2478,9 +2485,13 @@ const float ReferenceWidth = 1080f;
         }
         else
         {
-            RectTransform spacer = UIFactory.Rect("Spacer", rt);
-            LayoutElement spacerSize = spacer.gameObject.AddComponent<LayoutElement>();
-            spacerSize.flexibleHeight = 1f;
+            // Centred, not pushed to the floor.
+            //
+            // A flexible spacer above the words put them at the bottom of an
+            // otherwise empty screen, which on a phone reads as a picture that
+            // failed to load rather than a card that never had one. The same
+            // words in the middle of the card read as the whole card.
+            stack.childAlignment = TextAnchor.MiddleLeft;
         }
 
         // Keyed rather than blank, so this screen can be looked at before it is
@@ -2521,6 +2532,7 @@ const float ReferenceWidth = 1080f;
         RectTransform back = UIFactory.Rect("BackButton", rt);
         UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(Tap, Tap), Vector2.zero);
         controller.backButton = UIFactory.Button(back, ThemeRole.Surface, 0f, UIShape.Circle);
+        controller.backButton.gameObject.AddComponent<WayOut>();
         Icon(back, AppIcon.Back, 44f, ThemeRole.TextSecondary);
 
         // Kept and hidden: the controller writes to it, and the button still
@@ -2683,9 +2695,11 @@ const float ReferenceWidth = 1080f;
     /// survive a reinstall comes looking for it. A modal in the way of the map
     /// would be asking for a form before earning the right to.
     /// </summary>
-    static AccountSectionView BuildAccountCard(Transform content)
+    static AccountSectionView BuildAccountCard(Transform content, bool label = true,
+                                               System.Action<Transform> signedInExtras = null)
     {
-        SectionLabel(content, "settings.account");
+        if (label)
+            SectionLabel(content, "settings.account");
 
         RectTransform card = UIFactory.Rect("AccountCard", content);
         UIFactory.Card(card, 34f, 20f);
@@ -2711,6 +2725,11 @@ const float ReferenceWidth = 1080f;
         view.signedInNameField = Field(inGroup, "Name", "account.name");
         view.saveNameButton = FullWidthButton(inGroup, "SaveName", "account.saveName",
                                               ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        // Whatever the caller wants among the things only an account has - the
+        // You tab puts "Email and password" here.
+        if (signedInExtras != null)
+            signedInExtras(inGroup);
 
         view.signOutButton = FullWidthButton(inGroup, "SignOut", "account.signOut",
                                              ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
@@ -2950,9 +2969,16 @@ const float ReferenceWidth = 1080f;
         rootView.offsetMin = new Vector2(Margin, Nav + Margin);
         rootView.offsetMax = new Vector2(-Margin, -Margin);
         RectTransform content = UIFactory.ScrollList("Scroll", rootView, 26f);
+        controller.scroll = content.GetComponentInParent<ScrollRect>();
         navigator.rootView = rootView.gameObject;
 
-        BuildAccountCard(content);
+        // You first: the person, then the account, then the settings.
+        BuildProfileCard(content, controller);
+
+        BuildAccountCard(content, true, inGroup =>
+        {
+            controller.securityButton = HelpRow(inGroup, "settings.security", out TextMeshProUGUI _);
+        });
 
         controller.appearanceLabel = SectionLabel(content, "settings.appearance");
         RectTransform appearance = UIFactory.Rect("AppearanceCard", content);
@@ -3029,6 +3055,15 @@ const float ReferenceWidth = 1080f;
                                            out controller.sourcesRowLabel);
         Divider(help);
         controller.aboutButton = HelpRow(help, "settings.about", out controller.aboutRowLabel);
+        Divider(help);
+        controller.termsButton = LinkRow(help, "settings.terms");
+        Divider(help);
+        controller.privacyButton = LinkRow(help, "settings.privacyPolicy");
+
+        // Leaving, last, and in plain sight. Deleting is one button and one
+        // confirmation - never less friction than making the account, never more.
+        SectionLabel(content, "settings.yourData");
+        BuildDeleteCard(content);
 
         RectTransform versionRow = UIFactory.Rect("Version", content);
         UIFactory.Size(versionRow.gameObject, Tap);
@@ -3041,16 +3076,20 @@ const float ReferenceWidth = 1080f;
         controller.sourcesPage = SubPage(rt, "SourcesPage", "settings.dataSources",
                                          "sub.sources.body");
         controller.aboutPage = SubPage(rt, "AboutPage", "settings.about", "sub.about.body");
+        controller.badgesPage = BuildBadgesPage(rt);
+        controller.securityPage = BuildSecurityPage(rt);
 
         navigator.pages = new List<GameObject>
         {
-            controller.sourcesPage, controller.aboutPage
+            controller.sourcesPage, controller.aboutPage,
+            controller.badgesPage, controller.securityPage
         };
 
         RectTransform backRect = UIFactory.Rect("BackButton", rt);
         UIFactory.Corner(backRect, new Vector2(0f, 1f), new Vector2(280f, Tap),
                          new Vector2(Margin, -Margin));
         navigator.backButton = UIFactory.Button(backRect, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+        navigator.backButton.gameObject.AddComponent<WayOut>();
         navigator.backLabel = UIFactory.Text("Label", backRect, Secondary, ThemeRole.TextPrimary,
                                              TextAlignmentOptions.Center, "settings.back",
                                              FontStyles.Bold);
@@ -3059,6 +3098,397 @@ const float ReferenceWidth = 1080f;
 
         navigator.ShowRoot();
         return controller;
+    }
+
+    // ----------------------------------------------------------------- you
+
+    /// <summary>The glyph for each badge, in Badges.Keys order.</summary>
+    static Sprite[] BadgeSprites()
+    {
+        AppIcon[] icons =
+        {
+            AppIcon.MapPin, AppIcon.Navigation, AppIcon.Flag, AppIcon.Clock, AppIcon.Book,
+            AppIcon.Star, AppIcon.Trail, AppIcon.Users, AppIcon.Home, AppIcon.Mountain,
+            AppIcon.Camera
+        };
+
+        Sprite[] sprites = new Sprite[icons.Length];
+        for (int i = 0; i < icons.Length; i++)
+            sprites[i] = UIIcons.Get(icons[i]);
+
+        return sprites;
+    }
+
+    /// <summary>
+    /// A badge's disc: a wash of its colour with the glyph on it. Both are
+    /// coloured by the view from the badge's state, so neither is themed.
+    /// </summary>
+    static RectTransform Medal(Transform parent, float size, out Image ring, out Image icon)
+    {
+        RectTransform disc = UIFactory.Rect("Disc", parent);
+        LayoutElement discSize = UIFactory.Size(disc.gameObject, size, size);
+        discSize.flexibleWidth = 0f;
+
+        ring = UIFactory.Plain(disc, ThemeManager.Get(ThemeRole.Accent), UIShape.Circle);
+        ring.raycastTarget = false;
+        Unthemed(ring.gameObject);
+
+        RectTransform glyph = UIFactory.Rect("Glyph", disc);
+        UIFactory.Corner(glyph, new Vector2(0.5f, 0.5f), new Vector2(size * 0.52f, size * 0.52f),
+                         Vector2.zero);
+        icon = glyph.gameObject.AddComponent<Image>();
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
+        icon.color = ThemeManager.Get(ThemeRole.Accent);
+
+        return disc;
+    }
+
+    /// <summary>
+    /// The top of the You tab. Concept A: one scroll, you at the top.
+    /// </summary>
+    static ProfileView BuildProfileCard(Transform content, SettingsTabController controller)
+    {
+        RectTransform card = UIFactory.Rect("ProfileCard", content);
+        UIFactory.Card(card, 34f, 26f);
+
+        ProfileView view = card.gameObject.AddComponent<ProfileView>();
+        view.badgeSprites = BadgeSprites();
+
+        // ---- who
+        RectTransform me = UIFactory.Rect("Me", card);
+        UIFactory.Size(me.gameObject, 128f);
+        HorizontalLayoutGroup meRow = UIFactory.HorizontalStack(me, 26f, false);
+        meRow.childAlignment = TextAnchor.MiddleLeft;
+
+        RectTransform face = UIFactory.Rect("Face", me);
+        LayoutElement faceSize = UIFactory.Size(face.gameObject, 124f, 124f);
+        faceSize.flexibleWidth = 0f;
+        view.face = UIFactory.Plain(face, ThemeManager.Get(ThemeRole.Accent), UIShape.Circle);
+        view.face.raycastTarget = false;
+        Unthemed(view.face.gameObject);
+
+        view.faceLabel = UIFactory.Text("Initials", face, 46f, ThemeRole.OnAccent,
+                                        TextAlignmentOptions.Center, null, FontStyles.Bold);
+        UIFactory.Stretch(view.faceLabel.rectTransform);
+        view.faceLabel.raycastTarget = false;
+        Unthemed(view.faceLabel.gameObject);
+
+        Image guestIcon = Icon(face, AppIcon.Person, 64f, ThemeRole.TextMuted);
+        view.faceGuestIcon = guestIcon.gameObject;
+
+        RectTransform who = UIFactory.Rect("Who", me);
+        UIFactory.VerticalStack(who, 4f, false);
+        UIFactory.Flexible(who.gameObject);
+
+        view.nameLabel = UIFactory.Text("Name", who, Title, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.nameLabel.gameObject, 64f);
+        view.nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        view.nameLabel.overflowMode = TextOverflowModes.Ellipsis;
+
+        view.subLabel = UIFactory.Text("Sub", who, Caption, ThemeRole.TextMuted,
+                                       TextAlignmentOptions.Left, null);
+        UIFactory.Size(view.subLabel.gameObject, 40f);
+
+        // ---- the three numbers
+        RectTransform stats = UIFactory.Rect("Stats", card);
+        UIFactory.Size(stats.gameObject, 150f);
+        UIFactory.Fill(stats, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded).raycastTarget = false;
+        UIFactory.HorizontalStack(stats, 0f, true);
+        view.statsGroup = stats.gameObject;
+
+        view.trailsValue = StatCell(stats, "profile.trails");
+        view.stopsValue = StatCell(stats, "profile.stops");
+        view.badgesValue = StatCell(stats, "profile.badgesStat");
+
+        // ---- badges
+        RectTransform badges = UIFactory.Rect("Badges", card);
+        UIFactory.VerticalStack(badges, 14f, false);
+        view.badgesGroup = badges.gameObject;
+
+        RectTransform head = UIFactory.Rect("Head", badges);
+        UIFactory.Size(head.gameObject, 56f);
+        UIFactory.HorizontalStack(head, 12f, false);
+
+        view.badgesTitle = UIFactory.Text("Title", head, Caption, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left, null, FontStyles.UpperCase);
+        view.badgesTitle.characterSpacing = 6f;
+        UIFactory.Size(view.badgesTitle.gameObject, 56f);
+        UIFactory.Flexible(view.badgesTitle.gameObject);
+
+        RectTransform all = UIFactory.Rect("All", head);
+        LayoutElement allSize = UIFactory.Size(all.gameObject, 56f, 200f);
+        allSize.flexibleWidth = 0f;
+        view.allBadgesButton = UIFactory.Button(all, ThemeRole.Surface, 0f);
+        view.allBadgesLabel = UIFactory.Text("Label", all, Secondary, ThemeRole.Accent,
+                                             TextAlignmentOptions.Right, null, FontStyles.Bold);
+        UIFactory.Stretch(view.allBadgesLabel.rectTransform);
+        controller.allBadgesButton = view.allBadgesButton;
+
+        RectTransform medals = UIFactory.Rect("Medals", badges);
+        UIFactory.Size(medals.gameObject, 200f);
+        UIFactory.HorizontalStack(medals, 14f, true);
+
+        const int Slots = 4;
+        view.medalSlots = new GameObject[Slots];
+        view.medalRings = new Image[Slots];
+        view.medalIcons = new Image[Slots];
+        view.medalLabels = new TextMeshProUGUI[Slots];
+
+        for (int i = 0; i < Slots; i++)
+        {
+            RectTransform slot = UIFactory.Rect("Medal" + i, medals);
+            VerticalLayoutGroup slotStack = UIFactory.VerticalStack(slot, 10f, false);
+            slotStack.childAlignment = TextAnchor.UpperCenter;
+            slotStack.childForceExpandWidth = false;
+            view.medalSlots[i] = slot.gameObject;
+
+            Medal(slot, 116f, out view.medalRings[i], out view.medalIcons[i]);
+
+            view.medalLabels[i] = UIFactory.Text("Label", slot, 25f, ThemeRole.TextSecondary,
+                                                 TextAlignmentOptions.Top, null);
+            view.medalLabels[i].textWrappingMode = TextWrappingModes.Normal;
+            UIFactory.Size(view.medalLabels[i].gameObject, 66f, 210f);
+        }
+
+        view.guestNote = UIFactory.Text("GuestNote", badges, Caption, ThemeRole.TextSecondary,
+                                        TextAlignmentOptions.TopLeft, null);
+        view.guestNote.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(view.guestNote.gameObject, 118f);
+
+        // ---- the last two trails
+        RectTransform recent = UIFactory.Rect("Recent", card);
+        UIFactory.VerticalStack(recent, 4f, false);
+        view.recentGroup = recent.gameObject;
+
+        SectionLabel(recent, "profile.recent");
+
+        const int Rows = 2;
+        view.recentRows = new GameObject[Rows];
+        view.recentNames = new TextMeshProUGUI[Rows];
+        view.recentMetas = new TextMeshProUGUI[Rows];
+
+        for (int i = 0; i < Rows; i++)
+        {
+            RectTransform row = UIFactory.Rect("Trail" + i, recent);
+            UIFactory.Size(row.gameObject, 84f);
+            UIFactory.HorizontalStack(row, 18f, false);
+            view.recentRows[i] = row.gameObject;
+
+            view.recentNames[i] = UIFactory.Text("Name", row, Body, ThemeRole.TextPrimary,
+                                                 TextAlignmentOptions.Left, null);
+            UIFactory.Size(view.recentNames[i].gameObject, 84f);
+            UIFactory.Flexible(view.recentNames[i].gameObject);
+            view.recentNames[i].textWrappingMode = TextWrappingModes.NoWrap;
+            view.recentNames[i].overflowMode = TextOverflowModes.Ellipsis;
+
+            view.recentMetas[i] = UIFactory.Text("Meta", row, Caption, ThemeRole.TextMuted,
+                                                 TextAlignmentOptions.Right, null);
+            LayoutElement metaSize = UIFactory.Size(view.recentMetas[i].gameObject, 84f, 380f);
+            metaSize.flexibleWidth = 0f;
+        }
+
+        return view;
+    }
+
+    /// <summary>A number over its label, one third of the numbers strip.</summary>
+    static TextMeshProUGUI StatCell(Transform strip, string captionKey)
+    {
+        RectTransform cell = UIFactory.Rect("Stat", strip);
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(cell, 0f, false);
+        stack.childAlignment = TextAnchor.MiddleCenter;
+        stack.padding = new RectOffset(8, 8, 18, 14);
+
+        TextMeshProUGUI value = UIFactory.Text("Value", cell, Title, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Center, null, FontStyles.Bold);
+        UIFactory.Size(value.gameObject, 66f);
+        value.text = "0";
+
+        TextMeshProUGUI caption = UIFactory.Text("Caption", cell, Caption, ThemeRole.TextSecondary,
+                                                 TextAlignmentOptions.Center, captionKey);
+        UIFactory.Size(caption.gameObject, 40f);
+        return value;
+    }
+
+    /// <summary>A help row that leaves the app, so it wears the open-outside glyph.</summary>
+    static Button LinkRow(Transform card, string key)
+    {
+        RectTransform row = UIFactory.Rect("Row", card);
+        UIFactory.Size(row.gameObject, Tap);
+        Button button = UIFactory.Button(row, ThemeRole.Surface, 0f);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", row, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, key);
+        UIFactory.Stretch(label.rectTransform);
+        label.rectTransform.offsetMax = new Vector2(-56f, 0f);
+
+        Icon(row, AppIcon.OpenInNew, 34f, ThemeRole.TextMuted, out RectTransform glyphRect);
+        UIFactory.Corner(glyphRect, new Vector2(1f, 0.5f), new Vector2(34f, 34f),
+                         new Vector2(-14f, 0f));
+
+        return button;
+    }
+
+    /// <summary>The same frame as SubPage, for pages with more than a paragraph in them.</summary>
+    static RectTransform PageFrame(Transform parent, string name, out RectTransform content)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        UIFactory.Stretch(rt);
+        rt.offsetMin = new Vector2(Margin, Nav + Margin);
+        rt.offsetMax = new Vector2(-Margin, -(Margin + Tap + 20f));
+
+        content = UIFactory.ScrollList("Scroll", rt, 22f);
+        return rt;
+    }
+
+    /// <summary>Every badge, with its rule and how far along it is.</summary>
+    static GameObject BuildBadgesPage(Transform parent)
+    {
+        RectTransform rt = PageFrame(parent, "BadgesPage", out RectTransform content);
+        BadgesPageView view = rt.gameObject.AddComponent<BadgesPageView>();
+
+        view.titleLabel = UIFactory.Text("Title", content, Title, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.titleLabel.gameObject, 84f);
+
+        view.countLabel = UIFactory.Text("Count", content, Secondary, ThemeRole.TextSecondary,
+                                         TextAlignmentOptions.Left, null);
+        view.countLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(view.countLabel.gameObject, 56f);
+
+        Sprite[] sprites = BadgeSprites();
+        int n = Badges.Keys.Length;
+
+        view.rings = new Image[n];
+        view.icons = new Image[n];
+        view.titles = new TextMeshProUGUI[n];
+        view.rules = new TextMeshProUGUI[n];
+        view.progress = new TextMeshProUGUI[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            RectTransform row = UIFactory.Rect("Badge_" + Badges.Keys[i], content);
+            UIFactory.Fill(row, ThemeRole.Surface, 1f, UIShape.Rounded).raycastTarget = false;
+
+            HorizontalLayoutGroup line = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            line.padding = new RectOffset(28, 28, 26, 26);
+            line.spacing = 26f;
+            line.childAlignment = TextAnchor.MiddleLeft;
+            line.childControlWidth = true;
+            line.childControlHeight = true;
+            line.childForceExpandWidth = false;
+            line.childForceExpandHeight = false;
+
+            Medal(row, 108f, out view.rings[i], out view.icons[i]);
+            view.icons[i].sprite = sprites[i];
+
+            RectTransform text = UIFactory.Rect("Text", row);
+            UIFactory.VerticalStack(text, 4f, false);
+            UIFactory.Flexible(text.gameObject);
+
+            view.titles[i] = UIFactory.Text("Title", text, Body, ThemeRole.TextPrimary,
+                                            TextAlignmentOptions.Left, null, FontStyles.Bold);
+            UIFactory.Size(view.titles[i].gameObject, 52f);
+
+            view.rules[i] = UIFactory.Text("Rule", text, Caption, ThemeRole.TextSecondary,
+                                           TextAlignmentOptions.TopLeft, null);
+            view.rules[i].textWrappingMode = TextWrappingModes.Normal;
+            LayoutElement ruleSize = view.rules[i].gameObject.AddComponent<LayoutElement>();
+            ruleSize.minHeight = 76f;
+
+            view.progress[i] = UIFactory.Text("Progress", text, Caption, ThemeRole.Accent,
+                                              TextAlignmentOptions.Left, null, FontStyles.Bold);
+            UIFactory.Size(view.progress[i].gameObject, 40f);
+        }
+
+        rt.gameObject.SetActive(false);
+        return rt.gameObject;
+    }
+
+    /// <summary>Change the email address or the password - the website's settings, here.</summary>
+    static GameObject BuildSecurityPage(Transform parent)
+    {
+        RectTransform rt = PageFrame(parent, "SecurityPage", out RectTransform content);
+        AccountSecurityView view = rt.gameObject.AddComponent<AccountSecurityView>();
+
+        TextMeshProUGUI title = UIFactory.Text("Title", content, Title, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, "security.title",
+                                               FontStyles.Bold);
+        UIFactory.Size(title.gameObject, 84f);
+
+        view.currentEmailLabel = UIFactory.Text("Current", content, Secondary, ThemeRole.TextSecondary,
+                                                TextAlignmentOptions.Left, null);
+        UIFactory.Size(view.currentEmailLabel.gameObject, 52f);
+
+        RectTransform email = UIFactory.Rect("EmailCard", content);
+        UIFactory.Card(email, 34f, 18f);
+        view.newEmailField = Field(email, "NewEmail", "security.newEmail");
+        view.newEmailField.contentType = TMP_InputField.ContentType.EmailAddress;
+        view.emailButton = FullWidthButton(email, "ChangeEmail", "security.changeEmail",
+                                           ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        RectTransform password = UIFactory.Rect("PasswordCard", content);
+        UIFactory.Card(password, 34f, 18f);
+        view.currentPasswordField = Field(password, "Current", "security.currentPw");
+        view.currentPasswordField.contentType = TMP_InputField.ContentType.Password;
+        view.newPasswordField = Field(password, "New", "security.newPw");
+        view.newPasswordField.contentType = TMP_InputField.ContentType.Password;
+        view.againPasswordField = Field(password, "Again", "security.againPw");
+        view.againPasswordField.contentType = TMP_InputField.ContentType.Password;
+        view.passwordButton = FullWidthButton(password, "ChangePassword", "security.changePw",
+                                              ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        view.statusLabel = UIFactory.Text("Status", content, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left, null);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(view.statusLabel.gameObject, 96f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        rt.gameObject.SetActive(false);
+        return rt.gameObject;
+    }
+
+    /// <summary>Delete the account: one button, then one confirmation.</summary>
+    static void BuildDeleteCard(Transform content)
+    {
+        RectTransform card = UIFactory.Rect("DeleteCard", content);
+        UIFactory.Card(card, 34f, 16f);
+        DeleteAccountView view = card.gameObject.AddComponent<DeleteAccountView>();
+
+        RectTransform row = UIFactory.Rect("Row", card);
+        UIFactory.Size(row.gameObject, Tap);
+        view.deleteButton = UIFactory.Button(row, ThemeRole.Surface, 0f);
+
+        // No key: the view writes "Delete my account" or "Delete what this phone
+        // has sent" depending on who is signed in, and a key would overwrite it.
+        view.deleteLabel = UIFactory.Text("Label", row, Body, ThemeRole.StatusPoor,
+                                          TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Stretch(view.deleteLabel.rectTransform);
+
+        RectTransform confirm = UIFactory.Rect("Confirm", card);
+        UIFactory.VerticalStack(confirm, 16f, false);
+        view.confirmGroup = confirm.gameObject;
+
+        view.confirmText = UIFactory.Text("Text", confirm, Secondary, ThemeRole.TextSecondary,
+                                          TextAlignmentOptions.TopLeft, null);
+        view.confirmText.textWrappingMode = TextWrappingModes.Normal;
+        LayoutElement confirmSize = view.confirmText.gameObject.AddComponent<LayoutElement>();
+        confirmSize.minHeight = 120f;
+
+        view.confirmButton = FullWidthButton(confirm, "Yes", "delete.yes",
+                                             ThemeRole.StatusPoor, ThemeRole.OnAccent);
+        view.cancelButton = FullWidthButton(confirm, "No", "delete.no",
+                                            ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+        view.cancelButton.gameObject.AddComponent<WayOut>();
+        confirm.gameObject.SetActive(false);
+
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left, null);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        LayoutElement statusSize = view.statusLabel.gameObject.AddComponent<LayoutElement>();
+        statusSize.minHeight = 60f;
+        view.statusLabel.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -3232,19 +3662,26 @@ const float ReferenceWidth = 1080f;
         Button camera = NavButton(navRow, "CameraTabButton", "tab.camera", NavGlyph.Camera,
                                   out tabs.cameraLabel, out tabs.cameraIcon,
                                   out Image cameraPill);
-        // No settings tab.
+        // You, third.
         //
-        // The tab bar is the only surface visible on every screen, and a third of it
-        // went to a page holding a theme switch, a language toggle and a link to the
-        // walkthrough - opened twice in the life of an install. It is a gear on the
-        // map's top row now, which is where a gear has lived since about 2008.
+        // There was a settings tab once, and it went to a gear on the map because a
+        // theme switch and a language toggle were not worth a third of the bar.
+        // What comes back is not settings: it is the walker - their name, their
+        // trails, their badges - with the settings underneath, where settings
+        // belong. That is worth a tab, and it is where the gear's contents live now.
+        Button you = NavButton(navRow, "YouTabButton", "tab.you", NavGlyph.You,
+                               out tabs.settingsLabel, out tabs.settingsIcon,
+                               out Image youPill);
+
         tabs.mapIndicator = mapPill;
         tabs.cameraIndicator = cameraPill;
+        tabs.settingsIndicator = youPill;
 
         // Persistent listeners, not AddListener: a runtime listener added here is
         // thrown away when the scene is saved, and the tab bar would do nothing.
         Wire(map.onClick, tabs.ShowMap, "Map tab");
         Wire(camera.onClick, tabs.ShowCamera, "Camera tab");
+        Wire(you.onClick, tabs.ShowSettings, "You tab");
 
         EditorUtility.SetDirty(tabs);
         return tabs;
@@ -3254,7 +3691,8 @@ const float ReferenceWidth = 1080f;
     {
         Map,
         Camera,
-        Settings
+        Settings,
+        You
     }
 
     /// <summary>
@@ -3313,6 +3751,30 @@ const float ReferenceWidth = 1080f;
     /// </summary>
     static Graphic[] DrawGlyph(RectTransform holder, NavGlyph glyph)
     {
+        if (glyph == NavGlyph.You)
+        {
+            // A person for a guest, initials for somebody with an account. Both
+            // are in the list the tab controller colours, so whichever shows is lit
+            // with the tab.
+            Image person = Icon(holder, AppIcon.Person, 54f, ThemeRole.TextMuted);
+            Unthemed(person.gameObject);
+
+            TextMeshProUGUI initials = UIFactory.Text("Initials", holder, 34f, ThemeRole.TextMuted,
+                                                      TextAlignmentOptions.Center, null,
+                                                      FontStyles.Bold);
+            UIFactory.Stretch(initials.rectTransform);
+            initials.textWrappingMode = TextWrappingModes.NoWrap;
+            initials.raycastTarget = false;
+            Unthemed(initials.gameObject);
+            initials.gameObject.SetActive(false);
+
+            YouTabMark mark = holder.gameObject.AddComponent<YouTabMark>();
+            mark.personIcon = person.gameObject;
+            mark.initials = initials;
+
+            return new Graphic[] { person, initials };
+        }
+
         AppIcon icon = glyph == NavGlyph.Map ? AppIcon.MapPin
                      : glyph == NavGlyph.Camera ? AppIcon.Camera
                      : AppIcon.Settings;
@@ -3604,17 +4066,34 @@ const float ReferenceWidth = 1080f;
         // seeing one means something rather than being decoration on every trail.
         // Before the chevron: it belongs to the name, and the chevron belongs to
         // the whole control.
+        // The chip is as wide as the word in it.
+        //
+        // It was 150 pixels whatever it said, and "Capture the flag" does not
+        // fit in 150 - so the mode of every game trail read "Capture t..." on
+        // the one bar that is on screen the whole time. Bulgarian is longer
+        // again. A fitter costs nothing and the row it sits in has the space,
+        // because the trail name beside it is already free to shrink.
         RectTransform mode = UIFactory.Rect("Mode", row);
-        LayoutElement modeSize = UIFactory.Size(mode.gameObject, 50f, 150f);
+        LayoutElement modeSize = UIFactory.Size(mode.gameObject, 50f);
         modeSize.flexibleWidth = 0f;
+        modeSize.minWidth = 90f;
         UIFactory.Fill(mode, ThemeRole.Accent, 0.18f, UIShape.Pill).raycastTarget = false;
         view.modeChip = mode.gameObject;
 
+        // No ContentSizeFitter here. A fitter resizes the rect itself while the
+        // row above is also placing it, and the two disagree - which is how the
+        // chip ended up sitting on top of the trail name after the truncation
+        // fix. The row already asks this object what width it would like: the
+        // stack below controls its child, so the label reports the width of the
+        // word and the row honours it. Same result, one authority.
+        HorizontalLayoutGroup modeRow = UIFactory.HorizontalStack(mode, 0f);
+        modeRow.childAlignment = TextAnchor.MiddleCenter;
+        modeRow.padding = new RectOffset(16, 16, 0, 0);
+
         view.modeLabel = UIFactory.Text("Label", mode, 26f, ThemeRole.Accent,
                                         TextAlignmentOptions.Center, null, FontStyles.Bold);
-        UIFactory.Stretch(view.modeLabel.rectTransform);
+        UIFactory.Size(view.modeLabel.gameObject, 50f);
         view.modeLabel.textWrappingMode = TextWrappingModes.NoWrap;
-        view.modeLabel.overflowMode = TextOverflowModes.Ellipsis;
 
         Icon(row, AppIcon.List, 34f, ThemeRole.Accent, out RectTransform chevron);
         view.chevron = chevron.gameObject;
@@ -4113,6 +4592,17 @@ const float ReferenceWidth = 1080f;
         // and white-on-white for others. Behind it, and larger, is a halo.
         // The stop sits on the line, which runs through the middle of the row,
         // and its name reads off to the right the way a station's does.
+        // The whole row is the control.
+        //
+        // The button was wired all along; the target was the numbered disc
+        // alone - 88 units of an 880-unit row - with the stop's name, the part
+        // anybody actually aims at, inert beside it. On a phone that reads as a
+        // list that does not respond. First child, so it sits under every visual
+        // and is invisible; the labels are not raycast targets, so nothing
+        // fights it for the press.
+        RectTransform hit = UIFactory.Rect("Hit", rt);
+        UIFactory.Stretch(hit);
+
         RectTransform ring = UIFactory.Rect("Ring", rt);
         UIFactory.Corner(ring, new Vector2(0.5f, 0.5f), new Vector2(102f, 102f),
                          new Vector2(-330f, 0f));
@@ -4122,8 +4612,8 @@ const float ReferenceWidth = 1080f;
         RectTransform disc = UIFactory.Rect("Disc", rt);
         UIFactory.Corner(disc, new Vector2(0.5f, 0.5f), new Vector2(88f, 88f),
                          new Vector2(-330f, 0f));
-        view.button = UIFactory.Button(disc, ThemeRole.Surface, 1f, UIShape.Circle);
-        view.disc = disc.GetComponent<Image>();
+        view.disc = UIFactory.Fill(disc, ThemeRole.Surface, 1f, UIShape.Circle);
+        view.button = UIFactory.Button(hit, ThemeRole.Surface, 0.001f);
 
         RectTransform fill = UIFactory.Rect("Fill", disc);
         UIFactory.Stretch(fill);
@@ -4156,6 +4646,14 @@ const float ReferenceWidth = 1080f;
         UIFactory.Corner(view.distanceLabel.rectTransform, new Vector2(0.5f, 0.5f),
                          new Vector2(500f, 38f), new Vector2(-10f, -24f));
         view.distanceLabel.raycastTarget = false;
+
+        // Last, so nothing is drawn over the press.
+        //
+        // It was built first to keep it under the visuals, which is right for
+        // drawing and wrong for input: a Canvas gives the press to the frontmost
+        // graphic under the finger, so the disc kept its own tap and the rest of
+        // the row went to whatever was above. Invisible at this alpha either way.
+        hit.SetAsLastSibling();
 
         GameObject saved = PrefabUtility.SaveAsPrefabAsset(temp, GraphNodePrefabPath);
         Object.DestroyImmediate(temp);
@@ -4328,10 +4826,12 @@ const float ReferenceWidth = 1080f;
         flow.termsPanel = BuildTerms(holder, flow);
         flow.trailsPanel = BuildTrailsDoor(holder, flow, trailRowPrefab, out TrailsDoor trails);
         flow.codePanel = BuildCodeDoor(holder, flow, out CodeDoor code);
-        flow.teamPanel = BuildTeamDoor(holder, flow);
+        flow.teamPanel = BuildTeamDoor(holder, flow, out TeamDoorView teamDoor);
+        flow.accountPanel = BuildAccountDoor(holder, flow);
 
         flow.trails = trails;
         flow.code = code;
+        flow.team = teamDoor;
 
         EditorUtility.SetDirty(flow);
         return flow;
@@ -4633,13 +5133,62 @@ const float ReferenceWidth = 1080f;
     /// school board holds a dozen, so pooling is less machinery than a prefab
     /// and a spawner, and it cannot leak them.
     /// </summary>
-    static GameObject BuildTeamDoor(Transform parent, DoorFlow flow)
+    /// <summary>
+    /// The offer of an account, straight after the first tutorial.
+    ///
+    /// The same account form Settings has, so there is one of it to keep right,
+    /// on a card pinned to the top of the screen - the form is the thing people
+    /// type into, and the top half is the half the keyboard leaves alone.
+    /// </summary>
+    static GameObject BuildAccountDoor(Transform parent, DoorFlow flow)
+    {
+        RectTransform panel = Door(parent, "Account", plain: false, inner: out RectTransform inner);
+
+        RectTransform card = Card(inner, "Card", 22f);
+
+        // Top, not bottom. Every other card rests on the bottom of the screen
+        // because nothing on it is typed into.
+        card.anchorMin = new Vector2(0f, 1f);
+        card.anchorMax = new Vector2(1f, 1f);
+        card.pivot = new Vector2(0.5f, 1f);
+
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.VerticalStack(head, 6f, false);
+        Eyebrow(head, "accountDoor.eyebrow");
+        UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "accountDoor.title", FontStyles.Bold);
+
+        BuildAccountCard(card, label: false);
+
+        Button later = QuietAction(card, "Later", "trails.notNow", flow.AccountDone,
+                                   "account later");
+        later.gameObject.AddComponent<WayOut>();
+
+        panel.gameObject.SetActive(false);
+        return panel.gameObject;
+    }
+
+    static GameObject BuildTeamDoor(Transform parent, DoorFlow flow,
+                                    out TeamDoorView made)
     {
         RectTransform panel = Door(parent, "Team", plain: false, inner: out RectTransform inner);
 
         TeamDoorView view = panel.gameObject.AddComponent<TeamDoorView>();
+        made = view;
 
         RectTransform card = Card(inner, "Card", 26f);
+
+        // The whole height of the screen, not the height of what is in it.
+        //
+        // A card that sizes to its content had to be capped, or it grew off the
+        // bottom of the phone and took Close with it - and a capped card is a
+        // short strip that makes you scroll a form that would fit perfectly well
+        // on the screen it is sitting on. Pinned top and bottom instead, the
+        // body takes whatever is left, the form starts near the top of the
+        // phone where the keyboard cannot reach it, and Close is always at the
+        // bottom because the card's bottom is the screen's.
+        Object.DestroyImmediate(card.GetComponent<ContentSizeFitter>());
+        UIFactory.Stretch(card);
 
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.VerticalStack(head, 6f, false);
@@ -4662,10 +5211,11 @@ const float ReferenceWidth = 1080f;
         // scrolled off the bottom is a trap.
         // Nearly the whole screen. This is the card ten people crowd around, and
         // a board that has to be scrolled to be read is a board nobody reads.
+        // Whatever height the card has left. The board scrolls inside it when
+        // there are more teams than fit; the form above it never needs to.
         RectTransform body = UIFactory.Rect("Body", card);
         LayoutElement bodySize = UIFactory.Size(body.gameObject, 260f);
         bodySize.flexibleHeight = 1f;
-        bodySize.preferredHeight = 1500f;
 
         RectTransform scroll = UIFactory.ScrollList("Scroll", body, 16f);
 
@@ -4699,6 +5249,13 @@ const float ReferenceWidth = 1080f;
         view.nameField = Field(none, "Name", "team.name");
         view.createButton = FullWidthButton(none, "Create", "team.create",
                                             ThemeRole.Accent, ThemeRole.OnAccent);
+
+        // The way to the thing the sentence above says is missing. It used to
+        // say "make one under Settings", which is directions, not a door.
+        view.accountButton = FullWidthButton(none, "MakeAccount", "team.makeAccount",
+                                             ThemeRole.Accent, ThemeRole.OnAccent);
+        Wire(view.accountButton.onClick, flow.OpenAccount, "Team card account");
+        view.accountButton.gameObject.SetActive(false);
 
         view.codeField = Field(none, "Code", "team.code");
         view.joinButton = FullWidthButton(none, "Join", "team.join",
@@ -4863,6 +5420,7 @@ const float ReferenceWidth = 1080f;
         view.statusLabel.gameObject.SetActive(false);
 
         view.closeButton = QuietAction(card, "Close", "team.close", flow.Close, "close team");
+        view.closeButton.gameObject.AddComponent<WayOut>();
 
         return panel.gameObject;
     }
@@ -5055,6 +5613,7 @@ const float ReferenceWidth = 1080f;
         // "Not now", which is a different sentence from "close this".
         door.cancelButton = QuietAction(actions, "Cancel", "code.cancel", door.Cancel,
                                         "Cancel code entry");
+        door.cancelButton.gameObject.AddComponent<WayOut>();
 
         // Six characters in means there is nothing left to decide.
         UnityEventTools.AddVoidPersistentListener(boxes.onComplete, door.Join);
@@ -5275,6 +5834,9 @@ const float ReferenceWidth = 1080f;
         Button button = UIFactory.Button(rt, ThemeRole.SurfaceAlt, 1f, UIShape.Circle);
         Wire(button.onClick, call, what);
         Icon(rt, AppIcon.Close, 38f, ThemeRole.TextSecondary);
+
+        // Every card corner close is a way out, so back agrees with it.
+        button.gameObject.AddComponent<WayOut>();
 
         return button;
     }

@@ -110,7 +110,23 @@ public class MarkerQuestionView : MonoBehaviour
         if (checkButton != null)
             checkButton.onClick.AddListener(Submit);
 
+        // Typing has to redraw, or Check never wakes up.
+        //
+        // Draw decides whether Check is pressable from whether there is anything
+        // to send, and for a typed answer that is the contents of this field -
+        // but nothing called Draw when the contents changed. So the one question
+        // kind that needs a keyboard had a Check button that stayed dim and dead
+        // no matter what was written in it, and a free-text stop could not be
+        // answered at all.
+        if (openField != null)
+        {
+            openField.onValueChanged.AddListener(delegate { Draw(); });
 
+            // The keyboard covers the bottom of the page, and the bottom of the
+            // page is where Check is. Sending the page down as the field takes
+            // focus puts the button just above the keyboard instead of under it.
+            openField.onSelect.AddListener(delegate { ToTheBottom(); });
+        }
 
         if (finishedButton != null)
             finishedButton.onClick.AddListener(Finish);
@@ -141,6 +157,14 @@ public class MarkerQuestionView : MonoBehaviour
         _chosen = -1;
         _waiting = false;
         _wrong.Clear();
+
+        // Last time's answer belongs to last time.
+        //
+        // A walker refused for having no account made one, came back, and found
+        // "a competitive trail needs a real account" still sitting under the
+        // question - a sentence that was true ten minutes ago and is now simply
+        // wrong.
+        Set(bubbleHolder, false);
 
         if (_task == null || !_task.IsUsable)
             return;
@@ -301,7 +325,20 @@ public class MarkerQuestionView : MonoBehaviour
         {
             // Not a wrong answer. Everything the reader chose stays as it was, and
             // they can simply press again.
-            Bubble("task.offline", ThemeRole.TextSecondary);
+            //
+            // But say which of the two things happened. A refusal carries the
+            // server's own sentence - "make or join a team first", "a
+            // competitive trail needs a real account" - and those are things a
+            // walker can do something about. Only silence is the offline case,
+            // and reporting a refusal as one sent somebody to check the wifi
+            // when the answer was on the screen all along.
+            string said = result != null ? result.refusal : null;
+
+            if (!string.IsNullOrWhiteSpace(said))
+                Bubble(said, ThemeRole.StatusFair, false);
+            else
+                Bubble("task.offline", ThemeRole.TextSecondary);
+
             ReArm();
             ShowTheAnswer();
             Draw();
@@ -348,8 +385,7 @@ public class MarkerQuestionView : MonoBehaviour
     /// </summary>
     void ShowTheAnswer()
     {
-        if (scroll != null)
-            scroll.verticalNormalizedPosition = 0f;
+        ToTheBottom();
     }
 
     /// <summary>
@@ -578,6 +614,13 @@ public class MarkerQuestionView : MonoBehaviour
                                                    : AnswerOptionView.State.Muted);
             }
         }
+    }
+
+    /// <summary>Puts the end of the page on screen: the verdict, or Check.</summary>
+    void ToTheBottom()
+    {
+        if (scroll != null)
+            scroll.verticalNormalizedPosition = 0f;
     }
 
     void Update()

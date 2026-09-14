@@ -34,7 +34,14 @@ public class DoorFlow : MonoBehaviour
         /// reader opens it because they want to, which is why nothing in
         /// Evaluate ever shows it.
         /// </summary>
-        Team
+        Team,
+
+        /// <summary>
+        /// Making an account, offered once, straight after the first tutorial.
+        /// "Not now" is always there: a guided walk does not need one, and a
+        /// screen that will not let you past is how people give up on an app.
+        /// </summary>
+        Account
     }
 
     [Header("Screens")]
@@ -46,6 +53,9 @@ public class DoorFlow : MonoBehaviour
     [Tooltip("Who you are walking with, and the standings. Opened from the map " +
              "rather than by the flow itself - it is not a gate, it is a screen.")]
     public GameObject teamPanel;
+
+    [Tooltip("The account offer shown after the first tutorial.")]
+    public GameObject accountPanel;
 
     [Header("Behind them")]
     [Tooltip("The blurred still of the map. Only the card doors use it - Welcome " +
@@ -64,6 +74,10 @@ public class DoorFlow : MonoBehaviour
     [Header("Screens that fill themselves in")]
     public TrailsDoor trails;
     public CodeDoor code;
+
+    [Tooltip("The team card. Without this the Team door hides the interface " +
+             "and shows nothing, because Open has nothing to reveal.")]
+    public TeamDoorView team;
 
     /// <summary>Raised whenever the door changes, so the app can pause what it does.</summary>
     public static event Action<Door> OnDoorChanged;
@@ -101,6 +115,7 @@ public class DoorFlow : MonoBehaviour
         Hide(trailsPanel);
         Hide(codePanel);
         Hide(teamPanel);
+        Hide(accountPanel);
     }
 
     void OnDestroy()
@@ -114,6 +129,8 @@ public class DoorFlow : MonoBehaviour
         TermsService.OnAcceptedChanged += Evaluate;
         TrailService.OnTrailsChanged += HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged += Evaluate;
+        SupabaseAuth.OnSessionChanged += AccountMaybeMade;
+        TutorialFlow.OnFirstFinished += OfferAccount;
     }
 
     void OnDisable()
@@ -121,6 +138,8 @@ public class DoorFlow : MonoBehaviour
         TermsService.OnAcceptedChanged -= Evaluate;
         TrailService.OnTrailsChanged -= HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged -= Evaluate;
+        SupabaseAuth.OnSessionChanged -= AccountMaybeMade;
+        TutorialFlow.OnFirstFinished -= OfferAccount;
     }
 
     void Start()
@@ -136,6 +155,11 @@ public class DoorFlow : MonoBehaviour
     /// </summary>
     public void Evaluate()
     {
+        // Somebody filling in the account form is not interrupted by the session
+        // it is about to change. It closes itself when the account exists.
+        if (Current == Door.Account)
+            return;
+
         // A door the reader opened on purpose stays open until they close it.
         // Refreshing the trail list underneath must not throw them out of it.
         if (_reopened && Current != Door.None)
@@ -264,15 +288,85 @@ public class DoorFlow : MonoBehaviour
         _dismissed = false;
         Show(Door.None);
 
-        // Whether this trail takes anonymous walkers at all, asked once on the
-        // way in so the team card can say so before somebody types a team name
-        // and is refused by the server.
+        // Ask the server about this trail, then gate on the answer.
+        //
+        // The gate used to read SelectedIsGame, which resolves by looking the
+        // trail up in the loaded list - and joining by code reaches here before
+        // that list has been refetched, so the trail was not in it, the mode was
+        // unknown, and the gate quietly skipped. That is the path everybody
+        // takes on the day. trail_summary answers about one trail by id and does
+        // not wait for the list.
         TrailService trails = TrailService.Instance;
 
-        if (trails != null)
-            trails.LoadNeedsAccount(trails.SelectedId);
+        // On a first run the tutorial is still to come, and after it the offer of
+        // an account. Asking for a team before either is asking the wrong thing
+        // first: on a scored trail a team cannot be made without an account, so
+        // the team question has to wait until the account question is answered.
+        // The end of the tutorial runs the gate instead.
+        if (TutorialFlow.Showing || !TutorialFlow.HasBeenSeen)
+        {
+            if (trails != null)
+                trails.LoadNeedsAccount(trails.SelectedId);
 
+            return;
+        }
+
+        if (trails != null)
+            trails.LoadNeedsAccount(trails.SelectedId, () => StartCoroutine(TeamGate()));
+        else
+            StartCoroutine(TeamGate());
+    }
+
+    // ----------------------------------------------------------- account
+
+    /// <summary>
+    /// The tutorial has just ended for the first time. Somebody without an account
+    /// is offered one; everybody then goes on to the team question.
+    /// </summary>
+    void OfferAccount()
+    {
+        SupabaseAuth auth = SupabaseAuth.Instance;
+
+        if (auth == null || !auth.IsAnonymous)
+        {
+            StartCoroutine(TeamGate());
+            return;
+        }
+
+        _dismissed = false;
+        Show(Door.Account);
+    }
+
+    /// <summary>
+    /// The account form, asked for from the team card. When it closes the team
+    /// gate runs again, which is what brings the reader back to the team card -
+    /// now with a form they are allowed to use.
+    /// </summary>
+    public void OpenAccount()
+    {
+        _dismissed = false;
+        Show(Door.Account);
+    }
+
+    /// <summary>"Not now", or an account that now exists. Either way, on to teams.</summary>
+    public void AccountDone()
+    {
+        if (Current != Door.Account)
+            return;
+
+        Show(Door.None);
         StartCoroutine(TeamGate());
+    }
+
+    void AccountMaybeMade()
+    {
+        if (Current != Door.Account)
+            return;
+
+        SupabaseAuth auth = SupabaseAuth.Instance;
+
+        if (auth != null && auth.IsSignedIn && !auth.IsAnonymous)
+            AccountDone();
     }
 
     /// <summary>
@@ -292,7 +386,17 @@ public class DoorFlow : MonoBehaviour
     {
         TrailService trails = TrailService.Instance;
 
-        if (trails == null || !trails.SelectedIsGame)
+        if (trails == null)
+            yield break;
+
+        // The server's answer where there is one, the list only as a fallback.
+        string mode = trails.SelectedSummaryMode;
+
+        bool game = !string.IsNullOrEmpty(mode)
+            ? TrailService.IsGame(mode)
+            : trails.SelectedIsGame;
+
+        if (!game)
             yield break;
 
         TeamService teams = TeamService.Instance;
@@ -331,10 +435,12 @@ public class DoorFlow : MonoBehaviour
         Hide(trailsPanel);
         Hide(codePanel);
         Hide(teamPanel);
+        Hide(accountPanel);
 
         // The two card doors are the ones the map shows through. Welcome and Terms
         // are plain: nothing behind them, because there is nothing yet to look at.
-        bool wantsMap = door == Door.Trails || door == Door.Code || door == Door.Team;
+        bool wantsMap = door == Door.Trails || door == Door.Code || door == Door.Team ||
+                        door == Door.Account;
 
         if (navBar != null)
             navBar.SetActive(door == Door.None);
@@ -402,6 +508,22 @@ public class DoorFlow : MonoBehaviour
                 Reveal(codePanel);
                 if (code != null)
                     code.Begin();
+                break;
+
+            // Missing until a phone found it. Every other door had a case here
+            // and this one did not, so asking for a team turned the app off:
+            // the navigation bar and the map's own controls are switched off by
+            // Show for any door but None, the blur goes up, and then nothing
+            // was put in front of it. A walker joining a game from the trails
+            // list got a blurred map, no controls, and no way out.
+            case Door.Team:
+                Reveal(teamPanel);
+                if (team != null)
+                    team.Refresh();
+                break;
+
+            case Door.Account:
+                Reveal(accountPanel);
                 break;
         }
     }

@@ -59,6 +59,16 @@ public class MarkerTaskService : MonoBehaviour
         /// <summary>The creator's own words, when they wrote any. May be empty.</summary>
         public string feedback;
 
+        /// <summary>
+        /// What the server said when it refused, in its own words.
+        ///
+        /// Set only alongside Unavailable, and only when something actually
+        /// answered. A refusal a walker can act on - "make or join a team
+        /// first" - reads very differently from the offline sentence that used
+        /// to stand in for it.
+        /// </summary>
+        public string refusal;
+
         public MarkerProgress progress;
     }
 
@@ -311,9 +321,22 @@ public class MarkerTaskService : MonoBehaviour
                 Debug.LogWarning("[Task] check_answer failed (" + request.responseCode + "): " +
                                  request.error);
 
+                // A refusal is not a broken connection.
+                //
+                // This reported everything as Unavailable, and the screen says
+                // "Couldn't reach the server, so that was not sent". A phone
+                // then logged 403 Forbidden on a trail whose real answer was
+                // "a competitive trail needs a real account" - a sentence the
+                // walker could have acted on, replaced by one that sent them to
+                // check the wifi. Anything the server actually answered is
+                // passed through in its own words; only a request that never
+                // arrived is called unavailable.
+                string said = Postgrest.Said(request);
+
                 Report(done, new Result
                 {
                     verdict = Verdict.Unavailable,
+                    refusal = said,
                     progress = Progress(markerId)
                 });
 

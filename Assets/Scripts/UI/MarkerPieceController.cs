@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -157,9 +158,16 @@ public class MarkerPieceController : MonoBehaviour
                 MarkerMedia piece = _media[i];
                 bool audio = piece.Kind == MarkerMediaKind.Audio;
 
-                _rows[i].Bind(audio ? audioIcon : videoIcon,
-                              AppStrings.Get(Verb(piece)),
-                              piece.Title,
+                // A video link has no file name to fall back on, so Title comes
+                // back as the kind word and the row read "Watch" over "Watch".
+                // One of them is enough.
+                string caption = AppStrings.Get(Verb(piece));
+                string title = piece.Title;
+
+                if (string.Equals(title, caption, StringComparison.OrdinalIgnoreCase))
+                    title = string.Empty;
+
+                _rows[i].Bind(audio ? audioIcon : videoIcon, caption, title,
                               _played.Contains(Key(piece)));
             }
             else

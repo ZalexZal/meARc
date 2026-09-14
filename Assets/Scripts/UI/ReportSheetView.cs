@@ -184,7 +184,25 @@ public class ReportSheetView : MonoBehaviour
             {
                 Debug.LogWarning("[Report] report_marker failed (" + request.responseCode + "): " +
                                  (request.downloadHandler != null ? request.downloadHandler.text : ""));
-                Failed("report.failed");
+                string said = Postgrest.Said(request);
+
+                if (!string.IsNullOrWhiteSpace(said))
+                {
+                    _busy = false;
+                    SetInteractable(true);
+
+                    if (statusLabel != null)
+                    {
+                        statusLabel.text = said;
+                        statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+                        statusLabel.gameObject.SetActive(true);
+                    }
+                }
+                else
+                {
+                    Failed("report.failed");
+                }
+
                 yield break;
             }
         }

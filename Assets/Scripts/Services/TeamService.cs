@@ -120,6 +120,18 @@ public class TeamService : MonoBehaviour
 
     public bool Busy { get; private set; }
 
+    /// <summary>
+    /// True only while a change is on its way - making, joining or leaving.
+    ///
+    /// Separate from Busy on purpose. The team card re-reads the board every
+    /// fifteen seconds, and Busy was up for every one of those reads; the buttons
+    /// checked Busy and returned without a word. On school wifi or mobile data a
+    /// read can hang for many seconds, so Make a team looked and behaved dead -
+    /// on every trail - for as long as the network was slow. A read in flight is
+    /// no reason to refuse a write: the write reloads everything when it lands.
+    /// </summary>
+    public bool Writing { get; private set; }
+
     string _world;
 
     void Awake()
@@ -144,6 +156,19 @@ public class TeamService : MonoBehaviour
     {
         if (string.IsNullOrEmpty(worldId))
             return;
+
+        // Another trail's team is not this trail's team.
+        //
+        // Team was kept across a switch, so the card for the new trail drew once
+        // with the old trail's team in it - on a team, form hidden, Make a team
+        // switched off - and when the reload said "no team here" the form came
+        // back with the button still off. Being on a team anywhere made every
+        // other trail's team card impossible to use.
+        if (_world != worldId)
+        {
+            Team = null;
+            Board = null;
+        }
 
         _world = worldId;
         StartCoroutine(LoadBoth());
@@ -178,6 +203,15 @@ public class TeamService : MonoBehaviour
     {
         Busy = true;
         LastError = null;
+
+        // Nothing is asked of the server before there is somebody to ask as.
+        //
+        // A phone logged "my_team_detail failed (401)" one second after launch:
+        // the card opened, asked who was on the team, and the anonymous session
+        // had not come back yet. The card then drew an empty board and an empty
+        // team, which is indistinguishable from being on neither - and the walker
+        // is shown a form for a thing they may already have.
+        yield return SupabaseAuth.Ready();
 
         yield return Fetch("my_team_detail", "{\"p_world\":\"" + Escape(_world) + "\"}",
             json =>
@@ -233,6 +267,15 @@ public class TeamService : MonoBehaviour
         {
             yield return request.SendWebRequest();
 
+            if (Postgrest.WorthRetrying(request))
+            {
+                // Same story as everywhere else: the session is a second old and
+                // the database has not caught up with its own clock yet.
+                yield return new WaitForSeconds(2f);
+                yield return Fetch(rpc, body, got);
+                yield break;
+            }
+
             if (request.result != UnityWebRequest.Result.Success)
             {
                 // A 404 here means the migration has not been applied. Either way
@@ -267,6 +310,7 @@ public class TeamService : MonoBehaviour
         }
 
         Busy = true;
+        Writing = true;
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/" + rpc), body, null))
@@ -276,52 +320,34 @@ public class TeamService : MonoBehaviour
             if (request.result != UnityWebRequest.Result.Success)
             {
                 Busy = false;
+                Writing = false;
 
-                string message = Explain(request);
+                string message = Postgrest.Said(request);
                 Debug.LogWarning("[Team] " + rpc + " failed (" + request.responseCode + "): " + message);
+
+                // The listeners first, then the sentence. The other way round
+                // the card was told why it was refused and then immediately
+                // redrawn from LastError - which is null, because only a reload
+                // sets it - so every refusal was written and wiped in the same
+                // frame. Tapping Make a team on a competitive trail as a walker
+                // without an account did nothing at all on screen, while the log
+                // held the answer: "a competitive trail needs a real account".
+                if (OnTeamChanged != null)
+                    OnTeamChanged();
 
                 if (done != null)
                     done(message);
-
-                if (OnTeamChanged != null)
-                    OnTeamChanged();
 
                 yield break;
             }
         }
 
+        Writing = false;
+
         yield return LoadBoth();
 
         if (done != null)
             done(null);
-    }
-
-    /// <summary>
-    /// The database's own sentence where it wrote one.
-    ///
-    /// "this team is full" and "a competitive trail needs a real account" are
-    /// both things a person can act on. "Could not join" is not.
-    /// </summary>
-    static string Explain(UnityWebRequest request)
-    {
-        string payload = request.downloadHandler != null ? request.downloadHandler.text : null;
-
-        if (!string.IsNullOrWhiteSpace(payload))
-        {
-            try
-            {
-                PostgrestError error = JsonUtility.FromJson<PostgrestError>(payload);
-
-                if (error != null && !string.IsNullOrWhiteSpace(error.message))
-                    return error.message;
-            }
-            catch (Exception)
-            {
-                // Not a shape we know. The key below is the answer.
-            }
-        }
-
-        return "team.failed";
     }
 
     [Serializable]

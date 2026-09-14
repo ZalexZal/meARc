@@ -27,7 +27,17 @@ public enum AppIcon
     Video,
     Audio,
     Question,
-    Lock
+    Lock,
+
+    // The You tab and the badges.
+    Person,
+    Flag,
+    Star,
+    Mountain,
+    Book,
+    Clock,
+    Home,
+    Trail
 }
 
 /// <summary>
@@ -416,6 +426,79 @@ public static class UIIcons
 
                     return Union(shackle, body);
                 };
+
+            case AppIcon.Person:
+                return p => Union(
+                    Circle(p, 12f, 15.6f, 4.3f),
+                    Segment(p, 7.2f, 5.6f, 16.8f, 5.6f, 8.6f));
+
+            case AppIcon.Flag:
+                return p =>
+                {
+                    float pole = Segment(p, 6f, 2.5f, 6f, 21f, Stroke);
+                    float cloth = Triangle(p,
+                        new Vector2(6.8f, 20.5f), new Vector2(6.8f, 11f), new Vector2(18.5f, 15.7f));
+                    return Union(pole, cloth);
+                };
+
+            case AppIcon.Star:
+                return p =>
+                {
+                    // Two triangles, one pointing up, one down: a star at icon
+                    // size, without a five-point polygon to rasterize.
+                    float up = Triangle(p,
+                        new Vector2(12f, 21.2f), new Vector2(4.2f, 7.6f), new Vector2(19.8f, 7.6f));
+                    float down = Triangle(p,
+                        new Vector2(12f, 3.2f), new Vector2(19.6f, 16.2f), new Vector2(4.4f, 16.2f));
+                    return Union(up, down);
+                };
+
+            case AppIcon.Mountain:
+                return p =>
+                {
+                    float peak = Triangle(p,
+                        new Vector2(9.5f, 18.5f), new Vector2(2.5f, 5f), new Vector2(16.5f, 5f));
+                    float second = Triangle(p,
+                        new Vector2(16f, 13.5f), new Vector2(10.5f, 5f), new Vector2(21.5f, 5f));
+                    return Union(peak, second);
+                };
+
+            case AppIcon.Book:
+                return p =>
+                {
+                    float left = Segment(p, 3.5f, 17f, 11.2f, 15.2f, Stroke);
+                    float right = Segment(p, 12.8f, 15.2f, 20.5f, 17f, Stroke);
+                    float leftBottom = Segment(p, 3.5f, 6.5f, 11.2f, 4.8f, Stroke);
+                    float rightBottom = Segment(p, 12.8f, 4.8f, 20.5f, 6.5f, Stroke);
+                    float spine = Segment(p, 12f, 4.5f, 12f, 15.5f, Stroke);
+                    float sides = Union(Segment(p, 3.5f, 6.5f, 3.5f, 17f, Stroke),
+                                        Segment(p, 20.5f, 6.5f, 20.5f, 17f, Stroke));
+                    return Union(Union(Union(left, right), Union(leftBottom, rightBottom)),
+                                 Union(spine, sides));
+                };
+
+            case AppIcon.Clock:
+                return p => Union(Ring(p, 12f, 12f, 8.2f, Stroke),
+                                  Union(Segment(p, 12f, 12f, 12f, 17f, Stroke),
+                                        Segment(p, 12f, 12f, 15.5f, 10f, Stroke)));
+
+            case AppIcon.Home:
+                return p =>
+                {
+                    float roof = Union(Segment(p, 3.5f, 11.5f, 12f, 19.5f, Stroke),
+                                       Segment(p, 12f, 19.5f, 20.5f, 11.5f, Stroke));
+                    float walls = Union(Segment(p, 6f, 4f, 6f, 13f, Stroke),
+                                        Segment(p, 18f, 4f, 18f, 13f, Stroke));
+                    float floor = Segment(p, 6f, 4f, 18f, 4f, Stroke);
+                    return Union(Union(roof, walls), floor);
+                };
+
+            case AppIcon.Trail:
+                return p => Union(Union(
+                    Segment(p, 3.5f, 5f, 8.5f, 15f, Stroke),
+                    Segment(p, 8.5f, 15f, 13f, 9f, Stroke)),
+                    Union(Segment(p, 13f, 9f, 16f, 13f, Stroke),
+                          Segment(p, 16f, 13f, 20.5f, 5f, Stroke)));
 
             default: // Check
                 return p => Union(

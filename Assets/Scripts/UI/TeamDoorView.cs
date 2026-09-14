@@ -34,6 +34,10 @@ public class TeamDoorView : MonoBehaviour
     public TextMeshProUGUI noneBody;
     public TMP_InputField nameField;
     public Button createButton;
+
+    [Tooltip("Shown instead of the form when this trail will not take an anonymous " +
+             "walker. Opens the account form rather than describing where it is.")]
+    public Button accountButton;
     public TMP_InputField codeField;
     public Button joinButton;
 
@@ -113,6 +117,17 @@ public class TeamDoorView : MonoBehaviour
         if (teams != null && trails != null && !string.IsNullOrEmpty(trails.SelectedId))
             teams.Load(trails.SelectedId);
 
+        // Whether this trail takes anonymous walkers decides which half of the
+        // card is offered - the form, or the way to an account - and on a phone
+        // it arrived false on at least one launch path because nothing had asked.
+        // So the card asks, whenever it opens without an answer for this trail,
+        // and draws again when the answer comes.
+        if (trails != null && !string.IsNullOrEmpty(trails.SelectedId) &&
+            trails.SummaryFor != trails.SelectedId)
+        {
+            trails.LoadNeedsAccount(trails.SelectedId, Refresh);
+        }
+
         Refresh();
     }
 
@@ -166,14 +181,19 @@ public class TeamDoorView : MonoBehaviour
         TeamService.Detail team = teams != null ? teams.Team : null;
         bool onTeam = team != null && team.on_team;
 
-        // On a game with no team there is no way out of this card except making
-        // one or joining one, because there is nothing useful to do behind it:
-        // the server will not score a game for somebody who is on no team.
+        // Gated only in what it says, never in whether you can leave.
+        //
+        // Close used to be taken away on a game with no team, on the reasoning
+        // that there is nothing to score behind the card until you are on one.
+        // That is a locked door with the reader inside it: somebody who wants to
+        // look at the map first, wait for a friend's code, or simply read the
+        // stops could not do any of it. The server still refuses to score them,
+        // in its own words, and the Team button on the map brings this back.
         bool gated = !onTeam && TrailService.Instance != null
                      && TrailService.Instance.SelectedIsGame;
 
         if (closeButton != null)
-            closeButton.gameObject.SetActive(!gated);
+            closeButton.gameObject.SetActive(true);
 
         if (noTeamGroup != null)
             noTeamGroup.SetActive(!onTeam);
@@ -196,6 +216,9 @@ public class TeamDoorView : MonoBehaviour
         // depend on an animation to say so.
         if (createButton != null)
             createButton.gameObject.SetActive(!needsAccount);
+
+        if (accountButton != null)
+            accountButton.gameObject.SetActive(needsAccount);
 
         if (joinButton != null)
             joinButton.gameObject.SetActive(!needsAccount);
@@ -234,8 +257,11 @@ public class TeamDoorView : MonoBehaviour
 
             if (teamMeta != null)
             {
-                teamMeta.text = string.Format(AppStrings.Get("team.meta"),
-                                              team.solved, team.points);
+                // "1 stops" is the kind of thing a room of teenagers reads out
+                // loud. One stop gets its own sentence, in both languages.
+                teamMeta.text = string.Format(
+                    AppStrings.Get(team.solved == 1 ? "team.metaOne" : "team.meta"),
+                    team.solved, team.points);
             }
 
             DrawMoved(team);
@@ -263,8 +289,30 @@ public class TeamDoorView : MonoBehaviour
                     : member.name;
             }
 
-            if (createButton != null)
-                createButton.interactable = false;
+        }
+
+        // Both ways, every time.
+        //
+        // This was only ever switched off - on the branch that draws a team you
+        // are already on - and nothing switched it back. So anybody who had been
+        // on a team in this session and then left it, or whose card first drew
+        // while their team was still loading, got the form back with Make a team
+        // dimmed and dead however much they typed into the name.
+        if (createButton != null)
+            createButton.interactable = !onTeam;
+
+        // Tells the log what the card believes. The Make-a-team button has been
+        // reported dead after leaving a team, with nothing else in the log to
+        // say why - this is the line that says why.
+        if (createButton != null)
+        {
+            CanvasGroup g = createButton.GetComponent<CanvasGroup>();
+            Debug.Log("[Team] card onTeam=" + onTeam +
+                      " create.active=" + createButton.gameObject.activeInHierarchy +
+                      " interactable=" + createButton.interactable +
+                      " isInteractable=" + createButton.IsInteractable() +
+                      " alpha=" + (g != null ? g.alpha.ToString("0.00") : "-") +
+                      " busy=" + (teams != null && teams.Busy));
         }
 
         if (capacityLabel != null)
@@ -394,8 +442,16 @@ public class TeamDoorView : MonoBehaviour
     void Create()
     {
         TeamService teams = TeamService.Instance;
-        if (teams == null || teams.Busy)
+        if (teams == null)
             return;
+
+        // Only another change in flight holds this back, and then it says so
+        // rather than doing nothing.
+        if (teams.Writing)
+        {
+            Say("team.working");
+            return;
+        }
 
         string name = nameField != null ? nameField.text.Trim() : string.Empty;
 
@@ -412,8 +468,14 @@ public class TeamDoorView : MonoBehaviour
     void Join()
     {
         TeamService teams = TeamService.Instance;
-        if (teams == null || teams.Busy)
+        if (teams == null)
             return;
+
+        if (teams.Writing)
+        {
+            Say("team.working");
+            return;
+        }
 
         string code = codeField != null ? codeField.text.Trim() : string.Empty;
 
@@ -430,8 +492,14 @@ public class TeamDoorView : MonoBehaviour
     void Leave()
     {
         TeamService teams = TeamService.Instance;
-        if (teams == null || teams.Busy)
+        if (teams == null)
             return;
+
+        if (teams.Writing)
+        {
+            Say("team.working");
+            return;
+        }
 
         Say("team.working");
         teams.Leave(Done);

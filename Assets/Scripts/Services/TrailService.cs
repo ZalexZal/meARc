@@ -37,6 +37,26 @@ public class TrailService : MonoBehaviour
     /// </summary>
     public bool SelectedNeedsAccount { get; private set; }
 
+    /// <summary>
+    /// Which trail SelectedNeedsAccount was actually answered for. Empty until a
+    /// summary has come back. A screen that depends on the flag compares this
+    /// with SelectedId rather than trusting a false that may just mean "never
+    /// asked".
+    /// </summary>
+    public string SummaryFor { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// The open trail's mode as the server reports it, or null before it has
+    /// answered.
+    ///
+    /// Selected resolves by finding the trail in the loaded list, and right
+    /// after joining by code that list has not been fetched yet - so
+    /// SelectedIsGame was false at exactly the moment the team gate asked, and
+    /// the gate skipped. This comes straight from trail_summary and does not
+    /// wait for the list.
+    /// </summary>
+    public string SelectedSummaryMode { get; private set; }
+
     [Serializable]
     public class Trail
     {
@@ -99,10 +119,17 @@ public class TrailService : MonoBehaviour
 
     IEnumerator FetchNeedsAccount(string worldId, Action done)
     {
+        // Same reason as the team card: this runs at launch, and a summary asked
+        // for before there is a session comes back 401 and leaves the flag false.
+        Debug.Log("[Trails] asking for summary of " + worldId);
+
+        yield return SupabaseAuth.Ready();
+
         SupabaseConfig config = SupabaseConfig.Instance;
 
         if (config == null)
         {
+            Debug.LogWarning("[Trails] no SupabaseConfig, summary not fetched");
             if (done != null) done();
             yield break;
         }
@@ -126,9 +153,18 @@ public class TrailService : MonoBehaviour
                     SummaryList list = JsonUtility.FromJson<SummaryList>(
                         "{\"items\":" + payload + "}");
 
-                    SelectedNeedsAccount = list != null && list.items != null &&
-                                           list.items.Length > 0 &&
-                                           list.items[0].needs_account;
+                    bool got = list != null && list.items != null && list.items.Length > 0;
+
+                    SelectedNeedsAccount = got && list.items[0].needs_account;
+                    SelectedSummaryMode = got ? list.items[0].mode : null;
+                    SummaryFor = got ? worldId : string.Empty;
+
+                    // Two flags decide whether a walker is offered a team form
+                    // they are allowed to use. When they are wrong the card
+                    // either offers a button the server refuses or hides one it
+                    // would have accepted, and neither leaves a trace.
+                    Debug.Log("[Trails] summary " + worldId + " mode=" + SelectedSummaryMode +
+                              " needsAccount=" + SelectedNeedsAccount);
                 }
                 catch (Exception exception)
                 {
@@ -149,6 +185,7 @@ public class TrailService : MonoBehaviour
     class Summary
     {
         public bool needs_account;
+        public string mode;
     }
 
     [Serializable]
@@ -175,6 +212,28 @@ public class TrailService : MonoBehaviour
 
     /// <summary>What went wrong on the last call, for a screen to show. Null when fine.</summary>
     public string LastError { get; private set; }
+
+    bool _retriedMine;
+
+    /// <summary>
+    /// Asks for the list again if the last attempt failed. Called when My trails
+    /// is opened, so "Couldn't reach the server" is a moment, not a state the
+    /// app stays in until it is restarted.
+    /// </summary>
+    public void RetryIfFailed()
+    {
+        // Not while one is in flight, and not more than every few seconds: a
+        // failure redraws the list, the list asks again, and without this a dead
+        // network would be asked in a tight loop.
+        if (string.IsNullOrEmpty(LastError) || _fetchingMine ||
+            Time.unscaledTime - _lastMineAttempt < 5f)
+            return;
+
+        StartCoroutine(RefreshMine());
+    }
+
+    bool _fetchingMine;
+    float _lastMineAttempt = -100f;
 
     public Trail Selected
     {
@@ -215,6 +274,15 @@ public class TrailService : MonoBehaviour
     void HandleSession()
     {
         StartCoroutine(RefreshMine());
+
+        // The trail carried over from the last run never asked the server about
+        // itself. Only DoorFlow.Entered loads the summary, and reopening the app
+        // on a trail already chosen does not go through it - so needs_account
+        // was false, the team card offered Make a team to an anonymous walker on
+        // a competitive trail, and the server refused. Restarting the app is the
+        // single most likely thing to happen on the day.
+        if (!string.IsNullOrEmpty(SelectedId))
+            LoadNeedsAccount(SelectedId);
     }
 
     public void Select(string worldId)
@@ -223,6 +291,11 @@ public class TrailService : MonoBehaviour
             return;
 
         SelectedId = worldId;
+
+        // Belongs to the trail that was open, not this one.
+        SelectedNeedsAccount = false;
+        SelectedSummaryMode = null;
+        SummaryFor = string.Empty;
         PlayerPrefs.SetString(SelectedKey, worldId ?? string.Empty);
         PlayerPrefs.Save();
 
@@ -303,6 +376,20 @@ public class TrailService : MonoBehaviour
         if (config == null)
             yield break;
 
+        _lastMineAttempt = Time.unscaledTime;
+        _fetchingMine = true;
+        try
+        {
+            yield return FetchMine(config);
+        }
+        finally
+        {
+            _fetchingMine = false;
+        }
+    }
+
+    IEnumerator FetchMine(SupabaseConfig config)
+    {
         LastError = null;
 
         // Asking for our own rows explicitly.
@@ -327,11 +414,27 @@ public class TrailService : MonoBehaviour
 
             if (request.result != UnityWebRequest.Result.Success)
             {
+                // A 401 at launch is "JWT issued at future": the session is a
+                // second old and the database's clock has not caught up with the
+                // one that signed it. Not the server being unreachable. Asked once more once it is - a phone
+                // logged exactly this and then sat on "Couldn't reach the server"
+                // with an empty list, which empties everything that depends on
+                // knowing which trail you are on, team card included.
+                if (request.responseCode == 401 && !_retriedMine)
+                {
+                    _retriedMine = true;
+                    yield return SupabaseAuth.Ready();
+                    yield return FetchMine(config);
+                    yield break;
+                }
+
                 LastError = request.error;
                 Debug.LogWarning("[Trails] Could not read membership: " + request.error);
                 Raise();
                 yield break;
             }
+
+            _retriedMine = false;
 
             Parse(request.downloadHandler.text);
         }

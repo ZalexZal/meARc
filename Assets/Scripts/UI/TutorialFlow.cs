@@ -47,6 +47,16 @@ public class TutorialFlow : MonoBehaviour
     public Button backButton;
     public TextMeshProUGUI backLabel;
 
+    /// <summary>
+    /// Raised when the first run of the tutorial ends, by Next or by Skip.
+    /// Not on a replay from Settings - by then the reader has long since been
+    /// asked everything that follows it.
+    /// </summary>
+    public static event System.Action OnFirstFinished;
+
+    /// <summary>True while the tutorial is on screen.</summary>
+    public static bool Showing { get; private set; }
+
     public static bool HasBeenSeen
     {
         get { return PlayerPrefs.GetInt(PrefKey, 0) == 1; }
@@ -92,6 +102,7 @@ public class TutorialFlow : MonoBehaviour
     public void Open()
     {
         _page = 0;
+        Showing = true;
 
         if (root != null)
             root.SetActive(true);
@@ -122,11 +133,18 @@ public class TutorialFlow : MonoBehaviour
 
     public void Finish()
     {
+        bool first = !HasBeenSeen;
+
         PlayerPrefs.SetInt(PrefKey, 1);
         PlayerPrefs.Save();
 
+        Showing = false;
+
         if (root != null)
             root.SetActive(false);
+
+        if (first && OnFirstFinished != null)
+            OnFirstFinished();
     }
 
     void Render()

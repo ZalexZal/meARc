@@ -400,7 +400,17 @@ public static class UIFactory
 
         ScrollRect scroll = root.gameObject.AddComponent<ScrollRect>();
         scroll.horizontal = false;
-        scroll.movementType = ScrollRect.MovementType.Elastic;
+        scroll.vertical = true;
+
+        // Clamped rather than Elastic.
+        //
+        // The settings list on a phone would scroll down and never back up, at
+        // any position, reproducibly - which strands the account form at the top
+        // once anybody reaches the bottom, and making an account is what a scored
+        // trail requires. Elastic is the only part of this that can move content
+        // on its own, through the spring that pulls it back inside its bounds, so
+        // it is the part being taken away. A settings page does not need a bounce.
+        scroll.movementType = ScrollRect.MovementType.Clamped;
         scroll.scrollSensitivity = 30f;
 
         RectTransform viewport = Rect("Viewport", root);

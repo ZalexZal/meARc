@@ -107,6 +107,28 @@ public class TrailChipView : MonoBehaviour
             // a word, and a mode this build does not know about is the portal
             // being ahead of the app rather than a fault.
             modeLabel.text = named.StartsWith("mode.") ? mode : named;
+
+            // The chip asks for exactly the width of the word it is holding.
+            //
+            // The row it sits in wants more than it has - eyebrow, name, chip,
+            // chevron - so the layout shrinks every child towards its minimum,
+            // the chip included. With a fixed floor of 90 the pill came out
+            // narrower than "Capture the flag" and the centred label spilled out
+            // of both ends of it, across the trail name on one side and the
+            // chevron on the other. A ContentSizeFitter here fights the row for
+            // control of the same rect; setting the floor to the text instead
+            // leaves one authority and makes the trail name the only thing that
+            // gives, which is what it is for - it ellipsises, a mode word does
+            // not.
+            LayoutElement chipSize = modeChip != null
+                ? modeChip.GetComponent<LayoutElement>() : null;
+
+            if (chipSize != null)
+            {
+                float wanted = modeLabel.GetPreferredValues(modeLabel.text).x + 34f;
+                chipSize.minWidth = wanted;
+                chipSize.preferredWidth = wanted;
+            }
         }
 
         // Always pressable.

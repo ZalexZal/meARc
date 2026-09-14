@@ -58,6 +58,9 @@ public class TrailsDoor : MonoBehaviour
     {
         TrailService service = TrailService.Instance;
 
+        if (service != null)
+            service.RetryIfFailed();
+
         bool loaded = service != null && service.HasLoaded;
         bool failed = service != null && !string.IsNullOrEmpty(service.LastError);
         List<TrailService.Trail> mine = service != null

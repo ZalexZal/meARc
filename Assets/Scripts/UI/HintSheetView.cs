@@ -221,7 +221,12 @@ public class HintSheetView : MonoBehaviour
             {
                 Debug.LogWarning("[Hint] reveal_hint failed (" + request.responseCode + "): " +
                                  (request.downloadHandler != null ? request.downloadHandler.text : ""));
-                Failed();
+
+                // A phone asked for a hint on a competitive trail without an
+                // account. The server answered "a competitive trail needs a real
+                // account" and the sheet said "That did not unlock", which is
+                // true, useless, and reads as a fault of ours.
+                Failed(Postgrest.Said(request));
                 yield break;
             }
 
@@ -241,11 +246,27 @@ public class HintSheetView : MonoBehaviour
         Draw();
     }
 
-    void Failed()
+    void Failed(string said = null)
     {
         _busy = false;
-        Say("hint.failed", ThemeRole.StatusPoor);
+
+        if (!string.IsNullOrWhiteSpace(said))
+            Tell(said, ThemeRole.StatusPoor);
+        else
+            Say("hint.failed", ThemeRole.StatusPoor);
+
         Draw();
+    }
+
+    /// <summary>The server's own words, which are not a key to look up.</summary>
+    void Tell(string sentence, ThemeRole role)
+    {
+        if (statusLabel == null)
+            return;
+
+        statusLabel.text = sentence;
+        statusLabel.color = ThemeManager.Get(role);
+        statusLabel.gameObject.SetActive(true);
     }
 
     void Say(string key, ThemeRole role = ThemeRole.TextMuted)

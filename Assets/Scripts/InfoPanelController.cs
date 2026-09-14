@@ -264,7 +264,15 @@ public class InfoPanelController : MonoBehaviour
         // other side of town by tapping its pin on the map, which is the whole
         // game given away.
         if (MayCredit(data, fromMarker))
+        {
             DiscoveryTracker.MarkDiscovered(data);
+
+            // And to the server, which is what makes it count towards trails
+            // walked and badges. The phone's own flag stays for the screens that
+            // read it offline; this is the record that survives a new phone.
+            if (ProfileService.Instance != null)
+                ProfileService.Instance.RecordVisit(data.buildingId, fromMarker);
+        }
 
         // The contents are fetched either way, because reading a stop from the map
         // is a legitimate thing to do - it just is not the same as walking to it.

@@ -222,7 +222,76 @@ public static class UIPreview
         else
             Debug.LogWarning("[Preview] No account card to draw.");
 
+        // The You tab as a guest sees it - which is also what the editor is,
+        // since nobody is signed in here.
+        ProfileView you = canvas.GetComponentInChildren<ProfileView>(true);
+        if (you != null)
+            you.Render(true, null, null, null);
+        else
+            Debug.LogWarning("[Preview] No profile card to draw.");
+
+        DeleteAccountView leaving = canvas.GetComponentInChildren<DeleteAccountView>(true);
+
         Shoot(canvas, rig, "04-settings" + t, "SettingsPanel");
+
+        // And as somebody with an account and three trails behind them. Sample
+        // numbers, not anybody's: in the editor there is no server to ask.
+        ProfileService.ProfileData sample = SampleProfile();
+
+        if (you != null)
+        {
+            you.Render(false, sample, "Alex Scan", "alex@example.com");
+            Shoot(canvas, rig, "35-you" + t, "SettingsPanel");
+        }
+
+        SubPanelNavigator pages = canvas.GetComponentInChildren<SubPanelNavigator>(true);
+        BadgesPageView badgePage = canvas.GetComponentInChildren<BadgesPageView>(true);
+        AccountSecurityView security = canvas.GetComponentInChildren<AccountSecurityView>(true);
+
+        if (pages != null && badgePage != null)
+        {
+            pages.ShowPage(badgePage.gameObject);
+            badgePage.Render(sample);
+            Shoot(canvas, rig, "36-badges" + t, "SettingsPanel");
+        }
+
+        if (pages != null && security != null)
+        {
+            pages.ShowPage(security.gameObject);
+            if (security.currentEmailLabel != null)
+                security.currentEmailLabel.text = string.Format(AppStrings.Get("security.current"),
+                                                                "alex@example.com");
+            Shoot(canvas, rig, "37-security" + t, "SettingsPanel");
+        }
+
+        if (pages != null)
+            pages.ShowRoot();
+
+        // The confirmation, scrolled into view: the one step between a tap and
+        // an account being gone.
+        if (leaving != null && leaving.confirmGroup != null)
+        {
+            if (leaving.deleteLabel != null) leaving.deleteLabel.text = AppStrings.Get("delete.account");
+            if (leaving.confirmText != null) leaving.confirmText.text = AppStrings.Get("delete.confirm");
+            leaving.confirmGroup.SetActive(true);
+            if (leaving.deleteButton != null) leaving.deleteButton.gameObject.SetActive(false);
+
+            ScrollRect scroll = leaving.GetComponentInParent<ScrollRect>(true);
+            if (scroll != null)
+            {
+                Canvas.ForceUpdateCanvases();
+                scroll.verticalNormalizedPosition = 0f;
+            }
+
+            Shoot(canvas, rig, "38-delete" + t, "SettingsPanel");
+
+            leaving.confirmGroup.SetActive(false);
+            if (leaving.deleteButton != null) leaving.deleteButton.gameObject.SetActive(true);
+            if (scroll != null) scroll.verticalNormalizedPosition = 1f;
+        }
+
+        if (you != null)
+            you.Render(true, null, null, null);
 
         // The sheet and the walkthrough sit over whatever is behind them.
         Shoot(canvas, rig, "05-marker-sheet" + t, "MapPanel", "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim");
@@ -384,6 +453,7 @@ public static class UIPreview
             if (door.joinButton != null) door.joinButton.gameObject.SetActive(false);
             if (door.nameField != null) door.nameField.gameObject.SetActive(false);
             if (door.codeField != null) door.codeField.gameObject.SetActive(false);
+            if (door.accountButton != null) door.accountButton.gameObject.SetActive(true);
 
             Shoot(canvas, rig, "33-team-needs-account" + t,
                   "MapPanel", "Doors/Backdrop", "Doors/Team");
@@ -392,6 +462,18 @@ public static class UIPreview
             if (door.joinButton != null) door.joinButton.gameObject.SetActive(true);
             if (door.nameField != null) door.nameField.gameObject.SetActive(true);
             if (door.codeField != null) door.codeField.gameObject.SetActive(true);
+            if (door.accountButton != null) door.accountButton.gameObject.SetActive(false);
+
+            // The form itself: the state a walker with an account sees on a game,
+            // and the one that was squashed into a strip under the keyboard.
+            if (door.noneTitle != null)
+                door.noneTitle.text = AppStrings.Get("team.needed");
+
+            if (door.noneBody != null)
+                door.noneBody.text = AppStrings.Get("team.neededBody");
+
+            Shoot(canvas, rig, "34-team-form" + t,
+                  "MapPanel", "Doors/Backdrop", "Doors/Team");
         }
 
         // The two states of the list that are not a list. The third, waiting, is
@@ -790,6 +872,40 @@ public static class UIPreview
     /// <summary>Where a sheet was parked before a shot moved it, so it goes back.</summary>
     static readonly Dictionary<RectTransform, Vector2> _parked =
         new Dictionary<RectTransform, Vector2>();
+
+    static ProfileService.ProfileData SampleProfile()
+    {
+        ProfileService.BadgeRow B(string key, bool earned, int progress = 0, int target = 0, int tier = 0)
+        {
+            return new ProfileService.BadgeRow
+            {
+                key = key, earned = earned, progress = progress, target = target, tier = tier
+            };
+        }
+
+        return new ProfileService.ProfileData
+        {
+            name = "Alex Scan",
+            since = "2026-09-10T09:29:33Z",
+            trails_walked = 3,
+            stops_found = 17,
+            points = 340,
+            trails = new[]
+            {
+                new ProfileService.TrailRow { name = "Сканиране", mode = "ctf", team = "Scan Squad",
+                                              done = 3, total = 4, points = 100 },
+                new ProfileService.TrailRow { name = "Ямбол — център", mode = "guide",
+                                              done = 9, total = 9, finished = true },
+            },
+            badges = new[]
+            {
+                B("first_trail", true, 1, 1), B("guided", true), B("flag_runner", true),
+                B("free_roamer", false), B("scholar", false), B("flawless", false),
+                B("trailblazer", true, 3, 5, 1), B("team_player", true), B("captain", false),
+                B("summit", false), B("sharp_eye", false, 6, 10),
+            },
+        };
+    }
 
     static void Shoot(Canvas canvas, Rig rig, string name, params string[] visible)
     {

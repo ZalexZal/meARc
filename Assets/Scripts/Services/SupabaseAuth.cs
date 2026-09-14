@@ -61,6 +61,32 @@ public class SupabaseAuth : MonoBehaviour
         get { return Instance == null || Instance.HasSettled; }
     }
 
+    /// <summary>
+    /// Waits until there is somebody to make a request as.
+    ///
+    /// HasSettledYet answers true when there is no auth object at all, which is
+    /// right for a caller deciding what to draw and wrong for one about to call
+    /// the server: at launch the object exists a frame or two later than the
+    /// screens do, so "no instance yet" read as "ready" and the first request
+    /// went out with no token. A phone logged my_team_detail failed (401) one
+    /// second after launch, concluded the walker was on no team, and asked them
+    /// to make one they already had.
+    ///
+    /// Bounded, because a screen that waits for ever on a service that never
+    /// arrives is worse than one that tries and fails.
+    /// </summary>
+    public static IEnumerator Ready(float seconds = 8f)
+    {
+        float waited = 0f;
+
+        while (waited < seconds &&
+               (Instance == null || !Instance.HasSettled))
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
+    }
+
     [Tooltip("Refreshed this many seconds before the token actually expires, so a " +
              "request is never made with one that dies in flight.")]
     public int refreshMarginSeconds = 120;
@@ -323,6 +349,188 @@ public class SupabaseAuth : MonoBehaviour
     /// assumes there is a session - a signed-out state with no uid would show a
     /// map with no trails and no way to say why.
     /// </summary>
+    /// <summary>
+    /// Moves the account to another address.
+    ///
+    /// With email confirmation on, nothing changes until the new address is
+    /// confirmed, and the reply says so by carrying new_email - reported back as
+    /// "account.emailSent" so the screen does not claim a change that has not
+    /// happened. Without it the address changes at once.
+    /// </summary>
+    public IEnumerator ChangeEmail(string email, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || !IsSignedIn || IsAnonymous)
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        _working = true;
+
+        using (UnityWebRequest request = Put(config.Endpoint("/auth/v1/user"),
+                                             "{\"email\":\"" + Escape(email.Trim()) + "\"}"))
+        {
+            yield return request.SendWebRequest();
+            _working = false;
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Fail(done, Explain(request), request);
+                yield break;
+            }
+
+            string reply = request.downloadHandler != null ? request.downloadHandler.text : "";
+
+            if (reply.Contains("\"new_email\":\""))
+            {
+                if (done != null)
+                    done("account.emailSent");
+
+                yield break;
+            }
+        }
+
+        yield return Refresh();
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>
+    /// A new password, after proving the current one.
+    ///
+    /// The check first: a phone left unlocked on a desk should not be enough to
+    /// take an account over. Signing in with the current password is the check,
+    /// and it also hands back a fresh session for the change itself.
+    /// </summary>
+    public IEnumerator ChangePassword(string current, string next, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || !IsSignedIn || IsAnonymous || string.IsNullOrEmpty(Email))
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        if (string.IsNullOrEmpty(next) || next.Length < 8)
+        {
+            Fail(done, "account.pwShort");
+            yield break;
+        }
+
+        _working = true;
+
+        string proof = "{\"email\":\"" + Escape(Email) + "\"," +
+                       "\"password\":\"" + Escape(current) + "\"}";
+
+        using (UnityWebRequest request =
+               Post(config.Endpoint("/auth/v1/token?grant_type=password"), proof, config.anonKey))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                _working = false;
+                Fail(done, "account.pwWrong", request);
+                yield break;
+            }
+
+            Handle(request, "password check");
+        }
+
+        using (UnityWebRequest request = Put(config.Endpoint("/auth/v1/user"),
+                                             "{\"password\":\"" + Escape(next) + "\"}"))
+        {
+            yield return request.SendWebRequest();
+            _working = false;
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Fail(done, Explain(request), request);
+                yield break;
+            }
+        }
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>
+    /// Deletes the account for good, then carries on as a fresh guest.
+    ///
+    /// Somebody who made trails is sent to the website instead
+    /// ("account.deleteOnWebsite"): only there can they choose whether their
+    /// trails stay for other people, and only there are the uploaded photos
+    /// removed with them. Everybody else - nearly every walker - is two taps.
+    /// </summary>
+    public IEnumerator DeleteAccount(Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || !IsSignedIn)
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        _working = true;
+
+        using (UnityWebRequest request =
+               Post(config.Endpoint("/rest/v1/rpc/what_delete_removes"), "{}", AccessToken))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                _working = false;
+                Fail(done, "account.deleteFailed", request);
+                yield break;
+            }
+
+            string reply = request.downloadHandler != null ? request.downloadHandler.text : "";
+
+            // An empty list prints as "trails_owned": [] - anything else means
+            // there is at least one trail to decide about.
+            string compact = reply.Replace(" ", "");
+            bool ownsTrails = compact.Contains("\"trails_owned\":[{");
+
+            if (ownsTrails)
+            {
+                _working = false;
+
+                if (done != null)
+                    done("account.deleteOnWebsite");
+
+                yield break;
+            }
+        }
+
+        using (UnityWebRequest request =
+               Post(config.Endpoint("/rest/v1/rpc/delete_my_account"),
+                    "{\"p_keep_trails\":false}", AccessToken))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                _working = false;
+                Fail(done, "account.deleteFailed", request);
+                yield break;
+            }
+        }
+
+        _working = false;
+
+        // The account is gone; its tokens are worthless. Straight to a new guest.
+        yield return SignOut(null);
+
+        if (done != null)
+            done(null);
+    }
+
     public IEnumerator SignOut(Action done)
     {
         SupabaseConfig config = SupabaseConfig.Instance;

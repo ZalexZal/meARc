@@ -66,6 +66,22 @@ public class SettingsTabController : MonoBehaviour
 
     [Header("Sub-pages")]
     public SubPanelNavigator navigator;
+
+    [Header("You")]
+    [Tooltip("Opens the page with every badge and its rule.")]
+    public Button allBadgesButton;
+    public GameObject badgesPage;
+
+    [Tooltip("Opens the email and password page. Only on screen with an account.")]
+    public Button securityButton;
+    public GameObject securityPage;
+
+    [Tooltip("Open the website's own pages, in the app's language.")]
+    public Button termsButton;
+    public Button privacyButton;
+
+    [Tooltip("The settings list's own scroll, put back to the top on every open.")]
+    public ScrollRect scroll;
     public GameObject sourcesPage;
     public GameObject aboutPage;
 
@@ -113,6 +129,14 @@ public class SettingsTabController : MonoBehaviour
 
         WireHelpRow(sourcesButton, sourcesPage);
         WireHelpRow(aboutButton, aboutPage);
+        WireHelpRow(allBadgesButton, badgesPage);
+        WireHelpRow(securityButton, securityPage);
+
+        if (termsButton != null)
+            termsButton.onClick.AddListener(() => Application.OpenURL(SiteLink.Terms()));
+
+        if (privacyButton != null)
+            privacyButton.onClick.AddListener(() => Application.OpenURL(SiteLink.Privacy()));
     }
 
     /// <summary>
@@ -136,6 +160,15 @@ public class SettingsTabController : MonoBehaviour
 
         if (navigator != null)
             navigator.ShowRoot();
+
+        // Back to the top, every time.
+        //
+        // Independent of why the list would not scroll up: a settings page that
+        // reopens halfway down is showing somebody the middle of a document they
+        // have not read, and if scrolling up ever fails again this is what keeps
+        // the account card reachable.
+        if (scroll != null)
+            scroll.verticalNormalizedPosition = 1f;
     }
 
     void OnDisable()

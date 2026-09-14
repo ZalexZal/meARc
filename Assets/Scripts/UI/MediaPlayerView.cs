@@ -12,13 +12,21 @@ using UnityEngine.Video;
 /// <summary>
 /// Plays one piece of a marker: a video, or a recording.
 ///
-/// Both go through VideoPlayer, including the audio-only ones. The obvious way to
-/// play a recording is an AudioSource with UnityWebRequestMultimedia, and it is
-/// the wrong one here: that path wants the whole file in memory before a sound
-/// comes out, and it only understands mp3, ogg and wav. VideoPlayer hands the URL
-/// to the platform's own media stack, which streams it and knows the formats a
-/// phone actually records in. For an audio piece there is simply no picture, and
-/// the page does not show one.
+/// A video goes through VideoPlayer. A recording does not, and used to.
+///
+/// The reasoning was that VideoPlayer hands the URL to the platform's own media
+/// stack, which streams it and knows every format a phone records in, while
+/// UnityWebRequestMultimedia wants the whole file in memory and understands only
+/// mp3, ogg and wav. All true, and all beside the point: Android's media stack
+/// refuses a file with no picture in it. A phone playing a perfectly good mp3
+/// logged "AndroidVideoMedia: No video tracks" and the page said "Couldn't play
+/// that" - so every recording any creator has uploaded has been unplayable on
+/// the thing the app runs on.
+///
+/// So a recording is downloaded as an AudioClip and played through the
+/// AudioSource that was already here for the video's sound. It arrives whole
+/// rather than streaming, which for a minute of speech is a second or two, and
+/// the format has to be one of three - which is what the bucket accepts anyway.
 ///
 /// Nothing here autoplays. Sound starting by itself in a street is startling, and
 /// it spends someone's data without asking - which is also why the size is shown
@@ -61,6 +69,11 @@ public class MediaPlayerView : MonoBehaviour
 
     VideoPlayer _player;
     AudioSource _audio;
+
+    /// <summary>True while the open piece is a recording, which has its own path.</summary>
+    bool _hearing;
+
+    Coroutine _fetching;
     RenderTexture _target;
     MarkerMedia _media;
     bool _prepared;
@@ -120,6 +133,7 @@ public class MediaPlayerView : MonoBehaviour
         _media = media;
         _prepared = false;
         _failed = false;
+        _hearing = media != null && media.Kind == MarkerMediaKind.Audio;
 
         if (media == null)
             return;
@@ -193,12 +207,86 @@ public class MediaPlayerView : MonoBehaviour
         SetNotice("media.loading");
         SetDataQuestion(false);
 
+        if (_hearing)
+        {
+            if (_fetching != null)
+                StopCoroutine(_fetching);
+
+            _fetching = StartCoroutine(Hear(url));
+            return;
+        }
+
         _player.url = url;
 
         if (_media != null && _media.Kind == MarkerMediaKind.Video)
             EnsureTarget();
 
         _player.Prepare();
+    }
+
+    /// <summary>
+    /// Downloads a recording and hands it to the AudioSource.
+    ///
+    /// The type is read off the address rather than guessed: Unity will decode an
+    /// mp3 as an ogg without complaining and then play silence.
+    /// </summary>
+    IEnumerator Hear(string url)
+    {
+        using (UnityWebRequest request =
+               UnityWebRequestMultimedia.GetAudioClip(url, TypeOf(url)))
+        {
+            yield return request.SendWebRequest();
+
+            _fetching = null;
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning("[Media] Recording failed (" + request.responseCode + "): " +
+                                 request.error);
+                Fail("media.failed");
+                yield break;
+            }
+
+            AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
+
+            if (clip == null || clip.loadState == AudioDataLoadState.Failed)
+            {
+                Debug.LogWarning("[Media] Recording did not decode: " + url);
+                Fail("media.failed");
+                yield break;
+            }
+
+            _audio.clip = clip;
+            _prepared = true;
+
+            SetNotice(null);
+            UpdateTime(0d);
+
+            // Ready, not playing. Sound starting by itself in a street is
+            // startling, and the reader asked to open the piece, not be played at.
+            SetPlayIcon(false);
+        }
+    }
+
+    static AudioType TypeOf(string url)
+    {
+        string lower = url == null ? string.Empty : url.ToLowerInvariant();
+
+        // A signed URL keeps its token in the query string, which is full of
+        // letters that would fool a plain EndsWith.
+        int query = lower.IndexOf((char)63);
+        if (query > 0)
+            lower = lower.Substring(0, query);
+
+        if (lower.EndsWith(".ogg"))
+            return AudioType.OGGVORBIS;
+
+        if (lower.EndsWith(".wav"))
+            return AudioType.WAV;
+
+        // mp3, m4a, and anything unlabelled. MPEG is what a phone records and
+        // what a creator uploads.
+        return AudioType.MPEG;
     }
 
     // ------------------------------------------------------------- mobile data
@@ -381,7 +469,30 @@ public class MediaPlayerView : MonoBehaviour
 
     public void Toggle()
     {
-        if (_failed || _player == null)
+        if (_failed)
+            return;
+
+        if (_hearing)
+        {
+            if (_audio == null)
+                return;
+
+            if (_audio.isPlaying)
+            {
+                _audio.Pause();
+                SetPlayIcon(false);
+                return;
+            }
+
+            if (!_prepared)
+                return;   // still loading; the notice already says so
+
+            _audio.Play();
+            SetPlayIcon(true);
+            return;
+        }
+
+        if (_player == null)
             return;
 
         if (_player.isPlaying)
@@ -402,6 +513,9 @@ public class MediaPlayerView : MonoBehaviour
     {
         if (_player != null && _player.isPlaying)
             _player.Pause();
+
+        if (_audio != null && _audio.isPlaying)
+            _audio.Pause();
 
         SetPlayIcon(false);
     }
@@ -440,15 +554,34 @@ public class MediaPlayerView : MonoBehaviour
 
     void Update()
     {
-        if (_player == null || !_prepared)
+        if (!_prepared)
             return;
 
-        double length = _player.length;
+        double at;
+        double length;
+
+        if (_hearing)
+        {
+            if (_audio == null || _audio.clip == null)
+                return;
+
+            at = _audio.time;
+            length = _audio.clip.length;
+        }
+        else
+        {
+            if (_player == null)
+                return;
+
+            at = _player.time;
+            length = _player.length;
+        }
+
         if (length <= 0d)
             return;
 
-        SetProgress((float)(_player.time / length));
-        UpdateTime(_player.time);
+        SetProgress((float)(at / length));
+        UpdateTime(at);
     }
 
     // ------------------------------------------------------------------ screen

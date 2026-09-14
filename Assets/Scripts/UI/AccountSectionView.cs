@@ -132,7 +132,15 @@ public class AccountSectionView : MonoBehaviour
 
         SetBusy(true);
         Say("account.working");
-        StartCoroutine(auth.SignUp(email, password, Value(nameField), Done));
+        // On the auth service, not on this card.
+        //
+        // Sign-up refreshes the session half way through, and the account screen
+        // shown after the tutorial closes itself the moment the session changes.
+        // Closing it switched this card off, and Unity stops every coroutine on
+        // an object that is switched off - so the last step, writing the name to
+        // the profile, never ran. The leaderboard read the profile and called the
+        // new walker "Player". The auth service is never switched off.
+        auth.StartCoroutine(auth.SignUp(email, password, Value(nameField), Done));
     }
 
     void SignIn()
@@ -152,7 +160,7 @@ public class AccountSectionView : MonoBehaviour
 
         SetBusy(true);
         Say("account.working");
-        StartCoroutine(auth.SignIn(email, password, Done));
+        auth.StartCoroutine(auth.SignIn(email, password, Done));
     }
 
     void SaveName()
@@ -166,7 +174,7 @@ public class AccountSectionView : MonoBehaviour
 
         SetBusy(true);
         Say("account.working");
-        StartCoroutine(auth.SetDisplayName(Value(signedInNameField), Done));
+        auth.StartCoroutine(auth.SetDisplayName(Value(signedInNameField), Done));
     }
 
     void SignOut()
@@ -180,7 +188,7 @@ public class AccountSectionView : MonoBehaviour
 
         SetBusy(true);
         Say("account.working");
-        StartCoroutine(auth.SignOut(() =>
+        auth.StartCoroutine(auth.SignOut(() =>
         {
             SetBusy(false);
             Say(null);
