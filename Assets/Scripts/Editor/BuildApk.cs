@@ -240,6 +240,40 @@ public static class BuildApk
         RestorePreloadedAssets();
         ReportPreloads("as the build will use it");
 
+        // Signing, with the password kept out of everything that gets committed.
+        //
+        // Unity's -keystorePass and -keyaliasPass command line arguments are
+        // ignored here: the first release build ran to the end of the post
+        // processor and stopped at "Unable to sign the application; please
+        // provide passwords!". So the password arrives through the environment
+        // and is set for this run only.
+        //
+        // The keystore's path and its alias live in ProjectSettings, which is
+        // right - neither is secret. The password must never end up there. If
+        // this is ever changed, check ProjectSettings.asset before committing.
+        //
+        // And if a keystore is configured but no password was given, this stops
+        // rather than quietly handing back a debug-signed APK that looks like a
+        // release one. A build that is not signed by the right key is worse than
+        // no build, because it installs and runs and cannot be updated later.
+        string keyPass = Environment.GetEnvironmentVariable("ARTRAIL_KEYSTORE_PASS");
+
+        if (!string.IsNullOrEmpty(keyPass))
+        {
+            PlayerSettings.Android.useCustomKeystore = true;
+            PlayerSettings.Android.keystorePass = keyPass;
+            PlayerSettings.Android.keyaliasPass = keyPass;
+
+            Debug.Log("[Build] Signing with " + PlayerSettings.Android.keystoreName +
+                      " as \"" + PlayerSettings.Android.keyaliasName + "\"");
+        }
+        else if (PlayerSettings.Android.useCustomKeystore)
+        {
+            throw new Exception(
+                "A keystore is configured but ARTRAIL_KEYSTORE_PASS is not set, so the " +
+                "APK could only be debug-signed. Set it for this build and run again.");
+        }
+
         BuildPlayerOptions options = new BuildPlayerOptions
         {
             scenes = new[] { Scene },
