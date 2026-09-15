@@ -238,7 +238,7 @@ public static class AppStrings
         { "team.failed", "That did not work." },
         { "settings.account", "Account" },
         { "account.none", "You have no account yet" },
-        { "account.noneBody", "Your walking is saved on this phone only. Make an account and it follows you to another one, and to the website." },
+        { "account.noneBody", "Your walking is saved on this phone only. Make an account and it follows you to another one, and to the website. If you are under 14, an account can only be made with the consent of a parent or guardian - guided trails work as a guest, with no account." },
         { "account.name", "Your name" },
         { "account.nameHint", "What the leaderboard calls you." },
         { "account.saveName", "Save" },
@@ -340,6 +340,7 @@ public static class AppStrings
         { "piece.read", "Read" },
         { "piece.answer", "Answer" },
         { "piece.done", "Done" },
+        { "piece.tooFar", "Come closer to open this stop" },
         { "piece.back", "Back" },
 
         { "media.play", "Play" },
@@ -627,7 +628,7 @@ public static class AppStrings
         { "team.failed", "Не се получи." },
         { "settings.account", "Профил" },
         { "account.none", "Още нямаш профил" },
-        { "account.noneBody", "Извървяното се пази само на този телефон. Направи профил и то ще те следва на друг телефон и в сайта." },
+        { "account.noneBody", "Извървяното се пази само на този телефон. Направи профил и то ще те следва на друг телефон и в сайта. Ако си под 14 години, профил може да се направи само със съгласието на родител или настойник - водените маршрути работят и като гост, без профил." },
         { "account.name", "Твоето име" },
         { "account.nameHint", "Така те изписва класацията." },
         { "account.saveName", "Запази" },
@@ -729,6 +730,7 @@ public static class AppStrings
         { "piece.read", "Прочети" },
         { "piece.answer", "Отговори" },
         { "piece.done", "Готово" },
+        { "piece.tooFar", "Приближи се, за да отвориш спирката" },
         { "piece.back", "Назад" },
 
         { "media.play", "Пусни" },

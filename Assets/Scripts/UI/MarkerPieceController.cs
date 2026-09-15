@@ -116,6 +116,35 @@ public class MarkerPieceController : MonoBehaviour
     }
 
     /// <summary>Called when the sheet closes. Stops anything still playing.</summary>
+
+    /// <summary>
+    /// The stop is there, but the reader is not - so it names itself and keeps
+    /// its contents.
+    ///
+    /// The question and the media are the trail. Read from a bench on the other
+    /// side of town they are the route given away, and on a scored trail the
+    /// answer with it. Tapping a pin on the map used to open everything, which
+    /// made the whole AR half of the app optional.
+    ///
+    /// The section still shows, carrying the reason. An empty sheet with no
+    /// explanation reads as a bug; "come closer" reads as a rule.
+    /// </summary>
+    public void BindLocked(BuildingData marker)
+    {
+        _marker = marker;
+        _media = new List<MarkerMedia>();
+
+        Set(page, false);
+        Set(overview, true);
+        Set(closeMark, true);
+        Set(section, true);
+
+        if (countLabel != null)
+            countLabel.text = AppStrings.Get("piece.tooFar");
+
+        for (int i = 0; i < _rows.Count; i++)
+            _rows[i].gameObject.SetActive(false);
+    }
     public void Close()
     {
         if (media != null)

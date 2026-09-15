@@ -221,6 +221,25 @@ public class InfoPanelController : MonoBehaviour
     }
 
     /// <summary>
+    /// Whether this stop's question and media may be shown at all.
+    ///
+    /// The same rule as <see cref="MayCredit"/>, because it is the same
+    /// concession. Opening a stop from the map is the fallback for somebody
+    /// standing in front of one whose AR will not calibrate - not a way to read
+    /// the trail from a bench. Tapping a pin used to hand over every question
+    /// and every piece of media at any distance, which on a scored trail is the
+    /// answers, and which made the AR half of the app optional.
+    ///
+    /// A stop already found stays readable, so a team can look at the question
+    /// again while they work it out, and so somebody who walked a trail last
+    /// week can still read what they saw.
+    /// </summary>
+    static bool MayReveal(BuildingData data, bool fromMarker)
+    {
+        return MayCredit(data, fromMarker) || DiscoveryTracker.IsDiscovered(data);
+    }
+
+    /// <summary>
     /// Used when the server sent no radius - a marker placed before 0017, or a
     /// build talking to an older database. The same 100 metres the column
     /// defaults to, so the two agree.
@@ -248,12 +267,21 @@ public class InfoPanelController : MonoBehaviour
 
         currentBuilding = data;
 
+        // Worked out before anything is drawn, because it decides both what the
+        // sheet shows and whether the contents are asked for at all.
+        bool reveal = MayReveal(data, fromMarker);
+
         RenderBuilding(data);
 
         // After RenderBuilding, because the pieces list reads the marker's task and
         // media and both are language-aware.
         if (pieces != null)
-            pieces.Bind(data);
+        {
+            if (reveal)
+                pieces.Bind(data);
+            else
+                pieces.BindLocked(data);
+        }
         RefreshLabels();
 
         // Being there is what counts, not seeing it.
@@ -274,11 +302,11 @@ public class InfoPanelController : MonoBehaviour
                 ProfileService.Instance.RecordVisit(data.buildingId, fromMarker);
         }
 
-        // The contents are fetched either way, because reading a stop from the map
-        // is a legitimate thing to do - it just is not the same as walking to it.
-        // The sheet is already open by the time this returns; the pieces list
-        // fills in underneath.
-        if (MarkerDetailService.Instance != null)
+        // Not fetched unless it may be shown. Hiding a question the phone has
+        // already downloaded is a curtain rather than a rule, and anybody minded
+        // to look would find it in the response. Asking only when the reader is
+        // allowed to read is the honest version of the same thing.
+        if (reveal && MarkerDetailService.Instance != null)
         {
             MarkerDetailService.Instance.Fill(data, () =>
             {
