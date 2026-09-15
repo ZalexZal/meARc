@@ -165,19 +165,17 @@ public class StateCardView : MonoBehaviour
                 break;
         }
 
+        // The far state names the radius it actually searched, so "nothing here"
+        // is a fact the reader can check rather than a shrug. Which line carries
+        // the number is a translator's choice - in both languages today it is
+        // the title - so the radius goes wherever the placeholder is rather than
+        // into a line assumed to hold one. It was going into the body, which has
+        // no placeholder, and the title shipped a literal "{0}" to the reader.
         if (titleText != null)
-            titleText.text = AppStrings.Get(title);
+            titleText.text = WithRadius(AppStrings.Get(title));
 
         if (bodyText != null)
-        {
-            string text = AppStrings.Get(body);
-
-            // The empty state names the radius it actually searched, so "nothing
-            // here" is a fact the reader can check rather than a shrug.
-            bodyText.text = _kind == Kind.FarAway
-                ? string.Format(text, AppStrings.FormatDistance(radiusMetres))
-                : text;
-        }
+            bodyText.text = WithRadius(AppStrings.Get(body));
 
         if (icon != null)
         {
@@ -200,5 +198,16 @@ public class StateCardView : MonoBehaviour
     {
         if (onAction != null)
             onAction();
+    }
+
+    /// <summary>
+    /// Puts the searched radius into a line that asks for it, and leaves alone
+    /// one that does not.
+    /// </summary>
+    string WithRadius(string text)
+    {
+        return !string.IsNullOrEmpty(text) && text.Contains("{0}")
+            ? string.Format(text, AppStrings.FormatDistance(radiusMetres))
+            : text;
     }
 }

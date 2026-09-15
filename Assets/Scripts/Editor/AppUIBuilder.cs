@@ -756,6 +756,15 @@ const float ReferenceWidth = 1080f;
         pieces.countLabel = UIFactory.Text("Count", chip, 28f, ThemeRole.TextSecondary,
                                            TextAlignmentOptions.Center, null, FontStyles.Bold);
         UIFactory.Stretch(pieces.countLabel.rectTransform);
+        pieces.countRow = header.gameObject;
+
+        // The reason a stop will not open, on a line of its own. It first
+        // borrowed the count chip above, which is a fixed 210px pill: "Come
+        // closer to open this stop" wrapped into three cramped lines and read
+        // as a layout bug rather than as a rule.
+        pieces.tooFarLabel = UIFactory.Text("TooFar", section, 28f, ThemeRole.TextSecondary,
+                                            TextAlignmentOptions.Left, null);
+        UIFactory.FitsItsText(pieces.tooFarLabel);
 
         RectTransform list = UIFactory.Rect("List", section);
         UIFactory.VerticalStack(list, 10f, false);
@@ -2746,8 +2755,7 @@ const float ReferenceWidth = 1080f;
 
         TextMeshProUGUI body = UIFactory.Text("Body", outGroup, Secondary, ThemeRole.TextSecondary,
                                               TextAlignmentOptions.Left, "account.noneBody");
-        body.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(body.gameObject, 110f);
+        UIFactory.FitsItsText(body);
 
         // First, because it is the one field that is about the person rather
         // than about the login.

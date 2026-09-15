@@ -364,6 +364,29 @@ public static class UIFactory
         return layout;
     }
 
+    /// <summary>
+    /// A label that takes the height its own text needs.
+    ///
+    /// Size() pins min and preferred height together, which is right for a line
+    /// of chrome and wrong for a sentence. The account card's body was pinned at
+    /// 110px for two lines; adding the under-14 line ran the text up underneath
+    /// the heading and clipped it mid-word behind the next field. A bigger magic
+    /// number only moves that, because Bulgarian runs longer than English and
+    /// the next edit is longer again.
+    ///
+    /// VerticalStack sets childControlHeight, so with no LayoutElement in the
+    /// way it asks the text itself how tall it is.
+    /// </summary>
+    public static void FitsItsText(TextMeshProUGUI label)
+    {
+        LayoutElement element = label.GetComponent<LayoutElement>();
+
+        if (element != null)
+            Object.DestroyImmediate(element);
+
+        label.textWrappingMode = TextWrappingModes.Normal;
+    }
+
     public static LayoutElement Size(GameObject go, float height, float width = -1f)
     {
         LayoutElement element = go.GetComponent<LayoutElement>();

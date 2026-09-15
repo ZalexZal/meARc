@@ -24,7 +24,11 @@ public class MarkerPieceController : MonoBehaviour
     [Tooltip("The whole pieces section. Off for a marker that is only text.")]
     public GameObject section;
 
+    public GameObject countRow;
     public TextMeshProUGUI countLabel;
+
+    [Tooltip("Why a stop will not open. Its own line - the count chip is a fixed pill.")]
+    public TextMeshProUGUI tooFarLabel;
     public RectTransform listParent;
     public PieceRowView rowPrefab;
 
@@ -101,6 +105,10 @@ public class MarkerPieceController : MonoBehaviour
         int count = marker != null ? marker.PieceCount : 0;
 
         Set(section, count > 0);
+        Set(countRow, true);
+
+        if (tooFarLabel != null)
+            Set(tooFarLabel.gameObject, false);
 
         if (count == 0)
             return;
@@ -114,8 +122,6 @@ public class MarkerPieceController : MonoBehaviour
 
         Fill();
     }
-
-    /// <summary>Called when the sheet closes. Stops anything still playing.</summary>
 
     /// <summary>
     /// The stop is there, but the reader is not - so it names itself and keeps
@@ -139,12 +145,21 @@ public class MarkerPieceController : MonoBehaviour
         Set(closeMark, true);
         Set(section, true);
 
-        if (countLabel != null)
-            countLabel.text = AppStrings.Get("piece.tooFar");
+        // The count chip is a fixed pill and this is a sentence, so the chip goes
+        // and the sentence gets the width it needs.
+        Set(countRow, false);
+
+        if (tooFarLabel != null)
+        {
+            Set(tooFarLabel.gameObject, true);
+            tooFarLabel.text = AppStrings.Get("piece.tooFar");
+        }
 
         for (int i = 0; i < _rows.Count; i++)
             _rows[i].gameObject.SetActive(false);
     }
+
+    /// <summary>Called when the sheet closes. Stops anything still playing.</summary>
     public void Close()
     {
         if (media != null)

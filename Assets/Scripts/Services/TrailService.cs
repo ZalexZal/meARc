@@ -277,7 +277,21 @@ public class TrailService : MonoBehaviour
         // drawer and found nothing. Now that the account is known, read that
         // account's own choice. Without this line, scoping the key would lose
         // the chosen trail on every single launch.
+        string was = SelectedId;
         SelectedId = PlayerPrefs.GetString(AccountScope.Key(SelectedKey), string.Empty);
+
+        // And say so, because this is not the only thing listening to the
+        // session. RemoteMarkerSource subscribes to the same event, and both
+        // subscribers run in whatever order they happened to enable in. When it
+        // ran first it read the empty id, fell back to its built-in world id,
+        // fetched zero markers for a trail nobody is on, and never asked again:
+        // a returning walker opened the app to an empty map and "Nothing within
+        // 500 m" for a trail whose stop was 460 metres away.
+        //
+        // Only when it changed, so an ordinary token refresh does not send
+        // everybody back to the server for markers they already have.
+        if (SelectedId != was)
+            Raise();
 
         StartCoroutine(RefreshMine());
 
