@@ -387,6 +387,28 @@ public static class UIFactory
         label.textWrappingMode = TextWrappingModes.Normal;
     }
 
+    /// <summary>
+    /// A label that holds a height open and grows past it rather than clipping.
+    ///
+    /// Status lines carry whatever the server said, and those sentences are not
+    /// a fixed length: "a competitive trail needs a real account" is one line in
+    /// English and runs longer in Bulgarian, and the next message added will be
+    /// longer again. Size() pins min and preferred together, so anything past
+    /// the guess is cut - and a refusal the reader cannot finish reading is a
+    /// failure this project has already had once, when a refusal arrived looking
+    /// like a network error.
+    ///
+    /// The reservation is worth keeping: without it the card jumps every time a
+    /// message appears and goes again. So the minimum stays, and the preferred
+    /// height goes back to the text.
+    /// </summary>
+    public static LayoutElement ReservesButGrows(GameObject go, float reserve)
+    {
+        LayoutElement element = Size(go, reserve);
+        element.preferredHeight = -1f;
+        return element;
+    }
+
     public static LayoutElement Size(GameObject go, float height, float width = -1f)
     {
         LayoutElement element = go.GetComponent<LayoutElement>();

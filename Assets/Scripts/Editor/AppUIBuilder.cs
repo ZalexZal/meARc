@@ -993,8 +993,7 @@ const float ReferenceWidth = 1080f;
         view.titleLabel = UIFactory.Text("Title", card, Title, ThemeRole.TextPrimary,
                                          TextAlignmentOptions.TopLeft, "report.title",
                                          FontStyles.Bold);
-        view.titleLabel.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(view.titleLabel.gameObject, 76f);
+        UIFactory.FitsItsText(view.titleLabel);
 
         for (int i = 0; i < ReportSheetView.Reasons.Length; i++)
         {
@@ -2784,14 +2783,13 @@ const float ReferenceWidth = 1080f;
         TextMeshProUGUI warn = UIFactory.Text("Merge", outGroup, Caption, ThemeRole.TextMuted,
                                               TextAlignmentOptions.Left,
                                               "account.mergeWarning");
-        warn.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(warn.gameObject, 80f);
+        UIFactory.FitsItsText(warn);
 
         // ----------------------------------------------------------- status
         view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
                                           TextAlignmentOptions.Left);
         view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(view.statusLabel.gameObject, 60f);
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 60f);
         view.statusLabel.text = string.Empty;
         view.statusLabel.gameObject.SetActive(false);
 
@@ -2932,8 +2930,7 @@ const float ReferenceWidth = 1080f;
         TextMeshProUGUI note = UIFactory.Text("Note", card, Caption, ThemeRole.TextMuted,
                                               TextAlignmentOptions.TopLeft,
                                               "search.discoveredNote");
-        note.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(note.gameObject, 104f);
+        UIFactory.FitsItsText(note);
 
         DiscoveryProgressCard component = card.gameObject.AddComponent<DiscoveryProgressCard>();
         component.statsRow = stats.gameObject;
@@ -3256,14 +3253,16 @@ const float ReferenceWidth = 1080f;
 
             view.medalLabels[i] = UIFactory.Text("Label", slot, 25f, ThemeRole.TextSecondary,
                                                  TextAlignmentOptions.Top, null);
+            // Pinned on purpose, unlike every other wrapping label here: these sit
+            // in a row of badge slots, and one that grew a line taller would drag
+            // its neighbours out of line. The width is fixed for the same reason.
             view.medalLabels[i].textWrappingMode = TextWrappingModes.Normal;
             UIFactory.Size(view.medalLabels[i].gameObject, 66f, 210f);
         }
 
         view.guestNote = UIFactory.Text("GuestNote", badges, Caption, ThemeRole.TextSecondary,
                                         TextAlignmentOptions.TopLeft, null);
-        view.guestNote.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(view.guestNote.gameObject, 118f);
+        UIFactory.FitsItsText(view.guestNote);
 
         // ---- the last two trails
         RectTransform recent = UIFactory.Rect("Recent", card);
@@ -3362,8 +3361,7 @@ const float ReferenceWidth = 1080f;
 
         view.countLabel = UIFactory.Text("Count", content, Secondary, ThemeRole.TextSecondary,
                                          TextAlignmentOptions.Left, null);
-        view.countLabel.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(view.countLabel.gameObject, 56f);
+        UIFactory.FitsItsText(view.countLabel);
 
         Sprite[] sprites = BadgeSprites();
         int n = Badges.Keys.Length;
@@ -3450,7 +3448,7 @@ const float ReferenceWidth = 1080f;
         view.statusLabel = UIFactory.Text("Status", content, Secondary, ThemeRole.TextMuted,
                                           TextAlignmentOptions.Left, null);
         view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(view.statusLabel.gameObject, 96f);
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 96f);
         view.statusLabel.gameObject.SetActive(false);
 
         rt.gameObject.SetActive(false);
@@ -5294,8 +5292,7 @@ const float ReferenceWidth = 1080f;
                                                     ThemeRole.TextMuted,
                                                     TextAlignmentOptions.Left,
                                                     "team.inviteHint");
-        inviteHint.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(inviteHint.gameObject, 68f);
+        UIFactory.FitsItsText(inviteHint);
 
         // ------------------------------------------------------ the board
         RectTransform board = UIFactory.Rect("Board", scroll);
@@ -5424,7 +5421,7 @@ const float ReferenceWidth = 1080f;
         view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
                                           TextAlignmentOptions.Left);
         view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.Size(view.statusLabel.gameObject, 56f);
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 56f);
         view.statusLabel.gameObject.SetActive(false);
 
         view.closeButton = QuietAction(card, "Close", "team.close", flow.Close, "close team");
