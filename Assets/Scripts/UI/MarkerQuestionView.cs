@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -292,9 +293,28 @@ public class MarkerQuestionView : MonoBehaviour
         if (progress.IsFinished || progress.IsLocked)
             return;
 
+        // A chosen option travels as its position, not as its words.
+        //
+        // check_answer reads p_submitted for a choice question as a list of
+        // numbers - the indices of what was picked - and compares them with the
+        // indices the creator ticked. This sent the option's text instead, and
+        // the two only ever agreed by accident:
+        //
+        //   Options labelled "1", "2", "3" with the second ticked. Tapping the
+        //   first sent "1", the server read index 1, and a wrong answer scored.
+        //   That stop was then solved, so every later answer came back correct
+        //   as well - which is what a field test sees as "everything is right".
+        //
+        //   Options labelled with words - "Paris", "London" - are worse and
+        //   quieter. The server keeps only digits, so nothing survived, the
+        //   chosen set was empty, and every answer was wrong. Those questions
+        //   have never been answerable by anybody.
+        //
+        // Open answers are unaffected: those are compared as text, and text is
+        // what they have always sent.
         string answer = _task.Kind == MarkerTaskKind.Open
             ? (openField != null ? openField.text : string.Empty)
-            : (_chosen >= 0 ? _task.OptionAt(_chosen) : null);
+            : (_chosen >= 0 ? _chosen.ToString(CultureInfo.InvariantCulture) : null);
 
         if (string.IsNullOrWhiteSpace(answer))
         {
