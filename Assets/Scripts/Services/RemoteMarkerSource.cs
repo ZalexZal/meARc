@@ -83,6 +83,19 @@ public class RemoteMarkerSource : MonoBehaviour
 
     float _lastFetchTime = -999f;
     bool _fetching;
+
+    /// <summary>
+    /// A refresh that arrived while a fetch was already under way.
+    ///
+    /// Refresh used to return when a fetch was in flight, and that dropped the
+    /// one change that matters most. On a fresh start the session lands with no
+    /// trail chosen, so the first fetch goes to the fallback world; the trail
+    /// list arrives a moment later, the only trail is selected, and its refresh
+    /// hit the in-flight fetch and vanished. HandleTrailChanged had already
+    /// recorded the new world as fetched, so nothing ever asked again, and a
+    /// walker standing at a stop saw "Nothing within 500 m".
+    /// </summary>
+    bool _again;
     double _lastFetchLat, _lastFetchLng;
     bool _hasFetchedOnce;
 
@@ -172,7 +185,10 @@ public class RemoteMarkerSource : MonoBehaviour
     public void Refresh()
     {
         if (_fetching)
+        {
+            _again = true;
             return;
+        }
 
         _lastFetchTime = -999f;
         BuildingDatabase.SetLoading();
@@ -261,7 +277,10 @@ public class RemoteMarkerSource : MonoBehaviour
     IEnumerator Fetch(double latitude, double longitude)
     {
         if (_fetching)
+        {
+            _again = true;
             yield break;
+        }
 
         SupabaseConfig config = SupabaseConfig.Instance;
 
@@ -303,7 +322,7 @@ public class RemoteMarkerSource : MonoBehaviour
                                  request.downloadHandler.text);
                 if (!_hasFetchedOnce)
                     BuildingDatabase.SetFailed();
-                _fetching = false;
+                Settled(world);
                 yield break;
             }
 
@@ -343,7 +362,24 @@ public class RemoteMarkerSource : MonoBehaviour
             }
         }
 
+        Settled(world);
+    }
+
+    /// <summary>
+    /// A fetch is over. Ask again if anything was waiting on it, or if the trail
+    /// it fetched is no longer the one that is open - which covers the change
+    /// however it arrived, rather than only the paths somebody remembered.
+    /// </summary>
+    void Settled(string fetchedWorld)
+    {
         _fetching = false;
+
+        if (_again || fetchedWorld != ActiveWorld)
+        {
+            _again = false;
+            _fetchedWorld = ActiveWorld;
+            Refresh();
+        }
     }
 
     // ----------------------------------------------------------------- publish
