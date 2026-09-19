@@ -365,6 +365,37 @@ public class MarkerQuestionView : MonoBehaviour
             return;
         }
 
+        // Too soon after the last wrong answer. The server refused to judge this
+        // one at all - it deliberately answers "wait" whatever was pressed, so
+        // the cooldown cannot be used to probe for the right option.
+        //
+        // It was drawn as a wrong answer. Worse than a wrong message: the chosen
+        // option was crossed out and filed in _wrong, and Choose() refuses
+        // anything in _wrong, so a walker who tapped a wrong option and then the
+        // right one inside the minute had the RIGHT one struck off for good. A
+        // field test read that as "even the correct answer is marked wrong".
+        //
+        // So nothing is judged and nothing is crossed out. The service has
+        // already set the lock, and Draw() shows its countdown; when it runs
+        // out, the same option can be pressed again.
+        if (result.verdict == MarkerTaskService.Verdict.Wait)
+        {
+            ReArm();
+            ShowTheAnswer();
+            Draw();
+            return;
+        }
+
+        // A typed answer sent to the creator. Not wrong either - it has not been
+        // looked at yet - and it was being drawn as a red "Wrong answer".
+        if (result.verdict == MarkerTaskService.Verdict.PendingReview)
+        {
+            Bubble(AppStrings.Get("task.review"), ThemeRole.StatusFair, false);
+            ShowTheAnswer();
+            Draw();
+            return;
+        }
+
         bool right = result.verdict == MarkerTaskService.Verdict.Correct;
 
         MarkAnswered(right);
