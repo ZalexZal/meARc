@@ -47,7 +47,10 @@ public static class UISprites
     public static Sprite Shadow { get { return GetOrCreateShadow("UIShadow", 200, 52f, 40f); } }
 
     /// <summary>Fully round ends, for pills, switch tracks and segmented controls.</summary>
-    public static Sprite Pill { get { return GetOrCreate("UIPill", 64, 32); } }
+    // Radius 80: a 9-slice keeps its corner radius as drawn, so the first pill
+    // (radius 32) gave every 128-pixel button square-ish ends. Anything shorter
+    // than 160 now gets fully round ends - Unity shrinks the corners to fit.
+    public static Sprite Pill { get { return GetOrCreate("UIPill160", 160, 80); } }
 
     /// <summary>A plain circle, for dots and switch knobs.</summary>
     public static Sprite Circle { get { return GetOrCreate("UICircle", 64, 32, false); } }

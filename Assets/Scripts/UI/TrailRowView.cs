@@ -118,6 +118,33 @@ public class TrailRowView : MonoBehaviour
 
         if (currentMark != null)
             currentMark.SetActive(current);
+
+        if (leaveButton != null)
+            leaveButton.gameObject.SetActive(true);
+    }
+
+    /// <summary>
+    /// A public trail the reader has not joined. The whole row joins it, so
+    /// there is nothing to leave; the line under the name is the preview -
+    /// how it is played, how long it is and how far away it starts.
+    /// </summary>
+    public void BindListed(TrailService.Listed listed)
+    {
+        if (listed == null)
+            return;
+
+        Bind(new TrailService.Trail { id = listed.id, name = listed.name, mode = listed.mode }, false);
+
+        if (leaveButton != null)
+            leaveButton.gameObject.SetActive(false);
+
+        if (metaLabel != null)
+        {
+            metaLabel.text = string.Format(AppStrings.Get("near.meta"),
+                Meta(new TrailService.Trail { mode = listed.mode }),
+                listed.stop_count,
+                AppStrings.FormatDistance(listed.distance_m));
+        }
     }
 
     /// <summary>

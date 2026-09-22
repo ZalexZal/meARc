@@ -80,10 +80,21 @@ public class TermsService : MonoBehaviour
     /// a session, the record catches up. Without it a first run in a tunnel leaves
     /// a profile that has agreed to nothing.
     /// </summary>
+    /// <summary>
+    /// True while the server is being asked whether this account already
+    /// accepted. The terms door waits for the answer rather than asking first.
+    /// </summary>
+    public bool Checking { get; private set; }
+
+    string _askedFor;
+
     void EnsureRecorded()
     {
         if (!Accepted)
+        {
+            AskServer();
             return;
+        }
 
         if (PlayerPrefs.GetString(AccountScope.Key(RecordedKey), string.Empty) == RequiredVersion)
             return;
@@ -101,6 +112,61 @@ public class TermsService : MonoBehaviour
     /// terms and pressed the button has accepted them; making that depend on a
     /// signal would mean showing the same screen again in a tunnel.
     /// </summary>
+    /// <summary>
+    /// Signing into an account that accepted on another phone, or before a
+    /// reinstall. The acceptance is on the account, not the phone, so it is
+    /// read back rather than asked for twice. Never on a first run: a brand-new
+    /// guest has nothing on record, and the welcome screen should not wait on a
+    /// request to find that out.
+    /// </summary>
+    public void AskServer()
+    {
+        SupabaseAuth auth = SupabaseAuth.Instance;
+
+        if (auth == null || !auth.IsSignedIn || string.IsNullOrEmpty(auth.UserId) ||
+            _askedFor == auth.UserId || PlayerPrefs.GetInt(DoorFlow.WelcomeSeenKey, 0) == 0)
+        {
+            return;
+        }
+
+        _askedFor = auth.UserId;
+        StartCoroutine(ReadRecord(auth.UserId));
+    }
+
+    IEnumerator ReadRecord(string userId)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+            yield break;
+
+        Checking = true;
+
+        string url = config.Endpoint("/rest/v1/profiles?select=terms_version&id=eq." +
+                                     UnityWebRequest.EscapeURL(userId));
+
+        using (UnityWebRequest request = SupabaseAuth.Get(url))
+        {
+            yield return request.SendWebRequest();
+
+            bool same = SupabaseAuth.Instance != null && SupabaseAuth.Instance.UserId == userId;
+            string wanted = "\"terms_version\":\"" + RequiredVersion + "\"";
+
+            if (same && request.result == UnityWebRequest.Result.Success &&
+                request.downloadHandler.text.Contains(wanted))
+            {
+                PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
+                PlayerPrefs.SetString(AccountScope.Key(RecordedKey), RequiredVersion);
+                PlayerPrefs.Save();
+            }
+        }
+
+        Checking = false;
+
+        if (OnAcceptedChanged != null)
+            OnAcceptedChanged();
+    }
+
     public void Accept()
     {
         PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);

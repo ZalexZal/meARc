@@ -123,7 +123,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.101960786, g: 0.12156863, b: 0.15294118, a: 1}
+  m_Color: {r: 0.10980392, g: 0.10980392, b: 0.11764706, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -222,15 +222,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: Distance
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
+  m_sharedMaterial: {fileID: -3743413330557323609, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0.5568628, g: 0.58431375, b: 0.62352943, a: 1}
+  m_fontColor: {r: 0.59607846, g: 0.59607846, b: 0.6156863, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -374,15 +374,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: Name
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
+  m_sharedMaterial: {fileID: -3743413330557323609, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0.9529412, g: 0.9607843, b: 0.96862745, a: 1}
+  m_fontColor: {r: 0.9607843, g: 0.9607843, b: 0.96862745, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -409,7 +409,7 @@ MonoBehaviour:
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 512
   m_textAlignment: 65535
-  m_characterSpacing: 0
+  m_characterSpacing: -0.8
   m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
@@ -670,7 +670,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.101960786, g: 0.12156863, b: 0.15294118, a: 0.001}
+  m_Color: {r: 0.10980392, g: 0.10980392, b: 0.11764706, a: 0.001}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -841,15 +841,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: Number
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
+  m_sharedMaterial: {fileID: -3743413330557323609, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0.9529412, g: 0.9607843, b: 0.96862745, a: 1}
+  m_fontColor: {r: 0.9607843, g: 0.9607843, b: 0.96862745, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -993,15 +993,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: Points
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
+  m_sharedMaterial: {fileID: -3743413330557323609, guid: dbaf15348bd3df94bbae9102e3772892, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0.27058825, g: 0.76862746, b: 0.6901961, a: 1}
+  m_fontColor: {r: 0.039215688, g: 0.5176471, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:

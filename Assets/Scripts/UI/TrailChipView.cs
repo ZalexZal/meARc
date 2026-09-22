@@ -58,6 +58,7 @@ public class TrailChipView : MonoBehaviour
     {
         TrailService.OnTrailsChanged += Refresh;
         AppStrings.OnLanguageChanged += Refresh;
+        DemoTrail.OnChanged += Refresh;
         Refresh();
     }
 
@@ -65,6 +66,7 @@ public class TrailChipView : MonoBehaviour
     {
         TrailService.OnTrailsChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
+        DemoTrail.OnChanged -= Refresh;
     }
 
     void Open()
@@ -78,6 +80,10 @@ public class TrailChipView : MonoBehaviour
         TrailService service = TrailService.Instance;
         TrailService.Trail trail = service != null ? service.Selected : null;
 
+        // The demo is not a trail anybody joined, and says so.
+        if (DemoTrail.Active)
+            trail = new TrailService.Trail { name = AppStrings.Get("demo.name"), mode = "guide" };
+
         bool hasName = trail != null && !string.IsNullOrWhiteSpace(trail.name);
 
         // With no trail open this is an invitation, not a heading. It used to read
@@ -88,7 +94,7 @@ public class TrailChipView : MonoBehaviour
 
         // Nothing open, nothing to report.
         if (reportButton != null)
-            reportButton.gameObject.SetActive(hasName);
+            reportButton.gameObject.SetActive(hasName && !DemoTrail.Active);
 
         // Guide is the default and needs no label. A chip on every trail would be a
         // chip that means nothing.

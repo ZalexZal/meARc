@@ -18,7 +18,7 @@ using UnityEngine;
 /// </summary>
 public class DoorFlow : MonoBehaviour
 {
-    const string WelcomeSeenKey = "welcome_seen";
+    public const string WelcomeSeenKey = "welcome_seen";
 
     public enum Door
     {
@@ -37,11 +37,14 @@ public class DoorFlow : MonoBehaviour
         Team,
 
         /// <summary>
-        /// Making an account, offered once, straight after the first tutorial.
-        /// "Not now" is always there: a guided walk does not need one, and a
-        /// screen that will not let you past is how people give up on an app.
+        /// Making an account, asked for from the team card when a scored trail
+        /// needs one. "Not now" is always there: a guided walk does not need one,
+        /// and a screen that will not let you past is how people give up on an app.
         /// </summary>
-        Account
+        Account,
+
+        /// <summary>The end of the demo: find a trail near you, or use a code.</summary>
+        Ready
     }
 
     [Header("Screens")]
@@ -54,8 +57,15 @@ public class DoorFlow : MonoBehaviour
              "rather than by the flow itself - it is not a gate, it is a screen.")]
     public GameObject teamPanel;
 
-    [Tooltip("The account offer shown after the first tutorial.")]
+    [Tooltip("The account form, opened from the team card.")]
     public GameObject accountPanel;
+
+    [Tooltip("The card at the end of the demo.")]
+    public GameObject readyPanel;
+
+    [Tooltip("Runs the demo. On an object that stays active, so it keeps " +
+             "listening while the camera tab is up.")]
+    public DemoCoach coach;
 
     [Header("Behind them")]
     [Tooltip("The blurred still of the map. Only the card doors use it - Welcome " +
@@ -96,6 +106,9 @@ public class DoorFlow : MonoBehaviour
     /// <summary>Set by "I have a code" on the welcome screen, spent after the terms.</summary>
     bool _wantsCode;
 
+    /// <summary>Set by "Try it now", spent after the terms: the demo starts.</summary>
+    bool _wantsDemo;
+
     /// <summary>
     /// The reader has said "not now" to picking a trail, and is to be left alone
     /// until they ask again.
@@ -116,6 +129,7 @@ public class DoorFlow : MonoBehaviour
         Hide(codePanel);
         Hide(teamPanel);
         Hide(accountPanel);
+        Hide(readyPanel);
     }
 
     void OnDestroy()
@@ -130,7 +144,6 @@ public class DoorFlow : MonoBehaviour
         TrailService.OnTrailsChanged += HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged += Evaluate;
         SupabaseAuth.OnSessionChanged += AccountMaybeMade;
-        TutorialFlow.OnFirstFinished += OfferAccount;
     }
 
     void OnDisable()
@@ -139,7 +152,6 @@ public class DoorFlow : MonoBehaviour
         TrailService.OnTrailsChanged -= HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged -= Evaluate;
         SupabaseAuth.OnSessionChanged -= AccountMaybeMade;
-        TutorialFlow.OnFirstFinished -= OfferAccount;
     }
 
     void Start()
@@ -167,7 +179,15 @@ public class DoorFlow : MonoBehaviour
 
         TermsService terms = TermsService.Instance;
 
-        if (terms != null && SupabaseAuth.HasSettledYet && !terms.Accepted)
+        // Whoever gets the session event first, the question goes out before
+        // the answer is read.
+        if (terms != null && !terms.Accepted)
+            terms.AskServer();
+
+        // Checking: signing into an account that accepted on another phone. The
+        // server has the record, and asking again while it answers is the
+        // "terms twice" people saw.
+        if (terms != null && SupabaseAuth.HasSettledYet && !terms.Accepted && !terms.Checking)
         {
             Show(PlayerPrefs.GetInt(WelcomeSeenKey, 0) == 0 ? Door.Welcome : Door.Terms);
             return;
@@ -177,6 +197,21 @@ public class DoorFlow : MonoBehaviour
         {
             _wantsCode = false;
             Show(Door.Code);
+            return;
+        }
+
+        if (_wantsDemo)
+        {
+            _wantsDemo = false;
+            StartDemo();
+            return;
+        }
+
+        // The demo and its closing card own the screen until they are done.
+        if (DemoTrail.Active || (coach != null && coach.Running) || Current == Door.Ready)
+        {
+            if (Current != Door.Ready)
+                Show(Door.None);
             return;
         }
 
@@ -210,12 +245,39 @@ public class DoorFlow : MonoBehaviour
 
     // -------------------------------------------------------------- the buttons
 
-    /// <summary>Welcome: "Get started".</summary>
+    /// <summary>Welcome: "Try it now". The terms, then the demo.</summary>
     public void PassWelcome()
     {
+        _wantsDemo = !_wantsCode;
         PlayerPrefs.SetInt(WelcomeSeenKey, 1);
         PlayerPrefs.Save();
         Show(Door.Terms);
+    }
+
+    /// <summary>Starts the demo, on a first run or from Settings.</summary>
+    public void StartDemo()
+    {
+        _reopened = false;
+        _dismissed = false;
+        Show(Door.None);
+
+        if (coach != null)
+            coach.Begin();
+    }
+
+    /// <summary>The demo is over: where to go next.</summary>
+    public void ShowReady()
+    {
+        _reopened = false;
+        _dismissed = false;
+        Show(Door.Ready);
+    }
+
+    /// <summary>Ready: "Find a trail near you".</summary>
+    public void OpenLibrary()
+    {
+        _dismissed = false;
+        Show(Door.Trails);
     }
 
     /// <summary>
@@ -286,6 +348,11 @@ public class DoorFlow : MonoBehaviour
     {
         _reopened = false;
         _dismissed = false;
+
+        // A real trail was chosen part way through the demo.
+        if (DemoTrail.Active && coach != null)
+            coach.Stop();
+
         Show(Door.None);
 
         // Ask the server about this trail, then gate on the answer.
@@ -298,19 +365,6 @@ public class DoorFlow : MonoBehaviour
         // not wait for the list.
         TrailService trails = TrailService.Instance;
 
-        // On a first run the tutorial is still to come, and after it the offer of
-        // an account. Asking for a team before either is asking the wrong thing
-        // first: on a scored trail a team cannot be made without an account, so
-        // the team question has to wait until the account question is answered.
-        // The end of the tutorial runs the gate instead.
-        if (TutorialFlow.Showing || !TutorialFlow.HasBeenSeen)
-        {
-            if (trails != null)
-                trails.LoadNeedsAccount(trails.SelectedId);
-
-            return;
-        }
-
         if (trails != null)
             trails.LoadNeedsAccount(trails.SelectedId, () => StartCoroutine(TeamGate()));
         else
@@ -318,24 +372,6 @@ public class DoorFlow : MonoBehaviour
     }
 
     // ----------------------------------------------------------- account
-
-    /// <summary>
-    /// The tutorial has just ended for the first time. Somebody without an account
-    /// is offered one; everybody then goes on to the team question.
-    /// </summary>
-    void OfferAccount()
-    {
-        SupabaseAuth auth = SupabaseAuth.Instance;
-
-        if (auth == null || !auth.IsAnonymous)
-        {
-            StartCoroutine(TeamGate());
-            return;
-        }
-
-        _dismissed = false;
-        Show(Door.Account);
-    }
 
     /// <summary>
     /// The account form, asked for from the team card. When it closes the team
@@ -436,11 +472,17 @@ public class DoorFlow : MonoBehaviour
         Hide(codePanel);
         Hide(teamPanel);
         Hide(accountPanel);
+        Hide(readyPanel);
+
+        // The app itself is up, which is the moment to ask where it is - not
+        // cold over the welcome screen.
+        if (door == Door.None && UserLocationService.Instance != null)
+            UserLocationService.Instance.Begin();
 
         // The two card doors are the ones the map shows through. Welcome and Terms
         // are plain: nothing behind them, because there is nothing yet to look at.
         bool wantsMap = door == Door.Trails || door == Door.Code || door == Door.Team ||
-                        door == Door.Account;
+                        door == Door.Account || door == Door.Ready;
 
         if (navBar != null)
             navBar.SetActive(door == Door.None);
@@ -524,6 +566,10 @@ public class DoorFlow : MonoBehaviour
 
             case Door.Account:
                 Reveal(accountPanel);
+                break;
+
+            case Door.Ready:
+                Reveal(readyPanel);
                 break;
         }
     }

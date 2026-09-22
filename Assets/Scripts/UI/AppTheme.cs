@@ -83,21 +83,18 @@ public static class AppTheme
     {
         return new Palette
         {
-            // Surface sits a clear step above the background - at the previous
-            // spacing the cards were invisible against it on a phone screen.
-            background = Hex("#0B0D10"),
-            surface = Hex("#1A1F27"),
-            surfaceAlt = Hex("#272D37"),
-            line = Hex("#343B47"),
-            textPrimary = Hex("#F3F5F7"),
-            textSecondary = Hex("#A7ADB5"),
-            // Measured, not eyeballed: #727982 came to 3.77:1 on Surface,
-            // under the 4.5:1 small-text floor. This clears it on all three
-            // dark surfaces - 6.4:1 on Background, 5.5:1 on Surface, 4.6:1
-            // on SurfaceAlt.
-            textMuted = Hex("#8E959F"),
-            accent = Hex("#45C4B0"),
-            onAccent = Hex("#04201C"),
+            // Apple's dark system: true black, grouped surfaces one step up,
+            // and the one blue. Measured: muted text is 5.8:1 on Surface and
+            // 4.8:1 on SurfaceAlt; the blue is 4.6:1 as text on Surface.
+            background = Hex("#000000"),
+            surface = Hex("#1C1C1E"),
+            surfaceAlt = Hex("#2C2C2E"),
+            line = Hex("#38383A"),
+            textPrimary = Hex("#F5F5F7"),
+            textSecondary = Hex("#AEAEB2"),
+            textMuted = Hex("#98989D"),
+            accent = Hex("#0A84FF"),
+            onAccent = Hex("#FFFFFF"),
             scrim = new Color(0f, 0f, 0f, 0.55f),
             statusGood = Hex("#74D96B"),
             statusFair = Hex("#E0A040"),
@@ -110,17 +107,17 @@ public static class AppTheme
     {
         return new Palette
         {
-            background = Hex("#F1F1EF"),
+            // Parchment ground, white cards, near-black ink, Action Blue.
+            // Muted text is 5.4:1 on white, 5.0:1 on parchment and 4.6:1 on
+            // SurfaceAlt; white on the blue is 5.6:1.
+            background = Hex("#F5F5F7"),
             surface = Hex("#FFFFFF"),
-            surfaceAlt = Hex("#E8E9E6"),
-            line = Hex("#D3D5D1"),
-            textPrimary = Hex("#16181B"),
-            textSecondary = Hex("#464B52"),
-            // Same measurement in reverse: #7A8088 was 3.98:1 on white.
-            // This is 5.9:1 on Surface, 5.2:1 on Background, 4.8:1 on
-            // SurfaceAlt.
-            textMuted = Hex("#5F656D"),
-            accent = Hex("#0F7A6B"),
+            surfaceAlt = Hex("#EDEDF0"),
+            line = Hex("#D2D2D7"),
+            textPrimary = Hex("#1D1D1F"),
+            textSecondary = Hex("#48484C"),
+            textMuted = Hex("#6A6A6F"),
+            accent = Hex("#0066CC"),
             onAccent = Hex("#FFFFFF"),
             scrim = new Color(0f, 0f, 0f, 0.35f),
             statusGood = Hex("#41762B"),

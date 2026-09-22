@@ -84,8 +84,9 @@ public class TutorialFlow : MonoBehaviour
         // Start rather than Awake: the tab controller decides what is on screen in
         // its own Start, and opening over a panel that is about to change is how
         // a walkthrough ends up behind the map.
-        if (!HasBeenSeen)
-            Open();
+        // Not any more: the demo is the first run now. Kept for the preview
+        // harness, which photographs these cards.
+
     }
 
     void OnEnable()

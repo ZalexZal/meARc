@@ -307,6 +307,26 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         Moved();
     }
 
+    /// <summary>
+    /// Centres on a point at a given width, with or without a position. The demo
+    /// uses it so its stops are in frame even when location is off.
+    /// </summary>
+    public void LookAt(double latitude, double longitude, float metres)
+    {
+        if (!_hasOrigin)
+        {
+            _originLat = latitude;
+            _originLon = longitude;
+            _hasOrigin = true;
+        }
+
+        _followsReader = false;
+        GeoMath.LocalOffsetMetres(_originLat, _originLon, latitude, longitude,
+                                  out _panEast, out _panNorth);
+        metresAcross = Mathf.Clamp(metres, minMetresAcross, maxMetresAcross);
+        Moved();
+    }
+
     /// <summary>Back to the reader, at a zoom that includes the nearest marker.</summary>
     public void Recentre()
     {

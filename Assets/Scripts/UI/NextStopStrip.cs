@@ -46,6 +46,10 @@ public class NextStopStrip : MonoBehaviour
     [Header("Previous")]
     [Tooltip("Hidden at the start of a trail, when there is nothing behind you.")]
     public GameObject previousRow;
+
+    [Tooltip("Opens the stop just found. A row naming a stop that did nothing " +
+             "when tapped read as broken.")]
+    public Button previousButton;
     public Image previousKnob;
     public Image previousWire;
     public TextMeshProUGUI previousName;
@@ -69,11 +73,15 @@ public class NextStopStrip : MonoBehaviour
     public BearingArrow nextArrow;
 
     BuildingData _next;
+    BuildingData _previous;
 
     void Awake()
     {
         if (nextButton != null)
             nextButton.onClick.AddListener(OpenNext);
+
+        if (previousButton != null)
+            previousButton.onClick.AddListener(OpenPrevious);
     }
 
     void OnEnable()
@@ -105,6 +113,12 @@ public class NextStopStrip : MonoBehaviour
     {
         if (_next != null && mapTab != null)
             mapTab.Focus(_next);
+    }
+
+    void OpenPrevious()
+    {
+        if (_previous != null && mapTab != null)
+            mapTab.Focus(_previous);
     }
 
     // ------------------------------------------------------------------ drawing
@@ -265,6 +279,7 @@ public class NextStopStrip : MonoBehaviour
 
     void SetPrevious(BuildingData previous)
     {
+        _previous = previous;
         bool show = previous != null;
 
         if (previousRow != null && previousRow.activeSelf != show)

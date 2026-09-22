@@ -174,6 +174,7 @@ const float ReferenceWidth = 1080f;
     {
         Transform root = canvas.transform;
 
+        AppFonts.Ensure();
         ConfigureCanvas(canvas);
         RemoveGenerated(root);
         EnsureFolder();
@@ -251,7 +252,8 @@ const float ReferenceWidth = 1080f;
         Transform mapChrome = mapPanel.Find("Safe");
 
         BuildDoors(root, navRow.parent.gameObject, trailRowPrefab,
-                   mapChrome != null ? mapChrome.gameObject : null);
+                   mapChrome != null ? mapChrome.gameObject : null,
+                   mapPanel.GetComponentInChildren<MapView>(true));
 
         AddFade(mapPanel.gameObject);
         AddFade(browsePanel.gameObject);
@@ -831,7 +833,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(rt.gameObject, Tap);
         UIFactory.Flexible(rt.gameObject);
 
-        button = UIFactory.Button(rt, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded);
+        button = UIFactory.Button(rt, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
 
         label = UIFactory.Text("Label", rt, Secondary, ThemeRole.TextPrimary,
                                TextAlignmentOptions.Center, key, FontStyles.Bold);
@@ -1454,7 +1456,7 @@ const float ReferenceWidth = 1080f;
         RectTransform stop = UIFactory.Rect("Stop", row);
         LayoutElement stopSize = UIFactory.Size(stop.gameObject, Tap, 190f);
         stopSize.flexibleWidth = 0f;
-        banner.stopButton = UIFactory.Button(stop, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded);
+        banner.stopButton = UIFactory.Button(stop, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
         banner.stopLabel = UIFactory.Text("Label", stop, Secondary, ThemeRole.TextPrimary,
                                           TextAlignmentOptions.Center, "guide.stop",
                                           FontStyles.Bold);
@@ -1918,6 +1920,8 @@ const float ReferenceWidth = 1080f;
         RectTransform prev = Row(rows, "Previous", RowHeight, RailWidth,
                                  out RectTransform prevRail, out RectTransform prevText);
         strip.previousRow = prev.gameObject;
+        strip.previousButton = UIFactory.Button(prev, ThemeRole.Surface, 0f);
+        prev.GetComponent<Image>().raycastTarget = true;
         strip.previousKnob = Knob(prevRail, true, out RectTransform _);
         strip.previousWire = Wire(prevRail, RowHeight);
 
@@ -2825,7 +2829,7 @@ const float ReferenceWidth = 1080f;
         RectTransform rt = UIFactory.Rect(name, parent);
         UIFactory.Size(rt.gameObject, Tap);
 
-        Button button = UIFactory.Button(rt, background, 1f, UIShape.Rounded);
+        Button button = UIFactory.Button(rt, background, 1f, UIShape.Pill);
 
         TextMeshProUGUI label = UIFactory.Text("Label", rt, Body, ink,
                                                TextAlignmentOptions.Center, key,
@@ -3005,7 +3009,9 @@ const float ReferenceWidth = 1080f;
         RectTransform segment = UIFactory.Rect("Segment", langRow);
         LayoutElement segmentSize = UIFactory.Size(segment.gameObject, 76f, 264f);
         segmentSize.flexibleWidth = 0f;
-        UIFactory.Plain(segment, ThemeManager.Get(ThemeRole.SurfaceAlt), UIShape.Pill);
+        // Themed. It was a Plain image painted once with whichever theme the
+        // build ran in, so in light mode the track stayed near-black.
+        UIFactory.Fill(segment, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
         HorizontalLayoutGroup segmentLayout = UIFactory.HorizontalStack(segment, 0f, true);
         segmentLayout.padding = new RectOffset(5, 5, 5, 5);
 
@@ -3188,7 +3194,9 @@ const float ReferenceWidth = 1080f;
 
         view.nameLabel = UIFactory.Text("Name", who, Title, ThemeRole.TextPrimary,
                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(view.nameLabel.gameObject, 64f);
+        // Inter's line is 1.21 em. At 64 a Title-sized name no longer fitted,
+        // and an ellipsised label that does not fit its height draws nothing.
+        UIFactory.Size(view.nameLabel.gameObject, 72f);
         view.nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
         view.nameLabel.overflowMode = TextOverflowModes.Ellipsis;
 
@@ -4295,7 +4303,9 @@ const float ReferenceWidth = 1080f;
         RectTransform ruleChip = UIFactory.Rect("Chip", rule);
         LayoutElement ruleSize = UIFactory.Size(ruleChip.gameObject, 52f);
         ruleSize.flexibleWidth = 0f;
-        UIFactory.Fill(ruleChip, ThemeRole.StatusFair, 0.16f, UIShape.Pill).raycastTarget = false;
+        // Neutral, not the warning colour. It is said before anybody has answered,
+        // and in orange with a warning sign it read as a verdict already given.
+        UIFactory.Fill(ruleChip, ThemeRole.SurfaceAlt, 1f, UIShape.Pill).raycastTarget = false;
 
         ContentSizeFitter ruleFit = ruleChip.gameObject.AddComponent<ContentSizeFitter>();
         ruleFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
@@ -4304,10 +4314,10 @@ const float ReferenceWidth = 1080f;
         ruleLayout.childAlignment = TextAnchor.MiddleLeft;
         ruleLayout.padding = new RectOffset(18, 22, 0, 0);
 
-        Icon(ruleChip, AppIcon.Warning, 28f, ThemeRole.StatusFair);
+        Icon(ruleChip, AppIcon.Clock, 28f, ThemeRole.TextSecondary);
 
-        view.ruleLabel = UIFactory.Text("Label", ruleChip, 28f, ThemeRole.StatusFair,
-                                        TextAlignmentOptions.Left, null, FontStyles.Bold);
+        view.ruleLabel = UIFactory.Text("Label", ruleChip, 28f, ThemeRole.TextSecondary,
+                                        TextAlignmentOptions.Left);
         UIFactory.Size(view.ruleLabel.gameObject, 52f);
 
         // One line, and it reports its own width to the fitter above. Wrapping
@@ -4499,7 +4509,7 @@ const float ReferenceWidth = 1080f;
         RectTransform finishedButton = UIFactory.Rect("Button", finished);
         UIFactory.BottomStretch(finishedButton, Tap);
         view.finishedButton = UIFactory.Button(finishedButton, ThemeRole.SurfaceAlt, 1f,
-                                               UIShape.Rounded);
+                                               UIShape.Pill);
 
         view.finishedButtonLabel = UIFactory.Text("Label", finishedButton, Secondary,
                                                   ThemeRole.TextPrimary,
@@ -4815,7 +4825,8 @@ const float ReferenceWidth = 1080f;
     /// bar behind it is a tab bar people tap straight past.
     /// </summary>
     static DoorFlow BuildDoors(Transform root, GameObject navBar,
-                               TrailRowView trailRowPrefab, GameObject mapChrome)
+                               TrailRowView trailRowPrefab, GameObject mapChrome,
+                               MapView mapView)
     {
         RectTransform holder = UIFactory.Rect("Doors", root);
         Undo.RegisterCreatedObjectUndo(holder.gameObject, "Build App UI");
@@ -4834,6 +4845,9 @@ const float ReferenceWidth = 1080f;
         flow.codePanel = BuildCodeDoor(holder, flow, out CodeDoor code);
         flow.teamPanel = BuildTeamDoor(holder, flow, out TeamDoorView teamDoor);
         flow.accountPanel = BuildAccountDoor(holder, flow);
+        flow.readyPanel = BuildReadyDoor(holder, flow);
+        flow.coach = BuildCoach(holder, mapChrome, mapView);
+        holder.gameObject.AddComponent<JoinLinks>();
 
         flow.trails = trails;
         flow.code = code;
@@ -4889,12 +4903,11 @@ const float ReferenceWidth = 1080f;
     {
         RectTransform panel = Door(parent, "Welcome", plain: true, inner: out RectTransform inner);
 
-        TextMeshProUGUI brand = UIFactory.Text("Brand", inner, 30f, ThemeRole.Accent,
+        TextMeshProUGUI brand = UIFactory.Text("Brand", inner, 34f, ThemeRole.TextPrimary,
                                                TextAlignmentOptions.TopLeft, "app.name",
                                                FontStyles.Bold);
         UIFactory.Corner(brand.rectTransform, new Vector2(0f, 1f), new Vector2(620f, 48f),
                          Vector2.zero);
-        brand.characterSpacing = 12f;
 
         WelcomeMarkers(inner);
 
@@ -4904,7 +4917,7 @@ const float ReferenceWidth = 1080f;
         // very bottom and nine hundred pixels of nothing above them reads as a
         // screen that failed to load rather than one that is deliberately quiet.
         RectTransform words = UIFactory.Rect("Words", inner);
-        UIFactory.BottomStretch(words, 620f, Tap + 60f);
+        UIFactory.BottomStretch(words, 620f, Tap * 2f + 14f + 60f);
         VerticalLayoutGroup wordStack = UIFactory.VerticalStack(words, 22f, false);
         wordStack.childAlignment = TextAnchor.LowerLeft;
 
@@ -4930,34 +4943,34 @@ const float ReferenceWidth = 1080f;
         // So neither is quiet. Side by side, equal width, and the two of them read
         // as a question with two answers rather than an instruction with a way to
         // disobey it.
+        // One filled capsule and one quiet one, stacked. Trying it is what most
+        // people have come to do; the code is the answer for the ones who were
+        // handed one, and it is still a full-width target a thumb can find.
         RectTransform ways = UIFactory.Rect("Ways", inner);
-        UIFactory.BottomStretch(ways, Tap);
-        HorizontalLayoutGroup wayRow = UIFactory.HorizontalStack(ways, 14f);
-        wayRow.childForceExpandWidth = true;
-        wayRow.childControlWidth = true;
-
-        RectTransform code = UIFactory.Rect("HaveCode", ways);
-        UIFactory.Flexible(code.gameObject);
-        Button codeButton = UIFactory.Button(code, ThemeRole.Accent, 1f, UIShape.Rounded);
-        Wire(codeButton.onClick, flow.PassWelcomeWithCode, "Welcome code");
-
-        TextMeshProUGUI codeLabel = UIFactory.Text("Label", code, Body, ThemeRole.OnAccent,
-                                                   TextAlignmentOptions.Center,
-                                                   "welcome.haveCode", FontStyles.Bold);
-        UIFactory.Stretch(codeLabel.rectTransform);
-        codeLabel.raycastTarget = false;
+        UIFactory.BottomStretch(ways, Tap * 2f + 14f);
+        UIFactory.VerticalStack(ways, 14f, false);
 
         RectTransform start = UIFactory.Rect("Start", ways);
-        UIFactory.Flexible(start.gameObject);
-        Button startButton = UIFactory.Button(start, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded);
+        UIFactory.Size(start.gameObject, Tap);
+        Button startButton = UIFactory.Button(start, ThemeRole.Accent, 1f, UIShape.Pill);
         Wire(startButton.onClick, flow.PassWelcome, "Welcome start");
-        Outline(start);
 
-        TextMeshProUGUI startLabel = UIFactory.Text("Label", start, Body, ThemeRole.TextPrimary,
+        TextMeshProUGUI startLabel = UIFactory.Text("Label", start, Body, ThemeRole.OnAccent,
                                                     TextAlignmentOptions.Center, "welcome.start",
                                                     FontStyles.Bold);
         UIFactory.Stretch(startLabel.rectTransform);
         startLabel.raycastTarget = false;
+
+        RectTransform code = UIFactory.Rect("HaveCode", ways);
+        UIFactory.Size(code.gameObject, Tap);
+        Button codeButton = UIFactory.Button(code, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+        Wire(codeButton.onClick, flow.PassWelcomeWithCode, "Welcome code");
+
+        TextMeshProUGUI codeLabel = UIFactory.Text("Label", code, Body, ThemeRole.Accent,
+                                                   TextAlignmentOptions.Center,
+                                                   "welcome.haveCode", FontStyles.Bold);
+        UIFactory.Stretch(codeLabel.rectTransform);
+        codeLabel.raycastTarget = false;
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
@@ -5160,7 +5173,6 @@ const float ReferenceWidth = 1080f;
 
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.VerticalStack(head, 6f, false);
-        Eyebrow(head, "accountDoor.eyebrow");
         UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
                        TextAlignmentOptions.TopLeft, "accountDoor.title", FontStyles.Bold);
 
@@ -5172,6 +5184,114 @@ const float ReferenceWidth = 1080f;
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
+    }
+
+    /// <summary>
+    /// The end of the demo. A moment of "done", then the two ways into a real
+    /// trail - the library first, because most people will not have a code.
+    /// </summary>
+    static GameObject BuildReadyDoor(Transform parent, DoorFlow flow)
+    {
+        RectTransform panel = Door(parent, "Ready", plain: false, inner: out RectTransform inner);
+
+        RectTransform card = Card(inner, "Card", 22f);
+
+        RectTransform badgeRow = UIFactory.Rect("Badge", card);
+        UIFactory.Size(badgeRow.gameObject, 132f);
+        HorizontalLayoutGroup badgeLayout = UIFactory.HorizontalStack(badgeRow, 0f);
+        badgeLayout.childAlignment = TextAnchor.MiddleLeft;
+
+        RectTransform badge = UIFactory.Rect("Disc", badgeRow);
+        LayoutElement badgeSize = UIFactory.Size(badge.gameObject, 132f, 132f);
+        badgeSize.flexibleWidth = 0f;
+        UIFactory.Fill(badge, ThemeRole.Accent, 1f, UIShape.Circle).raycastTarget = false;
+        Icon(badge, AppIcon.Check, 64f, ThemeRole.OnAccent);
+
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.VerticalStack(head, 10f, false);
+        UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "ready.title", FontStyles.Bold);
+        TextMeshProUGUI body = UIFactory.Text("Body", head, Secondary, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.TopLeft, "ready.body");
+        UIFactory.FitsItsText(body);
+
+        RectTransform actions = UIFactory.Rect("Actions", card);
+        UIFactory.VerticalStack(actions, 14f, false);
+
+        PrimaryAction(actions, "Near", "ready.near", flow.OpenLibrary, "Ready library");
+
+        Button code = FullWidthButton(actions, "Code", "ready.code",
+                                      ThemeRole.SurfaceAlt, ThemeRole.Accent);
+        Wire(code.onClick, flow.OpenCode, "Ready code");
+
+        QuietAction(actions, "NotNow", "trails.notNow", flow.Close, "Ready not now")
+            .gameObject.AddComponent<WayOut>();
+
+        panel.gameObject.SetActive(false);
+        return panel.gameObject;
+    }
+
+    /// <summary>
+    /// The demo's one line of instruction, resting on the map above its card.
+    ///
+    /// The card lives in the map's chrome, so a door going up hides it with the
+    /// rest; the component that runs it lives on the always-active door holder,
+    /// so it keeps listening while the camera tab is up.
+    /// </summary>
+    static DemoCoach BuildCoach(Transform holder, GameObject mapChrome, MapView mapView)
+    {
+        DemoCoach coach = holder.gameObject.AddComponent<DemoCoach>();
+        coach.map = mapView;
+
+        Transform dock = mapChrome != null ? mapChrome.transform.Find("Panel") : null;
+        if (dock == null)
+        {
+            _notes.Add("No map dock, so the demo has nowhere to say what to do.");
+            return coach;
+        }
+
+        RectTransform card = UIFactory.Rect("DemoCoach", dock);
+        card.SetAsFirstSibling();
+        UIFactory.Fill(card, ThemeRole.Surface, 1f, UIShape.Rounded).raycastTarget = true;
+        Outline(card, ThemeRole.Accent);
+
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(card, 16f, false);
+        stack.padding = new RectOffset(34, 34, 28, 24);
+
+        // No localisation key: DemoCoach writes this line, and a LocalizedLabel
+        // would put step one back every time the map panel is shown again.
+        coach.line = UIFactory.Text("Line", card, Body, ThemeRole.TextPrimary,
+                                    TextAlignmentOptions.TopLeft, null, FontStyles.Bold);
+        coach.line.text = AppStrings.Get("demo.step1");
+        UIFactory.FitsItsText(coach.line);
+
+        RectTransform row = UIFactory.Rect("Actions", card);
+        UIFactory.Size(row.gameObject, 96f);
+        HorizontalLayoutGroup rowLayout = UIFactory.HorizontalStack(row, 14f);
+        rowLayout.childAlignment = TextAnchor.MiddleRight;
+        rowLayout.childForceExpandWidth = false;
+
+        RectTransform skip = UIFactory.Rect("Skip", row);
+        LayoutElement skipSize = UIFactory.Size(skip.gameObject, 96f, 220f);
+        skipSize.flexibleWidth = 0f;
+        coach.skipButton = UIFactory.Button(skip, ThemeRole.Surface, 0f);
+        UIFactory.Stretch(UIFactory.Text("Label", skip, Secondary, ThemeRole.TextSecondary,
+                                         TextAlignmentOptions.Center, "demo.skip",
+                                         FontStyles.Bold).rectTransform);
+
+        RectTransform finish = UIFactory.Rect("Finish", row);
+        LayoutElement finishSize = UIFactory.Size(finish.gameObject, 96f, 280f);
+        finishSize.flexibleWidth = 0f;
+        coach.finishButton = UIFactory.Button(finish, ThemeRole.Accent, 1f, UIShape.Pill);
+        UIFactory.Stretch(UIFactory.Text("Label", finish, Secondary, ThemeRole.OnAccent,
+                                         TextAlignmentOptions.Center, "demo.finish",
+                                         FontStyles.Bold).rectTransform);
+
+        coach.card = card.gameObject;
+        card.gameObject.SetActive(false);
+
+        EditorUtility.SetDirty(coach);
+        return coach;
     }
 
     static GameObject BuildTeamDoor(Transform parent, DoorFlow flow,
@@ -5198,7 +5318,6 @@ const float ReferenceWidth = 1080f;
 
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.VerticalStack(head, 6f, false);
-        Eyebrow(head, "team.eyebrow");
         UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
                        TextAlignmentOptions.TopLeft, "team.title", FontStyles.Bold);
 
@@ -5444,8 +5563,6 @@ const float ReferenceWidth = 1080f;
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.VerticalStack(head, 6f, false);
 
-        Eyebrow(head, "trails.eyebrow");
-
         UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
                        TextAlignmentOptions.TopLeft, "trails.title", FontStyles.Bold);
 
@@ -5463,6 +5580,24 @@ const float ReferenceWidth = 1080f;
         door.emptyState = StateNote(content, "Empty", "trails.empty", "trails.emptyBody");
         door.failedState = StateNote(content, "Failed", "trails.failed", null,
                                      out door.failedLabel);
+
+        // Near you: public trails, joined with a tap and no code.
+        RectTransform near = UIFactory.Rect("Near", content);
+        VerticalLayoutGroup nearStack = UIFactory.VerticalStack(near, 12f, false);
+        nearStack.padding = new RectOffset(0, 0, 18, 0);
+        door.nearGroup = near.gameObject;
+
+        Eyebrow(near, "near.title");
+
+        // Written by TrailsDoor, so no key - see the demo coach's line.
+        door.nearNote = UIFactory.Text("Note", near, Secondary, ThemeRole.TextMuted,
+                                       TextAlignmentOptions.TopLeft, null);
+        door.nearNote.text = AppStrings.Get("near.looking");
+        UIFactory.FitsItsText(door.nearNote);
+
+        RectTransform nearRows = UIFactory.Rect("Rows", near);
+        UIFactory.VerticalStack(nearRows, 12f, false);
+        door.nearParent = nearRows;
 
         // --- what to do about it ---
         RectTransform actions = UIFactory.Rect("Actions", card);
@@ -5505,8 +5640,6 @@ const float ReferenceWidth = 1080f;
 
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.VerticalStack(head, 6f, false);
-
-        Eyebrow(head, "code.eyebrow");
 
         UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
                        TextAlignmentOptions.TopLeft, "code.title", FontStyles.Bold);
@@ -5718,7 +5851,9 @@ const float ReferenceWidth = 1080f;
         // Black in both themes, and not a theme role. A shadow is the absence of
         // light rather than a colour, and a light-theme shadow tinted towards the
         // background is just a grey ring.
-        Image cast = UIFactory.Plain(shade, new Color(0f, 0f, 0f, 0.42f));
+        // Faint. Shadow is for things resting on a surface, not for UI; this
+        // is only enough to lift a white card off a pale blurred map.
+        Image cast = UIFactory.Plain(shade, new Color(0f, 0f, 0f, 0.10f));
         cast.sprite = UISprites.Shadow;
         cast.type = Image.Type.Sliced;
         cast.pixelsPerUnitMultiplier = 1f;
@@ -5772,10 +5907,13 @@ const float ReferenceWidth = 1080f;
     /// </summary>
     static TextMeshProUGUI Eyebrow(Transform parent, string key)
     {
-        TextMeshProUGUI label = UIFactory.Text("Eyebrow", parent, 28f, ThemeRole.Accent,
+        // A section header in the grouped-list manner: small, grey, capitals.
+        // It was the accent colour, spaced wide, above every card's title -
+        // a second heading saying what the first one already said.
+        TextMeshProUGUI label = UIFactory.Text("Eyebrow", parent, 28f, ThemeRole.TextMuted,
                                                TextAlignmentOptions.TopLeft, key,
-                                               FontStyles.Bold);
-        label.characterSpacing = 10f;
+                                               FontStyles.UpperCase);
+        label.characterSpacing = 3f;
         return label;
     }
 

@@ -64,6 +64,12 @@ public class BackKey : MonoBehaviour
             if (button == null || !button.isActiveAndEnabled || !button.interactable)
                 continue;
 
+            // A closed bottom sheet slides off the screen and stays active, so
+            // its close button kept winning: Back "closed" a sheet nobody could
+            // see while the Progress page in front of the reader stayed put.
+            if (!OnScreen(button.transform as RectTransform))
+                continue;
+
             long depth = DrawOrder(outs[i].transform);
 
             if (depth > bestDepth)
@@ -85,6 +91,19 @@ public class BackKey : MonoBehaviour
     /// ordering: two controls compare first on the branch nearest the root that
     /// separates them, which is the one that decides who is on top.
     /// </summary>
+    static readonly Vector3[] Corners = new Vector3[4];
+
+    /// <summary>The overlay canvas draws in screen pixels, so world corners are screen corners.</summary>
+    static bool OnScreen(RectTransform rect)
+    {
+        if (rect == null)
+            return true;
+
+        rect.GetWorldCorners(Corners);
+        return Corners[2].x > 0f && Corners[0].x < Screen.width &&
+               Corners[2].y > 0f && Corners[0].y < Screen.height;
+    }
+
     static long DrawOrder(Transform node)
     {
         long order = 0L;

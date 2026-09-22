@@ -182,6 +182,11 @@ public static class UIFactory
         text.raycastTarget = false;
         text.text = name;
 
+        // Tighter as it gets bigger - the "Apple tight" headline. Inter runs a
+        // little wider than SF, so this is its own dynamic-tracking curve.
+        // Small text keeps the face's own spacing.
+        text.characterSpacing = size >= 70f ? -2f : size >= 50f ? -1.5f : size >= 38f ? -0.8f : 0f;
+
         if (TMP_Settings.defaultFontAsset != null)
             text.font = TMP_Settings.defaultFontAsset;
 
@@ -204,6 +209,11 @@ public static class UIFactory
     public static Button Button(RectTransform rt, ThemeRole background, float alpha = 1f,
                                 UIShape shape = UIShape.Rect)
     {
+        // The filled blue button is always a capsule. That shape is the signal
+        // for "the action", so no call site gets to forget it.
+        if (background == ThemeRole.Accent && shape == UIShape.Rounded)
+            shape = UIShape.Pill;
+
         Image image = Fill(rt, background, alpha, shape);
 
         Button button = rt.gameObject.AddComponent<Button>();

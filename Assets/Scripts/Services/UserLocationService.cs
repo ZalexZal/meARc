@@ -131,8 +131,11 @@ public class UserLocationService : MonoBehaviour
 
     void Start()
     {
-        if (useGpsFallback)
-            StartCoroutine(StartGps());
+        // Not on a first run. The permission is asked when the app is first
+        // usable - the demo placing its stops - rather than cold over a
+        // welcome screen that has not yet said what the app is.
+        if (AndroidPermissions.Has(FineLocation) || PlayerPrefs.GetInt(DoorFlow.WelcomeSeenKey, 0) == 1)
+            Begin();
 
         // Harmless when there is no magnetometer - trueHeading simply stays at 0
         // and HasHeading never turns on, which the arrows check before drawing.
@@ -272,6 +275,21 @@ public class UserLocationService : MonoBehaviour
         return true;
     }
 
+    bool _begun;
+
+    /// <summary>True while the permission dialog is up.</summary>
+    public bool Asking { get; private set; }
+
+    /// <summary>Starts the position, asking for the permission if it has to. Safe to call again.</summary>
+    public void Begin()
+    {
+        if (_begun || !useGpsFallback)
+            return;
+
+        _begun = true;
+        StartCoroutine(StartGps());
+    }
+
     /// <summary>Named here so the string is not repeated at the call site.</summary>
     const string FineLocation = "android.permission.ACCESS_FINE_LOCATION";
 
@@ -296,7 +314,9 @@ public class UserLocationService : MonoBehaviour
 
         if (!granted)
         {
+            Asking = true;
             yield return AndroidPermissions.Ask(FineLocation, answer => granted = answer);
+            Asking = false;
         }
 
         // Refused. The map says where it does not know rather than pretending, and

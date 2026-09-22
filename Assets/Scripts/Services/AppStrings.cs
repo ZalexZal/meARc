@@ -77,6 +77,14 @@ public static class AppStrings
         return key;
     }
 
+    /// <summary>One language's string, whatever the app is set to. For content
+    /// that carries both, like the demo's stops.</summary>
+    public static string GetIn(AppLanguage language, string key)
+    {
+        Dictionary<string, string> table = language == AppLanguage.Bulgarian ? Bg : En;
+        return table.TryGetValue(key, out string value) ? value : Get(key);
+    }
+
     // ---------------------------------------------------------------- English
 
     static readonly Dictionary<string, string> En = new Dictionary<string, string>
@@ -198,7 +206,7 @@ public static class AppStrings
         { "graph.shut", "Not open yet" },
         { "search.points", "points" },
         { "search.standing", "on the board" },
-        { "search.noTeam", "walking alone" },
+        { "search.noTeam", "not ranked yet" },
         { "search.rank", "#{0}" },
         { "search.discoveredNote", "* A stop counts once you tap its marker in the camera — or open it from the map while you are standing at it." },
 
@@ -262,7 +270,7 @@ public static class AppStrings
         { "settings.nearbyBuildings", "Alert me about markers nearby" },
         { "settings.nearbyNote", "While the app is open. Markers you have already read about are not announced." },
         { "settings.help", "Help" },
-        { "settings.replayTutorial", "Replay tutorial" },
+        { "settings.replayTutorial", "Replay the demo" },
         { "settings.dataSources", "Data and sources" },
         { "settings.about", "About" },
         { "settings.version", "Version {0}" },
@@ -278,9 +286,9 @@ public static class AppStrings
 
         { "app.name", "AR Trail" },
 
-        { "welcome.title", "Markers left in real places." },
-        { "welcome.body", "Walk to them and see what somebody else left behind." },
-        { "welcome.start", "Get started" },
+        { "welcome.title", "A treasure hunt in your city." },
+        { "welcome.body", "Find the stops, answer the questions, beat the other teams." },
+        { "welcome.start", "Try it now" },
         { "welcome.haveCode", "I have a code" },
 
         { "terms.title", "Before we start" },
@@ -288,11 +296,11 @@ public static class AppStrings
         { "terms.1.title", "Watch where you are going" },
         { "terms.1.body", "This is not a navigation app. It draws a straight line to a marker, not a route, and knows nothing about roads or traffic. Look up." },
         { "terms.2.title", "Where you are" },
-        { "terms.2.body", "Your location is used to find markers near you and to place them in the camera. It stays on your phone and reaches us only as a \"what is near this point\" question. We keep no record of where you have been." },
+        { "terms.2.body", "Your location finds the markers near you and places them in the camera. It reaches us only as a “what is near this point” question, and we keep no record of where you have been." },
         { "terms.3.title", "What other people leave" },
         { "terms.3.body", "Anyone can place a marker and we do not check them first. If one bothers you, Hide this marker takes it off your map at once, and nobody has to agree with you." },
         { "terms.4.title", "Your account" },
-        { "terms.4.body", "Your account remembers which trails you have joined, what your team has answered and the badges you have earned. You can delete it at any time, in two taps, under You in this app." },
+        { "terms.4.body", "It remembers your trails, your team’s answers and your badges. You can delete it at any time under You." },
         { "terms.footer", "Accepting records the date and the version against your account. The full terms and privacy policy are on the website, and under You, Help." },
 
         { "trails.title", "My trails" },
@@ -309,7 +317,7 @@ public static class AppStrings
         { "trails.loading", "Looking for your trails" },
         { "trails.failed", "Couldn’t reach the server. Anything joined earlier still works." },
         { "trails.empty", "No trails yet" },
-        { "trails.emptyBody", "Ask whoever made a trail for its code, and enter it here." },
+        { "trails.emptyBody", "Walk a trail near you, or enter the code you were given." },
         { "trails.markers", "{0} markers" },
         { "trails.role.viewer", "Viewer" },
         { "trails.role.editor", "Editor" },
@@ -374,11 +382,11 @@ public static class AppStrings
         { "task.wrong", "Wrong answer." },
         { "task.retry", "Try again" },
         { "task.review", "Sent. The trail's creator will check it." },
-        { "task.lockCap", "Wrong answer: you wait" },
+        { "task.lockCap", "Wrong answers mean a short wait" },
         { "task.lockMsg", "Locked. Try again in {0}" },
-        { "task.dedCap", "Wrong answer: \u2212{0} points" },
+        { "task.dedCap", "Wrong answers cost {0} points" },
         { "task.dedMsg", "Wrong answer. −{0} points." },
-        { "task.skipCap", "Wrong answer: no second try" },
+        { "task.skipCap", "One try only" },
         { "task.skipMsg", "This marker is finished." },
         { "task.skipBody", "The creator allowed one attempt." },
         { "task.backToMap", "Back to map" },
@@ -465,6 +473,37 @@ public static class AppStrings
         { "delete.no", "Keep it" },
         { "delete.working", "Deleting..." },
         { "delete.done", "Deleted. You are starting again as a guest." },
+
+        // The demo and the library.
+        { "near.title", "Near you" },
+        { "near.looking", "Looking for trails near you…" },
+        { "near.none", "No public trails near you yet." },
+        { "near.allJoined", "You have joined every public trail near you." },
+        { "near.noLocation", "Turn on location to see trails near you." },
+        { "near.meta", "{0} · {1} stops · {2}" },
+        { "near.walk", "Walk" },
+        { "near.failed", "Couldn’t join that trail. Try again." },
+        { "demo.name", "Demo" },
+        { "demo.placing", "Putting three practice stops around you…" },
+        { "demo.step1", "These dots are stops. Tap one to open it." },
+        { "demo.step2", "Each stop tells you something. One of them has a question – find it and answer it." },
+        { "demo.step3", "That’s the game. On a real trail you walk to each stop, and in Camera they stand in the street." },
+        { "demo.skip", "Skip" },
+        { "demo.finish", "Finish" },
+        { "demo.1.title", "Your first stop" },
+        { "demo.1.body", "Every stop has a short story, and some have a video, audio or a question. On a real trail a stop opens when you reach it – here they are all open." },
+        { "demo.2.title", "A question" },
+        { "demo.2.body", "Questions win your team points. Tap Answer, pick one and tap Check." },
+        { "demo.2.q", "How do you open a stop on the map?" },
+        { "demo.2.a1", "Tap it" },
+        { "demo.2.a2", "Shake the phone" },
+        { "demo.2.a3", "Say its name" },
+        { "demo.3.title", "The camera" },
+        { "demo.3.body", "Out on a trail, open Camera and hold the phone up. Stops stand in the street, right where whoever made the trail left them." },
+        { "ready.title", "You’re ready" },
+        { "ready.body", "Pick a trail near you, or join one with the code you were given." },
+        { "ready.near", "Find a trail near you" },
+        { "ready.code", "I have a code" },
     };
 
     // -------------------------------------------------------------- Bulgarian
@@ -589,7 +628,7 @@ public static class AppStrings
         { "graph.shut", "Още не е отключен" },
         { "search.points", "точки" },
         { "search.standing", "в класацията" },
-        { "search.noTeam", "вървиш сам" },
+        { "search.noTeam", "още без класиране" },
         { "search.rank", "#{0}" },
         { "search.discoveredNote", "* Спирката се отчита, когато натиснеш маркера в камерата — или я отвориш от картата, докато стоиш при нея." },
 
@@ -653,7 +692,7 @@ public static class AppStrings
         { "settings.nearbyBuildings", "Известявай ме за маркери наблизо" },
         { "settings.nearbyNote", "Докато приложението е отворено. Маркери, които вече сте разгледали, не се обявяват." },
         { "settings.help", "Помощ" },
-        { "settings.replayTutorial", "Повтори обучението" },
+        { "settings.replayTutorial", "Пусни демото отново" },
         { "settings.dataSources", "Данни и източници" },
         { "settings.about", "За приложението" },
         { "settings.version", "Версия {0}" },
@@ -669,9 +708,9 @@ public static class AppStrings
 
         { "app.name", "AR Маршрути" },
 
-        { "welcome.title", "Маркери, оставени на истински места." },
-        { "welcome.body", "Вървете до тях и вижте какво е оставил някой друг." },
-        { "welcome.start", "Започни" },
+        { "welcome.title", "Съкровищен лов във вашия град." },
+        { "welcome.body", "Намерете спирките, отговорете на въпросите, изпреварете другите отбори." },
+        { "welcome.start", "Опитайте сега" },
         { "welcome.haveCode", "Имам код" },
 
         { "terms.title", "Преди да започнем" },
@@ -679,11 +718,11 @@ public static class AppStrings
         { "terms.1.title", "Гледайте къде вървите" },
         { "terms.1.body", "Това не е навигация. Чертае права линия до маркера, а не маршрут, и не знае нищо за улици и движение. Вдигнете поглед." },
         { "terms.2.title", "Къде се намирате" },
-        { "terms.2.body", "Местоположението ви служи, за да намерим маркерите близо до вас и да ги поставим през камерата. Остава на телефона и стига до нас само като въпрос „какво има близо до тази точка“. Не пазим история къде сте били." },
+        { "terms.2.body", "Местоположението ви намира маркерите наблизо и ги поставя в камерата. Стига до нас само като въпрос „какво има близо до тази точка“ и не пазим история къде сте били." },
         { "terms.3.title", "Какво оставят другите" },
         { "terms.3.body", "Всеки може да постави маркер и ние не ги проверяваме предварително. Ако някой ви пречи, „Скрий този маркер“ го маха от картата ви веднага и никой не трябва да се съгласява с вас." },
         { "terms.4.title", "Профилът ви" },
-        { "terms.4.body", "Профилът помни към кои маршрути сте се присъединили, какво е отговорил отборът ви и какви значки сте спечелили. Може да го изтриете по всяко време с два натиска, в раздела „Ти“ в приложението." },
+        { "terms.4.body", "Профилът помни маршрутите ви, отговорите на отбора и значките. Може да го изтриете по всяко време в раздела „Ти“." },
         { "terms.footer", "Приемането записва датата и версията към профила ви. Пълните условия и политиката за поверителност са в сайта и в „Ти“ → Помощ." },
 
         { "trails.title", "Моите маршрути" },
@@ -700,7 +739,7 @@ public static class AppStrings
         { "trails.loading", "Търсим вашите маршрути" },
         { "trails.failed", "Сървърът не отговаря. Всичко присъединено по-рано пак работи." },
         { "trails.empty", "Още няма маршрути" },
-        { "trails.emptyBody", "Поискайте кода от създателя на маршрута и го въведете тук." },
+        { "trails.emptyBody", "Тръгнете по маршрут наблизо или въведете кода, който сте получили." },
         { "trails.markers", "{0} маркера" },
         { "trails.role.viewer", "Гост" },
         { "trails.role.editor", "Редактор" },
@@ -765,11 +804,11 @@ public static class AppStrings
         { "task.wrong", "Грешен отговор." },
         { "task.retry", "Опитай пак" },
         { "task.review", "Изпратено. Създателят на маршрута ще го провери." },
-        { "task.lockCap", "Грешен отговор: изчакване" },
+        { "task.lockCap", "Грешният отговор значи кратко чакане" },
         { "task.lockMsg", "Заключено. Опитай отново след {0}" },
-        { "task.dedCap", "Грешен отговор: \u2212{0} точки" },
+        { "task.dedCap", "Грешният отговор струва {0} точки" },
         { "task.dedMsg", "Грешен отговор. −{0} точки." },
-        { "task.skipCap", "Грешен отговор: без втори опит" },
+        { "task.skipCap", "Само един опит" },
         { "task.skipMsg", "Този маркер е приключен." },
         { "task.skipBody", "Създателят е избрал един опит." },
         { "task.backToMap", "Към картата" },
@@ -856,6 +895,37 @@ public static class AppStrings
         { "delete.no", "Остави го" },
         { "delete.working", "Изтриване..." },
         { "delete.done", "Изтрито. Започваш отначало като гост." },
+
+        // The demo and the library.
+        { "near.title", "Наблизо" },
+        { "near.looking", "Търсим маршрути наблизо…" },
+        { "near.none", "Още няма публични маршрути наблизо." },
+        { "near.allJoined", "Вече сте се присъединили към всички публични маршрути наблизо." },
+        { "near.noLocation", "Включете местоположението, за да видите маршрути наблизо." },
+        { "near.meta", "{0} · {1} спирки · {2}" },
+        { "near.walk", "Тръгни" },
+        { "near.failed", "Не успяхме да ви присъединим. Опитайте пак." },
+        { "demo.name", "Демо" },
+        { "demo.placing", "Слагаме три пробни спирки около вас…" },
+        { "demo.step1", "Точките са спирки. Докоснете една, за да я отворите." },
+        { "demo.step2", "Всяка спирка разказва нещо. В една от тях има въпрос – намерете я и отговорете." },
+        { "demo.step3", "Това е играта. В истински маршрут вървите до всяка спирка, а през камерата те стоят на улицата." },
+        { "demo.skip", "Пропусни" },
+        { "demo.finish", "Готово" },
+        { "demo.1.title", "Първата ви спирка" },
+        { "demo.1.body", "Всяка спирка има кратка история, а някои – видео, аудио или въпрос. В истински маршрут спирката се отваря, когато стигнете до нея – тук всички са отворени." },
+        { "demo.2.title", "Въпрос" },
+        { "demo.2.body", "Въпросите носят точки на отбора. Докоснете „Отговори“, изберете и натиснете „Провери“." },
+        { "demo.2.q", "Как се отваря спирка на картата?" },
+        { "demo.2.a1", "Докосвате я" },
+        { "demo.2.a2", "Разклащате телефона" },
+        { "demo.2.a3", "Казвате името ѝ" },
+        { "demo.3.title", "Камерата" },
+        { "demo.3.body", "Навън отворете „Камера“ и вдигнете телефона. Спирките стоят на улицата, точно където ги е оставил създателят на маршрута." },
+        { "ready.title", "Готови сте" },
+        { "ready.body", "Изберете маршрут наблизо или се присъединете с кода, който сте получили." },
+        { "ready.near", "Намери маршрут наблизо" },
+        { "ready.code", "Имам код" },
     };
 
     /// <summary>

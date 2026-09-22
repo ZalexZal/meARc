@@ -60,13 +60,39 @@ public static class BuildingDatabase
 
     // ------------------------------------------------------------------ loading
 
+    /// <summary>
+    /// True while the demo owns the map. A marker fetch that lands meanwhile -
+    /// a session refresh, a resume - is dropped rather than drawn over it.
+    /// </summary>
+    public static bool Held { get; private set; }
+
+    /// <summary>Shows these and nothing else until <see cref="Release"/>.</summary>
+    public static void Hold(IEnumerable<BuildingData> buildings)
+    {
+        Held = false;
+        SetBuildings(buildings);
+        Held = true;
+    }
+
+    public static void Release()
+    {
+        Held = false;
+        SetBuildings(null);
+    }
+
     public static void SetLoading()
     {
+        if (Held)
+            return;
+
         LoadState = State.Loading;
     }
 
     public static void SetFailed()
     {
+        if (Held)
+            return;
+
         // Only a failure if there is nothing to show. A refresh that fails while a
         // cached list is already loaded is not worth telling the reader about.
         if (_all.Count == 0)
@@ -77,6 +103,9 @@ public static class BuildingDatabase
 
     public static void SetBuildings(IEnumerable<BuildingData> buildings)
     {
+        if (Held)
+            return;
+
         _all = buildings != null ? buildings.ToList() : new List<BuildingData>();
         LoadState = State.Ready;
 

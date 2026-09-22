@@ -38,3 +38,13 @@ PreviewShots/
 [Tt]emp/
 [Uu]serSettings/
 secrets.json
+
+# Written by the performance-testing package during every build.
+Assets/Resources/PerformanceTestRun*.json
+Assets/Resources/PerformanceTestRun*.json.meta
+
+# Inter as TextMeshPro assets. Made by AppFonts.Ensure at the start of every
+# UI build, from the .ttf files beside them; dynamic atlases that grow to
+# ~13 MB each as glyphs are drawn, so they are output, not source.
+Assets/Fonts/Inter/*SDF.asset
+Assets/Fonts/Inter/*SDF.asset.meta

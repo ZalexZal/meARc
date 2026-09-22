@@ -94,7 +94,8 @@ public class ProximityAlerts : MonoBehaviour
         for (int i = 0; i < all.Count; i++)
         {
             BuildingData marker = all[i];
-            if (marker == null || string.IsNullOrWhiteSpace(marker.buildingId))
+            if (marker == null || string.IsNullOrWhiteSpace(marker.buildingId) ||
+                DemoTrail.Owns(marker))
                 continue;
 
             double distance = locationService.DistanceMetresTo(marker);

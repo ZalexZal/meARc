@@ -114,6 +114,7 @@ public class InfoPanelController : MonoBehaviour
 
         AppStrings.OnLanguageChanged += RefreshLabels;
         GuidanceService.OnGuidanceChanged += RefreshLabels;
+        DoorFlow.OnDoorChanged += CloseUnderDoor;
 
         RefreshLabels();
     }
@@ -122,6 +123,19 @@ public class InfoPanelController : MonoBehaviour
     {
         AppStrings.OnLanguageChanged -= RefreshLabels;
         GuidanceService.OnGuidanceChanged -= RefreshLabels;
+        DoorFlow.OnDoorChanged -= CloseUnderDoor;
+    }
+
+    /// <summary>Raised when a stop's sheet opens, with the stop.</summary>
+    public static event Action<BuildingData> OnOpened;
+
+    public static event Action OnClosed;
+
+    /// <summary>One sheet at a time: a door going up closes the stop under it.</summary>
+    void CloseUnderDoor(DoorFlow.Door door)
+    {
+        if (door != DoorFlow.Door.None && currentBuilding != null)
+            ClosePanel();
     }
 
     void Update()
@@ -236,7 +250,9 @@ public class InfoPanelController : MonoBehaviour
     /// </summary>
     static bool MayReveal(BuildingData data, bool fromMarker)
     {
-        return MayCredit(data, fromMarker) || DiscoveryTracker.IsDiscovered(data);
+        // The demo asks nobody to walk, so its stops open from wherever you are.
+        return DemoTrail.Owns(data) || MayCredit(data, fromMarker) ||
+               DiscoveryTracker.IsDiscovered(data);
     }
 
     /// <summary>
@@ -271,6 +287,16 @@ public class InfoPanelController : MonoBehaviour
         // sheet shows and whether the contents are asked for at all.
         bool reveal = MayReveal(data, fromMarker);
 
+        // Hiding a practice stop would hide it from every replay, and a report
+        // would put a stop that does not exist in the moderators' queue.
+        bool demo = DemoTrail.Owns(data);
+
+        if (hideButton != null)
+            hideButton.gameObject.SetActive(!demo);
+
+        if (reportButton != null)
+            reportButton.gameObject.SetActive(reportSheet != null && !demo);
+
         RenderBuilding(data);
 
         // After RenderBuilding, because the pieces list reads the marker's task and
@@ -291,14 +317,14 @@ public class InfoPanelController : MonoBehaviour
         // competitive trail it means a marker can be explored from a bench on the
         // other side of town by tapping its pin on the map, which is the whole
         // game given away.
-        if (MayCredit(data, fromMarker))
+        if (MayCredit(data, fromMarker) || DemoTrail.Owns(data))
         {
             DiscoveryTracker.MarkDiscovered(data);
 
             // And to the server, which is what makes it count towards trails
             // walked and badges. The phone's own flag stays for the screens that
             // read it offline; this is the record that survives a new phone.
-            if (ProfileService.Instance != null)
+            if (ProfileService.Instance != null && !DemoTrail.Owns(data))
                 ProfileService.Instance.RecordVisit(data.buildingId, fromMarker);
         }
 
@@ -322,6 +348,9 @@ public class InfoPanelController : MonoBehaviour
 
         if (scrim != null)
             scrim.SetActive(true);
+
+        if (OnOpened != null)
+            OnOpened(data);
 
         if (sheet != null)
             sheet.Open();
@@ -445,6 +474,9 @@ public class InfoPanelController : MonoBehaviour
             pieces.Close();
 
         currentBuilding = null;
+
+        if (OnClosed != null)
+            OnClosed();
 
         if (scrim != null)
             scrim.SetActive(false);

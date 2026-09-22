@@ -568,6 +568,132 @@ public class TrailService : MonoBehaviour
             OnTrailsChanged();
     }
 
+    // ----------------------------------------------------------- the library
+
+    /// <summary>A public trail near the reader, as trails_near returns it.</summary>
+    [Serializable]
+    public class Listed
+    {
+        public string id;
+        public string name;
+        public string mode;
+        public int stop_count;
+        public double distance_m;
+    }
+
+    [Serializable] class ListedList { public Listed[] items; }
+
+    /// <summary>Public trails near the last position asked about, nearest first,
+    /// minus the ones already joined.</summary>
+    public List<Listed> Near { get; private set; } = new List<Listed>();
+
+    /// <summary>False until an answer came back, so "none near you" is never
+    /// said while the question is still out.</summary>
+    public bool NearLoaded { get; private set; }
+
+    /// <summary>How many public trails nearby were left out because they are already joined.</summary>
+    public int NearJoined { get; private set; }
+
+    public IEnumerator LoadNear(double latitude, double longitude, Action done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+        {
+            if (done != null) done();
+            yield break;
+        }
+
+        yield return SupabaseAuth.Ready();
+
+        string body = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "{{\"p_lat\":{0},\"p_lng\":{1},\"p_radius_m\":50000}}", latitude, longitude);
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/trails_near"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    Listed[] rows = JsonUtility.FromJson<ListedList>(
+                        "{\"items\":" + request.downloadHandler.text + "}").items;
+
+                    Near.Clear();
+                    NearJoined = 0;
+
+                    for (int i = 0; rows != null && i < rows.Length; i++)
+                    {
+                        bool joined = false;
+
+                        for (int j = 0; j < Mine.Count; j++)
+                            joined |= Mine[j].id == rows[i].id;
+
+                        if (!joined)
+                            Near.Add(rows[i]);
+                        else
+                            NearJoined++;
+                    }
+
+                    NearLoaded = true;
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Trails] Unreadable library: " + exception.Message);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[Trails] trails_near failed (" + request.responseCode + ")");
+            }
+        }
+
+        if (done != null) done();
+    }
+
+    /// <summary>
+    /// Joins a public trail without a code. join_listed refuses anything that is
+    /// not listed and approved, so this cannot open a private trail by its id.
+    /// </summary>
+    public IEnumerator JoinListed(string worldId, Action<bool> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || SupabaseAuth.Instance == null || !SupabaseAuth.Instance.IsSignedIn)
+        {
+            if (done != null) done(false);
+            yield break;
+        }
+
+        string body = "{\"p_world\":\"" + (worldId ?? string.Empty).Replace("\"", "") + "\"}";
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/join_listed"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning("[Trails] join_listed failed (" + request.responseCode + ")");
+                if (done != null) done(false);
+                yield break;
+            }
+        }
+
+        yield return RefreshMine();
+        Select(worldId);
+
+        for (int i = Near.Count - 1; i >= 0; i--)
+        {
+            if (Near[i].id == worldId)
+                Near.RemoveAt(i);
+        }
+
+        if (done != null) done(true);
+    }
+
     [Serializable] class MembershipList { public MembershipRow[] items; }
     [Serializable] class MembershipRow { public string role; public WorldRow worlds; }
     [Serializable] class WorldRow { public string id; public string name; public string mode; }

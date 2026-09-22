@@ -86,7 +86,8 @@ public class MarkerDetailService : MonoBehaviour
     /// </summary>
     public void Fill(BuildingData marker, Action done)
     {
-        if (marker == null || string.IsNullOrEmpty(marker.buildingId))
+        // The demo's stops carry everything already and exist nowhere else.
+        if (marker == null || string.IsNullOrEmpty(marker.buildingId) || DemoTrail.Owns(marker))
         {
             if (done != null)
                 done();

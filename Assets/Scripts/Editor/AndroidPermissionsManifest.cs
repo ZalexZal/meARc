@@ -49,10 +49,16 @@ public class AndroidPermissionsManifest : IPostGenerateGradleAndroidProject
             return;
         }
 
+        SkipStartupDialog(document, application);
+        AcceptJoinLinks(document, application);
+
+        document.Save(manifest);
+    }
+
+    static void SkipStartupDialog(XmlDocument document, XmlNode application)
+    {
         const string Name = "unityplayer.SkipPermissionsDialog";
 
-        // Idempotent: a rebuild over an existing generated project must not end up
-        // with the same meta-data twice, which is a manifest merger failure.
         foreach (XmlNode node in application.ChildNodes)
         {
             if (node.Name != "meta-data" || node.Attributes == null)
@@ -67,8 +73,53 @@ public class AndroidPermissionsManifest : IPostGenerateGradleAndroidProject
         meta.SetAttribute("name", AndroidNs, Name);
         meta.SetAttribute("value", AndroidNs, "true");
         application.AppendChild(meta);
-
-        document.Save(manifest);
         Debug.Log("[Manifest] Startup permission dialogs are ours to ask for now.");
+    }
+
+    /// <summary>
+    /// artrail://join/&lt;trail id&gt; opens the app on that trail. The website's
+    /// "Open in the app" button sends it, which is what a trail's QR code leads to.
+    /// </summary>
+    static void AcceptJoinLinks(XmlDocument document, XmlNode application)
+    {
+        foreach (XmlNode activity in application.SelectNodes("activity"))
+        {
+            bool launcher = false;
+
+            foreach (XmlNode filter in activity.SelectNodes("intent-filter"))
+            {
+                if (filter.InnerXml.Contains("android.intent.category.LAUNCHER"))
+                    launcher = true;
+
+                if (filter.InnerXml.Contains("artrail"))
+                    return;
+            }
+
+            if (!launcher)
+                continue;
+
+            XmlElement links = document.CreateElement("intent-filter");
+            links.AppendChild(Named(document, "action", "android.intent.action.VIEW"));
+            links.AppendChild(Named(document, "category", "android.intent.category.DEFAULT"));
+            links.AppendChild(Named(document, "category", "android.intent.category.BROWSABLE"));
+
+            XmlElement data = document.CreateElement("data");
+            data.SetAttribute("scheme", AndroidNs, "artrail");
+            data.SetAttribute("host", AndroidNs, "join");
+            links.AppendChild(data);
+
+            activity.AppendChild(links);
+            Debug.Log("[Manifest] artrail://join links open the app.");
+            return;
+        }
+
+        Debug.LogWarning("[Manifest] No launcher activity, so join links will not open the app.");
+    }
+
+    static XmlElement Named(XmlDocument document, string tag, string name)
+    {
+        XmlElement element = document.CreateElement(tag);
+        element.SetAttribute("name", AndroidNs, name);
+        return element;
     }
 }

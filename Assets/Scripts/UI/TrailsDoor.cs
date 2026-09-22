@@ -41,12 +41,34 @@ public class TrailsDoor : MonoBehaviour
              "leaves a quarter of the card empty under two trails.")]
     public LayoutElement listSize;
 
+    [Header("Near you")]
+    [Tooltip("The library: public trails near the reader, joined without a code.")]
+    public GameObject nearGroup;
+    public RectTransform nearParent;
+    public TextMeshProUGUI nearNote;
+
     readonly List<TrailRowView> _rows = new List<TrailRowView>();
+    readonly List<TrailRowView> _nearRows = new List<TrailRowView>();
+    bool _joining;
 
     void OnEnable()
     {
         AppStrings.OnLanguageChanged += Refresh;
         Refresh();
+        AskNear();
+    }
+
+    /// <summary>Once per opening. The list is short and the position rarely
+    /// moves far while this card is up.</summary>
+    void AskNear()
+    {
+        TrailService service = TrailService.Instance;
+        UserLocationService location = UserLocationService.Instance;
+
+        if (service == null || location == null || !location.HasValidPose)
+            return;
+
+        StartCoroutine(service.LoadNear(location.Latitude, location.Longitude, Refresh));
     }
 
     void OnDisable()
@@ -91,6 +113,7 @@ public class TrailsDoor : MonoBehaviour
         }
 
         Fill(mine, service != null ? service.SelectedId : null);
+        FillNear(service);
         SizeList();
     }
 
@@ -110,7 +133,7 @@ public class TrailsDoor : MonoBehaviour
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(listParent);
 
-        float wanted = Mathf.Min(LayoutUtility.GetPreferredHeight(listParent), 560f);
+        float wanted = Mathf.Min(LayoutUtility.GetPreferredHeight(listParent), 860f);
 
         // Both, or the minimum wins. UIFactory.Size sets minHeight alongside
         // preferredHeight, and a layout group takes the larger of the two.
@@ -156,6 +179,85 @@ public class TrailsDoor : MonoBehaviour
 
             row.onLeave = Leave;
         }
+    }
+
+    void FillNear(TrailService service)
+    {
+        if (nearGroup == null || nearParent == null || rowPrefab == null)
+            return;
+
+        // Last in the list, under the reader's own trails.
+        nearGroup.transform.SetAsLastSibling();
+
+        List<TrailService.Listed> near = service != null
+            ? service.Near
+            : new List<TrailService.Listed>();
+
+        UserLocationService location = UserLocationService.Instance;
+        bool located = location != null && location.HasValidPose;
+
+        string note = !located ? "near.noLocation"
+                    : service == null || !service.NearLoaded ? "near.looking"
+                    : near.Count == 0 && service.NearJoined > 0 ? "near.allJoined"
+                    : near.Count == 0 ? "near.none"
+                    : null;
+
+        if (nearNote != null)
+        {
+            nearNote.gameObject.SetActive(note != null);
+            if (note != null)
+                nearNote.text = AppStrings.Get(note);
+        }
+
+        while (_nearRows.Count < near.Count)
+            _nearRows.Add(Instantiate(rowPrefab, nearParent));
+
+        for (int i = 0; i < _nearRows.Count; i++)
+        {
+            TrailRowView row = _nearRows[i];
+            bool used = i < near.Count;
+            row.gameObject.SetActive(used);
+
+            if (!used)
+                continue;
+
+            row.BindListed(near[i]);
+
+            if (row.button != null)
+            {
+                string id = near[i].id;
+                row.button.onClick.RemoveAllListeners();
+                row.button.onClick.AddListener(() => JoinListed(id));
+            }
+        }
+    }
+
+    void JoinListed(string worldId)
+    {
+        TrailService service = TrailService.Instance;
+
+        if (service == null || _joining)
+            return;
+
+        _joining = true;
+
+        StartCoroutine(service.JoinListed(worldId, ok =>
+        {
+            _joining = false;
+
+            if (ok)
+            {
+                if (DoorFlow.Instance != null)
+                    DoorFlow.Instance.Entered();
+                return;
+            }
+
+            if (nearNote != null)
+            {
+                nearNote.gameObject.SetActive(true);
+                nearNote.text = AppStrings.Get("near.failed");
+            }
+        }));
     }
 
     /// <summary>

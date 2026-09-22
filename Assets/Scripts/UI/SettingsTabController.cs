@@ -217,9 +217,16 @@ public class SettingsTabController : MonoBehaviour
         ProximityAlerts.Enabled = enabled;
     }
 
+    /// <summary>The demo replaced the tutorial, so the replay is the demo, on the map.</summary>
     void ReplayTutorial()
     {
-        if (tutorial != null)
+        TabNavigationController tabs = FindAnyObjectByType<TabNavigationController>();
+        if (tabs != null)
+            tabs.ShowMap();
+
+        if (DoorFlow.Instance != null)
+            DoorFlow.Instance.StartDemo();
+        else if (tutorial != null)
             tutorial.Open();
     }
 

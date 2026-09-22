@@ -169,6 +169,13 @@ public class MarkerTaskService : MonoBehaviour
         return fresh;
     }
 
+    /// <summary>Drops what is known about one marker. The demo's replay.</summary>
+    public void Forget(string markerId)
+    {
+        if (!string.IsNullOrEmpty(markerId) && _progress.Remove(markerId))
+            SaveCache();
+    }
+
     /// <summary>Total points from every marker the server has scored.</summary>
     public int TotalPoints
     {
@@ -294,6 +301,14 @@ public class MarkerTaskService : MonoBehaviour
 
     IEnumerator Check(string markerId, string answer, Action<Result> done)
     {
+        // The demo's question is judged here and never sent, so practice cannot
+        // touch a score. Same verdict shape, same path through Apply.
+        if (DemoTrail.Owns(markerId))
+        {
+            Report(done, Apply(markerId, DemoTrail.Judge(markerId, answer)));
+            yield break;
+        }
+
         SupabaseConfig config = SupabaseConfig.Instance;
 
         if (config == null || string.IsNullOrEmpty(markerId))

@@ -491,6 +491,26 @@ public static class UIPreview
         Pieces.CodeState(canvas.transform, "T97S25", "code.unknown");
         Shoot(canvas, rig, "16-code-wrong" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
 
+        // --- the demo ---
+        Shoot(canvas, rig, "39-ready" + t, "MapPanel", "Doors/Backdrop", "Doors/Ready");
+
+        DemoCoach coach = canvas.GetComponentInChildren<DemoCoach>(true);
+        if (coach != null && coach.card != null)
+        {
+            coach.card.SetActive(true);
+            if (coach.line != null) coach.line.text = AppStrings.Get("demo.step1");
+            if (coach.finishButton != null) coach.finishButton.gameObject.SetActive(false);
+            Shoot(canvas, rig, "40-coach" + t, "MapPanel");
+
+            if (coach.line != null) coach.line.text = AppStrings.Get("demo.step3");
+            if (coach.skipButton != null) coach.skipButton.gameObject.SetActive(false);
+            if (coach.finishButton != null) coach.finishButton.gameObject.SetActive(true);
+            Shoot(canvas, rig, "41-coach-last" + t, "MapPanel");
+
+            coach.card.SetActive(false);
+            if (coach.skipButton != null) coach.skipButton.gameObject.SetActive(true);
+        }
+
         // --- inside a marker ---
         const string SheetPath = "InfoSheet/Safe/Sheet";
 
@@ -1822,9 +1842,31 @@ public static class UIPreview
             Show(trails.waitingState, false);
             Show(trails.failedState, false);
 
-            TrailRowView[] existing = content.GetComponentsInChildren<TrailRowView>(true);
+            // The library, with the one public trail the database holds today.
+            if (trails.nearParent != null && trails.nearParent.childCount == 0)
+            {
+                TrailRowView near = Object.Instantiate(trails.rowPrefab, trails.nearParent);
+                near.BindListed(new TrailService.Listed
+                {
+                    id = "preview-near",
+                    name = "Ямбол: тестов маршрут",
+                    mode = "guide",
+                    stop_count = 3,
+                    distance_m = 670
+                });
+            }
 
-            if (existing.Length == 0 && rows)
+            if (trails.nearNote != null)
+                trails.nearNote.gameObject.SetActive(false);
+
+            List<TrailRowView> existing = new List<TrailRowView>();
+            foreach (TrailRowView found in content.GetComponentsInChildren<TrailRowView>(true))
+            {
+                if (found.transform.parent == content)
+                    existing.Add(found);
+            }
+
+            if (existing.Count == 0 && rows)
             {
                 string[] names = { "Ямбол — център", "ПМГ — училищен маршрут" };
                 string[] roles = { "viewer", "editor" };
@@ -1842,10 +1884,13 @@ public static class UIPreview
                     }, i == 0);
                 }
 
+                if (trails.nearGroup != null)
+                    trails.nearGroup.transform.SetAsLastSibling();
+
                 return;
             }
 
-            for (int i = 0; i < existing.Length; i++)
+            for (int i = 0; i < existing.Count; i++)
                 existing[i].gameObject.SetActive(rows);
         }
 
