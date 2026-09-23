@@ -72,8 +72,18 @@ public class JoinLinks : MonoBehaviour
 
         yield return trails.JoinListed(id, ok =>
         {
-            if (ok && DoorFlow.Instance != null)
-                DoorFlow.Instance.Entered();
+            if (ok)
+            {
+                // To the map, where the trail is. From a link the app could be
+                // resumed on any tab, and landing on You looked like nothing
+                // had happened.
+                TabNavigationController tabs = FindAnyObjectByType<TabNavigationController>();
+                if (tabs != null)
+                    tabs.ShowMap();
+
+                if (DoorFlow.Instance != null)
+                    DoorFlow.Instance.Entered();
+            }
             else if (!ok)
                 Debug.LogWarning("[Links] Could not join " + id + " from a link.");
         });

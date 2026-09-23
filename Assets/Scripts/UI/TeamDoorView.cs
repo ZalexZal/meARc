@@ -133,6 +133,8 @@ public class TeamDoorView : MonoBehaviour
 
     void OnDisable()
     {
+        _leaveArmed = false;
+        DrawLeave();
         TeamService.OnTeamChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
         MarkerTaskService.OnProgressChanged -= Reload;
@@ -334,9 +336,7 @@ public class TeamDoorView : MonoBehaviour
 
             if (!string.IsNullOrEmpty(error))
             {
-                statusLabel.text = error.StartsWith("team.")
-                    ? AppStrings.Get(error)
-                    : error;
+                statusLabel.text = Words(error);
                 statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
             }
         }
@@ -489,6 +489,40 @@ public class TeamDoorView : MonoBehaviour
         teams.Join(code, Done);
     }
 
+    bool _leaveArmed;
+    float _leaveArmedAt;
+
+    void Update()
+    {
+        // An armed Leave left alone goes quiet again, like the trail list's.
+        if (_leaveArmed && Time.unscaledTime - _leaveArmedAt > 4f)
+        {
+            _leaveArmed = false;
+            DrawLeave();
+        }
+    }
+
+    /// <summary>
+    /// First tap asks, second leaves. The last one out takes the team with
+    /// them - leave_team deletes an empty team and its score - and a single tap
+    /// a centimetre from Close was enough to lose a finished trail's points.
+    /// </summary>
+    void DrawLeave()
+    {
+        TextMeshProUGUI label = leaveButton != null
+            ? leaveButton.GetComponentInChildren<TextMeshProUGUI>() : null;
+        if (label == null)
+            return;
+
+        TeamService.Detail team = TeamService.Instance != null ? TeamService.Instance.Team : null;
+        bool last = team != null && (team.members == null || team.members.Length <= 1);
+
+        label.text = !_leaveArmed ? AppStrings.Get("team.leave")
+                   : last ? string.Format(AppStrings.Get("team.leaveLast"), team.points)
+                   : AppStrings.Get("team.leaveConfirm");
+        label.color = ThemeManager.Get(_leaveArmed ? ThemeRole.StatusPoor : ThemeRole.TextPrimary);
+    }
+
     void Leave()
     {
         TeamService teams = TeamService.Instance;
@@ -501,6 +535,16 @@ public class TeamDoorView : MonoBehaviour
             return;
         }
 
+        if (!_leaveArmed)
+        {
+            _leaveArmed = true;
+            _leaveArmedAt = Time.unscaledTime;
+            DrawLeave();
+            return;
+        }
+
+        _leaveArmed = false;
+        DrawLeave();
         Say("team.working");
         teams.Leave(Done);
     }
@@ -523,9 +567,28 @@ public class TeamDoorView : MonoBehaviour
         if (statusLabel == null)
             return;
 
-        statusLabel.text = error.StartsWith("team.") ? AppStrings.Get(error) : error;
+        statusLabel.text = Words(error);
         statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
         statusLabel.gameObject.SetActive(true);
+    }
+
+    /// <summary>
+    /// The server's refusals in the reader's language. They came through as
+    /// raw lowercase English - "no team with that code" - on both languages.
+    /// </summary>
+    static string Words(string error)
+    {
+        if (error.StartsWith("team."))
+            return AppStrings.Get(error);
+
+        string e = error.ToLowerInvariant();
+        string key = e.Contains("no team with that code") ? "team.err.unknown"
+                   : e.Contains("team is full") ? "team.err.full"
+                   : e.Contains("already on a team") || e.Contains("leave your team") ? "team.err.already"
+                   : e.Contains("a guide, not a game") ? "team.err.guide"
+                   : null;
+
+        return key != null ? AppStrings.Get(key) : error;
     }
 
     void Say(string key)

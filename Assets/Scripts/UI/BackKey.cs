@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -64,10 +66,11 @@ public class BackKey : MonoBehaviour
             if (button == null || !button.isActiveAndEnabled || !button.interactable)
                 continue;
 
-            // A closed bottom sheet slides off the screen and stays active, so
-            // its close button kept winning: Back "closed" a sheet nobody could
-            // see while the Progress page in front of the reader stayed put.
-            if (!OnScreen(button.transform as RectTransform))
+            // Only a button a finger could press. A closed bottom sheet slides
+            // down behind the tab bar and stays active, so its close button kept
+            // winning: Back "closed" a sheet nobody could see while the Progress
+            // page in front of the reader stayed put.
+            if (!Reachable(button))
                 continue;
 
             long depth = DrawOrder(outs[i].transform);
@@ -92,16 +95,31 @@ public class BackKey : MonoBehaviour
     /// separates them, which is the one that decides who is on top.
     /// </summary>
     static readonly Vector3[] Corners = new Vector3[4];
+    static readonly List<RaycastResult> Hits = new List<RaycastResult>();
 
-    /// <summary>The overlay canvas draws in screen pixels, so world corners are screen corners.</summary>
-    static bool OnScreen(RectTransform rect)
+    /// <summary>
+    /// What a tap at the button's centre would land on. Asking the event system
+    /// rather than doing geometry means anything drawn over the button - the
+    /// tab bar, a card, a door - counts, the same way it does for a finger.
+    /// </summary>
+    static bool Reachable(Button button)
     {
-        if (rect == null)
+        EventSystem events = EventSystem.current;
+        RectTransform rect = button.transform as RectTransform;
+
+        if (events == null || rect == null)
             return true;
 
         rect.GetWorldCorners(Corners);
-        return Corners[2].x > 0f && Corners[0].x < Screen.width &&
-               Corners[2].y > 0f && Corners[0].y < Screen.height;
+        Vector2 centre = (Corners[0] + Corners[2]) * 0.5f;
+
+        if (centre.x < 0f || centre.y < 0f || centre.x > Screen.width || centre.y > Screen.height)
+            return false;
+
+        Hits.Clear();
+        events.RaycastAll(new PointerEventData(events) { position = centre }, Hits);
+
+        return Hits.Count > 0 && Hits[0].gameObject.transform.IsChildOf(button.transform);
     }
 
     static long DrawOrder(Transform node)

@@ -80,6 +80,18 @@ public class ProximityToast : MonoBehaviour
 
         ProximityAlerts.OnAlert += Show;
         AppStrings.OnLanguageChanged += Render;
+        BuildingDatabase.OnBuildingsChanged += DropIfGone;
+    }
+
+    /// <summary>
+    /// A stop that is no longer on the map is not nearby. Signing out, deleting
+    /// the account or switching trails left the last announcement standing,
+    /// naming a stop from a trail the reader no longer had open.
+    /// </summary>
+    void DropIfGone()
+    {
+        if (_marker != null && BuildingDatabase.GetById(_marker.buildingId) == null)
+            Dismiss();
     }
 
     void OnDisable()
@@ -90,6 +102,7 @@ public class ProximityToast : MonoBehaviour
 
         ProximityAlerts.OnAlert -= Show;
         AppStrings.OnLanguageChanged -= Render;
+        BuildingDatabase.OnBuildingsChanged -= DropIfGone;
     }
 
     public void Show(BuildingData marker)

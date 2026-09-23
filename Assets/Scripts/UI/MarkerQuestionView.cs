@@ -606,7 +606,9 @@ public class MarkerQuestionView : MonoBehaviour
         if (worthSaying && worthLabel != null)
             worthLabel.text = string.Format(AppStrings.Get("task.worth"), _task.points);
 
-        bool answerable = !locked && !solved;
+        // Sent for review is answered too. Check stayed live after "Sent. The
+        // trail's creator will check it", inviting a second copy for them to read.
+        bool answerable = !locked && !solved && !progress.awaitingReview;
 
         // Shown for both kinds now. It was only ever drawn for a typed answer,
         // because a tap on an option was the answer.

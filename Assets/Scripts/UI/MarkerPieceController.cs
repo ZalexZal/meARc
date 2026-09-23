@@ -208,8 +208,15 @@ public class MarkerPieceController : MonoBehaviour
                 string caption = AppStrings.Get(Verb(piece));
                 string title = piece.Title;
 
-                if (string.Equals(title, caption, StringComparison.OrdinalIgnoreCase))
-                    title = string.Empty;
+                // Where it plays instead - "youtu.be" - so the row is not a
+                // caption over an empty line, which read as a stop half loaded.
+                if (string.Equals(title, caption, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(title))
+                {
+                    title = Uri.TryCreate(piece.path ?? string.Empty, UriKind.Absolute, out Uri link)
+                        ? link.Host.Replace("www.", string.Empty)
+                        : string.Empty;
+                }
 
                 _rows[i].Bind(audio ? audioIcon : videoIcon, caption, title,
                               _played.Contains(Key(piece)));
@@ -232,12 +239,45 @@ public class MarkerPieceController : MonoBehaviour
 
     // ------------------------------------------------------------------- pages
 
+    static readonly string[] VideoFiles = { ".mp4", ".webm", ".mov", ".m4v", ".m3u8" };
+
+    static bool IsWebPage(MarkerMedia piece)
+    {
+        if (piece == null || string.IsNullOrWhiteSpace(piece.path) || piece.Kind == MarkerMediaKind.Audio)
+            return false;
+
+        if (!Uri.TryCreate(piece.path.Trim(), UriKind.Absolute, out Uri link) ||
+            (link.Scheme != "http" && link.Scheme != "https"))
+            return false;
+
+        string file = link.AbsolutePath.ToLowerInvariant();
+
+        for (int i = 0; i < VideoFiles.Length; i++)
+        {
+            if (file.EndsWith(VideoFiles[i]))
+                return false;
+        }
+
+        // Our own storage holds files; anything uploaded plays in the app.
+        return !link.AbsolutePath.Contains("/storage/v1/object/");
+    }
+
     public void Open(int index)
     {
         if (_marker == null)
             return;
 
         bool isQuestion = index >= _media.Count;
+
+        // A link to a page, not to a file - YouTube, Vimeo. The in-app player can
+        // only play a file, and said "Couldn't play that" for the very links the
+        // website's editor asks for. Those open where they play.
+        if (!isQuestion && IsWebPage(_media[index]))
+        {
+            _played.Add(Key(_media[index]));
+            Application.OpenURL(_media[index].path.Trim());
+            return;
+        }
 
         Set(overview, false);
         Set(page, true);

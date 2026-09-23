@@ -540,7 +540,7 @@ public class SupabaseAuth : MonoBehaviour
             _working = true;
 
             using (UnityWebRequest request =
-                   Post(config.Endpoint("/auth/v1/logout"), "{}", AccessToken))
+                   Post(config.Endpoint("/auth/v1/logout?scope=local"), "{}", AccessToken))
             {
                 yield return request.SendWebRequest();
                 // A failed logout is not worth blocking on. The token is being

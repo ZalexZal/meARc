@@ -480,6 +480,7 @@ public class MediaPlayerView : MonoBehaviour
             if (_audio.isPlaying)
             {
                 _audio.Pause();
+                _audioRunning = false;
                 SetPlayIcon(false);
                 return;
             }
@@ -488,6 +489,7 @@ public class MediaPlayerView : MonoBehaviour
                 return;   // still loading; the notice already says so
 
             _audio.Play();
+            _audioRunning = true;
             SetPlayIcon(true);
             return;
         }
@@ -517,6 +519,7 @@ public class MediaPlayerView : MonoBehaviour
         if (_audio != null && _audio.isPlaying)
             _audio.Pause();
 
+        _audioRunning = false;
         SetPlayIcon(false);
     }
 
@@ -536,6 +539,8 @@ public class MediaPlayerView : MonoBehaviour
         Debug.LogWarning("[Media] " + message);
         Fail("media.failed");
     }
+
+    bool _audioRunning;
 
     void HandleFinished(VideoPlayer source)
     {
@@ -564,6 +569,18 @@ public class MediaPlayerView : MonoBehaviour
         {
             if (_audio == null || _audio.clip == null)
                 return;
+
+            // An AudioSource has no "finished" event the way a VideoPlayer has
+            // loopPointReached. It just stops and rewinds, and the button stayed
+            // on pause over a clip that had ended.
+            if (_audioRunning && !_audio.isPlaying && _audio.time <= 0f)
+            {
+                _audioRunning = false;
+                SetPlayIcon(false);
+                SetProgress(1f);
+                UpdateTime(_audio.clip.length);
+                return;
+            }
 
             at = _audio.time;
             length = _audio.clip.length;
@@ -654,7 +671,11 @@ public class MediaPlayerView : MonoBehaviour
         if (timeLabel == null)
             return;
 
-        double length = _player != null ? _player.length : 0d;
+        // The clip's own length when it is sound. This read the video player
+        // only, so every audio piece said "0:00" for how long it was.
+        double length = _hearing
+            ? (_audio != null && _audio.clip != null ? _audio.clip.length : 0d)
+            : (_player != null ? _player.length : 0d);
 
         // Falls back to the length the portal recorded, so the reader sees how long
         // a piece is before it has been prepared.

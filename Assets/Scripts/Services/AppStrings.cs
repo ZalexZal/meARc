@@ -226,6 +226,8 @@ public static class AppStrings
         { "team.invite", "Team code" },
         { "team.inviteHint", "Give this to the people walking with you. It is not the trail code." },
         { "team.leave", "Leave the team" },
+        { "team.leaveConfirm", "Tap again to leave" },
+        { "team.leaveLast", "Tap again: the team and its {0} points will be deleted" },
         { "team.you", "(you)" },
         { "team.account", "This trail keeps a score" },
         { "team.accountBody", "A trail with points and a leaderboard needs an account, so the score stays yours. It takes a moment, and nothing you have walked is lost." },
@@ -259,6 +261,13 @@ public static class AppStrings
         { "account.mergeWarning", "Signing in to an account you already have does not carry over what you walked on this phone." },
         { "account.working", "One moment\u2026" },
         { "account.needBoth", "Fill in both an email and a password." },
+        { "account.shortPassword", "The password needs to be at least 8 characters." },
+        { "team.err.unknown", "No team has that code. Check it with whoever made the team." },
+        { "team.err.full", "That team is full." },
+        { "team.err.already", "You are already on a team for this trail. Leave it first." },
+        { "team.err.guide", "This trail has no teams." },
+        { "account.badLogin", "Wrong email or password." },
+        { "account.taken", "There is already an account with that email. Try signing in." },
         { "auth.failed", "That did not go through. Try again." },
         { "auth.noSession", "No connection to the server yet." },
         { "settings.appearance", "Appearance" },
@@ -276,8 +285,8 @@ public static class AppStrings
         { "settings.version", "Version {0}" },
         { "settings.back", "Back" },
 
-        { "sub.sources.body", "Marker text is written by hand, one entry at a time. Where a fact comes from a published source it is credited here." },
-        { "sub.about.body", "Trails in augmented reality: markers left in real places, for other people to find." },
+        { "sub.sources.body", "Map: © Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors.\n\nEvery trail, stop, photo and recording is made by the person who created that trail, and belongs to them. Report anything that should not be there from the stop itself.\n\nType: Inter, by Rasmus Andersson, under the SIL Open Font License." },
+        { "sub.about.body", "AR Trail is a treasure hunt in your city: find the stops, answer the questions, beat the other teams.\n\nMade by Alexander Zamov in Yambol. Questions and requests: zalex8623@gmail.com.\n\nTrails are made on the website, artrails.netlify.app." },
 
         { "unit.metres", "{0} m" },
         { "unit.kilometres", "{0} km" },
@@ -335,8 +344,8 @@ public static class AppStrings
 
         { "mode.guide", "Guided" },
         { "mode.freefall", "Freefall" },
-        { "mode.ctf", "Capture the flag" },
-        { "mode.educational", "Questions" },
+        { "mode.ctf", "Competition" },
+        { "mode.educational", "Educational" },
 
         // ------------------------------------------------- inside a marker
 
@@ -427,7 +436,7 @@ public static class AppStrings
         { "badge.guided", "Guided walker" },
         { "badge.guided.rule", "Finish a guided trail." },
         { "badge.flag_runner", "Flag runner" },
-        { "badge.flag_runner.rule", "Finish a Capture-the-flag trail with your team." },
+        { "badge.flag_runner.rule", "Finish a Competition trail with your team." },
         { "badge.free_roamer", "Free roamer" },
         { "badge.free_roamer.rule", "Finish a Freefall trail, where the stops can be taken in any order." },
         { "badge.scholar", "Scholar" },
@@ -648,6 +657,8 @@ public static class AppStrings
         { "team.invite", "Код на отбора" },
         { "team.inviteHint", "Дай го на хората, с които вървиш. Не е кодът на маршрута." },
         { "team.leave", "Напусни отбора" },
+        { "team.leaveConfirm", "Натисни пак, за да напуснеш" },
+        { "team.leaveLast", "Натисни пак: отборът и неговите {0} точки ще бъдат изтрити" },
         { "team.you", "(ти)" },
         { "team.account", "Този маршрут води резултат" },
         { "team.accountBody", "Маршрут с точки и класиране иска профил, за да остане резултатът твой. Отнема момент и нищо извървяно не се губи." },
@@ -681,6 +692,13 @@ public static class AppStrings
         { "account.mergeWarning", "Влизането в профил, който вече имаш, не пренася извървяното на този телефон." },
         { "account.working", "Момент\u2026" },
         { "account.needBoth", "Попълни и имейл, и парола." },
+        { "team.err.unknown", "Няма отбор с този код. Провери го с човека, който е направил отбора." },
+        { "team.err.full", "Този отбор е пълен." },
+        { "team.err.already", "Вече си в отбор в този маршрут. Първо го напусни." },
+        { "team.err.guide", "Този маршрут няма отбори." },
+        { "account.shortPassword", "Паролата трябва да е поне 8 знака." },
+        { "account.badLogin", "Грешен имейл или парола." },
+        { "account.taken", "Вече има профил с този имейл. Опитай да влезеш." },
         { "auth.failed", "Не се получи. Опитай пак." },
         { "auth.noSession", "Още няма връзка със сървъра." },
         { "settings.appearance", "Външен вид" },
@@ -698,8 +716,8 @@ public static class AppStrings
         { "settings.version", "Версия {0}" },
         { "settings.back", "Назад" },
 
-        { "sub.sources.body", "Текстовете на маркерите са написани ръчно, запис по запис. Когато даден факт идва от публикуван източник, той е посочен тук." },
-        { "sub.about.body", "Маршрути с добавена реалност: маркери, оставени на истински места, за да ги открият други." },
+        { "sub.sources.body", "Карта: © Stadia Maps, © OpenMapTiles, © сътрудниците на OpenStreetMap.\n\nВсеки маршрут, спирка, снимка и запис е създаден от автора на маршрута и е негов. Ако нещо не бива да е там, докладвайте го от самата спирка.\n\nШрифт: Inter от Rasmus Andersson, под лиценза SIL Open Font License." },
+        { "sub.about.body", "AR Trail е съкровищен лов във вашия град: намерете спирките, отговорете на въпросите, изпреварете другите отбори.\n\nСъздаден от Александър Замов в Ямбол. Въпроси и молби: zalex8623@gmail.com.\n\nМаршрутите се правят в сайта artrails.netlify.app." },
 
         { "unit.metres", "{0} м" },
         { "unit.kilometres", "{0} км" },
@@ -755,10 +773,10 @@ public static class AppStrings
         { "code.failed", "Сървърът не отговаря. Опитайте пак." },
         { "code.needsAccount", "Влизане…" },
 
-        { "mode.guide", "С водач" },
+        { "mode.guide", "Воден" },
         { "mode.freefall", "Свободен" },
-        { "mode.ctf", "Надпревара" },
-        { "mode.educational", "Въпроси" },
+        { "mode.ctf", "Състезание" },
+        { "mode.educational", "Учебен" },
 
         // ------------------------------------------------- inside a marker
 
@@ -849,7 +867,7 @@ public static class AppStrings
         { "badge.guided", "Воден път" },
         { "badge.guided.rule", "Завърши воден маршрут." },
         { "badge.flag_runner", "Флагоносец" },
-        { "badge.flag_runner.rule", "Завърши маршрут „Капитулирай флага“ с отбора си." },
+        { "badge.flag_runner.rule", "Завърши маршрут тип „Състезание“ с отбора си." },
         { "badge.free_roamer", "Свободен скитник" },
         { "badge.free_roamer.rule", "Завърши маршрут „Свободно падане“, където спирките са в произволен ред." },
         { "badge.scholar", "Отличник" },

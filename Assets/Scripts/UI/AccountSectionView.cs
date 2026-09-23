@@ -126,6 +126,15 @@ public class AccountSectionView : MonoBehaviour
         if (!Complete(email, password))
             return;
 
+        // Eight, the same as the website. The server takes six, so the app
+        // let people make a password the website would then call too short.
+        if (password.Length < 8)
+        {
+            Say("account.shortPassword");
+            statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+            return;
+        }
+
         SupabaseAuth auth = SupabaseAuth.Instance;
         if (auth == null)
             return;
@@ -216,10 +225,15 @@ public class AccountSectionView : MonoBehaviour
             return;
         }
 
-        // A key if it is one of ours, otherwise the server's sentence as written.
-        statusLabel.text = error.StartsWith("auth.") || error.StartsWith("account.")
-            ? AppStrings.Get(error)
-            : error;
+        // A key if it is one of ours; the server's commonest English sentences
+        // in the reader's language; anything rarer as the server wrote it.
+        string key = error.StartsWith("auth.") || error.StartsWith("account.") ? error
+                   : error.IndexOf("Invalid login", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.badLogin"
+                   : error.IndexOf("already", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.taken"
+                   : error.IndexOf("at least", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.shortPassword"
+                   : null;
+
+        statusLabel.text = key != null ? AppStrings.Get(key) : error;
 
         statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
         statusLabel.gameObject.SetActive(true);

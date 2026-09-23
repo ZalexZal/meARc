@@ -31,6 +31,13 @@ public class TermsService : MonoBehaviour
     /// </summary>
     const string RecordedKey = "terms_recorded_version";
 
+    /// <summary>
+    /// The version accepted on this phone by anybody, unscoped. A guest made by
+    /// signing out is the same person holding the same phone a second later;
+    /// asking them again was the terms screen people met twice.
+    /// </summary>
+    const string DeviceKey = "terms_device_version";
+
     public static TermsService Instance { get; private set; }
 
     public static event Action OnAcceptedChanged;
@@ -130,6 +137,13 @@ public class TermsService : MonoBehaviour
         }
 
         _askedFor = auth.UserId;
+
+        if (auth.IsAnonymous && PlayerPrefs.GetString(DeviceKey, string.Empty) == RequiredVersion)
+        {
+            Accept();
+            return;
+        }
+
         StartCoroutine(ReadRecord(auth.UserId));
     }
 
@@ -155,6 +169,7 @@ public class TermsService : MonoBehaviour
             if (same && request.result == UnityWebRequest.Result.Success &&
                 request.downloadHandler.text.Contains(wanted))
             {
+                PlayerPrefs.SetString(DeviceKey, RequiredVersion);
                 PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
                 PlayerPrefs.SetString(AccountScope.Key(RecordedKey), RequiredVersion);
                 PlayerPrefs.Save();
@@ -169,6 +184,7 @@ public class TermsService : MonoBehaviour
 
     public void Accept()
     {
+        PlayerPrefs.SetString(DeviceKey, RequiredVersion);
         PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
         PlayerPrefs.Save();
 

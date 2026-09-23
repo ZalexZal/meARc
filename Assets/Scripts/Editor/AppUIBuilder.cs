@@ -4364,6 +4364,15 @@ const float ReferenceWidth = 1080f;
                                               out TextMeshProUGUI placeholder);
         view.openPlaceholder = placeholder;
 
+        // The input fill every other form uses. In Surface it was the colour of
+        // the sheet under it, so the box read as a loose line of grey text.
+        ThemedElement openFill = view.openField.GetComponent<ThemedElement>();
+        if (openFill != null)
+        {
+            openFill.role = ThemeRole.SurfaceAlt;
+            openFill.Apply();
+        }
+
         open.gameObject.SetActive(false);
 
         // --- and sending it ---
