@@ -235,6 +235,12 @@ const float ReferenceWidth = 1080f;
         EditorUtility.SetDirty(mapTab);
         EditorUtility.SetDirty(browseTab);
 
+        if (info.capture != null)
+        {
+            info.capture.tabs = tabs;
+            EditorUtility.SetDirty(info.capture);
+        }
+
         WireTapInput(cameraPanel, info);
 
         // Last, so the walkthrough covers the nav bar too. A first run with a live
@@ -355,6 +361,10 @@ const float ReferenceWidth = 1080f;
         go.AddComponent<SupabaseAuth>();
         go.AddComponent<TrailService>();
         go.AddComponent<TermsService>();
+
+        // Under 14: whether a parent has agreed. The server enforces it; this
+        // is what lets the app show the right door instead of a refusal.
+        go.AddComponent<ConsentService>();
 
         // Phase 2.5. Harmless before the migration is applied: every check comes
         // back Unavailable, which the sheet shows as "couldn't check that".
@@ -687,6 +697,12 @@ const float ReferenceWidth = 1080f;
                       out controller.reportLabel);
         controller.reportButton = report;
 
+        // In place of Hide and Report, on a stop the reader made or edits.
+        OutlineButton(actions, "MoveButton", "capture.move", out Button move,
+                      out controller.moveLabel);
+        controller.moveButton = move;
+        move.gameObject.SetActive(false);
+
         RectTransform close = UIFactory.Rect("CloseButton", sheet);
         UIFactory.Corner(close, new Vector2(1f, 1f), new Vector2(Tap, Tap),
                          new Vector2(-24f, -6f));
@@ -1012,6 +1028,17 @@ const float ReferenceWidth = 1080f;
                                           TextAlignmentOptions.Left);
         UIFactory.Size(view.statusLabel.gameObject, 52f);
         view.statusLabel.gameObject.SetActive(false);
+
+        // Blocking sits with reporting because it answers the same moment:
+        // something here should not be. Red ink, because it takes you out of
+        // their trails; the first tap only says so.
+        view.blockButton = FullWidthButton(card, "Block", "block.creator",
+                                           ThemeRole.SurfaceAlt, ThemeRole.StatusPoor);
+        view.blockLabel = view.blockButton.GetComponentInChildren<TextMeshProUGUI>();
+        view.blockLabel.textWrappingMode = TextWrappingModes.Normal;
+        view.blockLabel.fontSizeMax = Body;
+        view.blockLabel.enableAutoSizing = true;
+        view.blockLabel.fontSizeMin = Secondary;
 
         // Not Surface: the card's own face is Surface, and a button the same
         // colour as the thing it sits on is a button nobody can see.
@@ -1649,6 +1676,17 @@ const float ReferenceWidth = 1080f;
                                                         60f, 180f);
         dockDistanceSize.flexibleWidth = 0f;
 
+        // Google's notice before the first Geospatial session. Over everything
+        // else on the tab, because nothing behind it is running yet.
+        BuildArNotice(safe, controller);
+
+        // In the dock's place while a stop is being moved: the same spot at the
+        // bottom of the camera, where a thumb already is.
+        info.capture = BuildCaptureBar(dockArea);
+        info.capture.hideWhileOpen = new[] { dock.gameObject, controller.radar != null
+                                                 ? controller.radar.gameObject : null };
+        EditorUtility.SetDirty(info);
+
         // Siblings render in hierarchy order, so the sheet is raised last - otherwise
         // the dock sits on top of an open nearby list and its scrim covers nothing.
         if (controller.nearbyPanel != null)
@@ -1661,6 +1699,111 @@ const float ReferenceWidth = 1080f;
 
         EditorUtility.SetDirty(controller);
         return controller;
+    }
+
+    static void BuildArNotice(RectTransform parent, CameraTabController controller)
+    {
+        RectTransform card = UIFactory.Rect("ArNotice", parent);
+        card.anchorMin = new Vector2(0f, 0.5f);
+        card.anchorMax = new Vector2(1f, 0.5f);
+        card.pivot = new Vector2(0.5f, 0.5f);
+        card.sizeDelta = new Vector2(-Margin * 2f, 0f);
+        UIFactory.Card(card, 30f, 16f);
+        Outline(card);
+        ContentSizeFitter fit = card.gameObject.AddComponent<ContentSizeFitter>();
+        fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        UIFactory.Text("Title", card, Title, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "arnotice.title", FontStyles.Bold);
+
+        TextMeshProUGUI body = UIFactory.Text("Body", card, Secondary, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.TopLeft, "arnotice.body");
+        body.textWrappingMode = TextWrappingModes.Normal;
+
+        controller.arNoticeContinue = FullWidthButton(card, "Continue", "arnotice.continue",
+                                                      ThemeRole.Accent, ThemeRole.OnAccent);
+        controller.arNoticeLearnMore = FullWidthButton(card, "LearnMore", "arnotice.learnMore",
+                                                       ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        controller.arNotice = card.gameObject;
+        card.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Capture mode's bar: which stop, how far it has moved, a pad of four
+    /// one-metre steps, "where I'm standing", and Save / Cancel.
+    /// </summary>
+    static CaptureMode BuildCaptureBar(Transform parent)
+    {
+        RectTransform card = UIFactory.Rect("CaptureBar", parent);
+        UIFactory.Card(card, 28f, 14f);
+        Outline(card);
+
+        CaptureMode view = card.gameObject.AddComponent<CaptureMode>();
+        view.spawner = Object.FindFirstObjectByType<MarkerSpawner>(FindObjectsInactive.Include);
+
+        if (view.spawner == null)
+            _notes.Add("No MarkerSpawner found, so capture mode cannot preview a move.");
+
+        view.titleLabel = UIFactory.Text("Title", card, Body, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        view.titleLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        view.titleLabel.overflowMode = TextOverflowModes.Ellipsis;
+        UIFactory.Size(view.titleLabel.gameObject, 52f);
+
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextSecondary,
+                                          TextAlignmentOptions.TopLeft, null);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 96f);
+
+        TextMeshProUGUI hint = UIFactory.Text("Hint", card, Caption, ThemeRole.TextMuted,
+                                              TextAlignmentOptions.Left, "capture.hint");
+        hint.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.FitsItsText(hint);
+
+        RectTransform pad = UIFactory.Rect("Pad", card);
+        UIFactory.Size(pad.gameObject, Tap);
+        UIFactory.HorizontalStack(pad, 12f, true);
+
+        view.leftButton = PadButton(pad, "Left", "←");
+        view.backButton = PadButton(pad, "Back", "↓");
+        view.forwardButton = PadButton(pad, "Forward", "↑");
+        view.rightButton = PadButton(pad, "Right", "→");
+
+        view.hereButton = FullWidthButton(card, "Here", "capture.here",
+                                          ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
+        RectTransform finish = UIFactory.Rect("Finish", card);
+        UIFactory.Size(finish.gameObject, Tap);
+        UIFactory.HorizontalStack(finish, 12f, true);
+
+        view.cancelButton = FullWidthButton(finish, "Cancel", "capture.cancel",
+                                            ThemeRole.SurfaceAlt, ThemeRole.TextSecondary);
+        UIFactory.Flexible(view.cancelButton.gameObject);
+        view.cancelButton.gameObject.AddComponent<WayOut>();
+
+        view.saveButton = FullWidthButton(finish, "Save", "capture.save",
+                                          ThemeRole.Accent, ThemeRole.OnAccent);
+        UIFactory.Flexible(view.saveButton.gameObject);
+
+        card.gameObject.SetActive(false);
+        return view;
+    }
+
+    static Button PadButton(Transform parent, string name, string glyph)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        UIFactory.Size(rt.gameObject, Tap);
+        UIFactory.Flexible(rt.gameObject);
+
+        Button button = UIFactory.Button(rt, ThemeRole.SurfaceAlt, 1f, UIShape.Pill);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", rt, Title, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Center, null, FontStyles.Bold);
+        label.text = glyph;
+        UIFactory.Stretch(label.rectTransform);
+
+        return button;
     }
 
     static void BuildWarningBanner(RectTransform parent, CameraTabController controller)
@@ -3040,6 +3183,8 @@ const float ReferenceWidth = 1080f;
         // rows because it is the same kind of thing: a line you press.
         controller.unhideAllButton = ActionRow(privacy, "settings.unhideAll", ThemeRole.Accent,
                                                out controller.unhideAllLabel);
+        Divider(privacy);
+        controller.blockedButton = HelpRow(privacy, "settings.blocked", out TextMeshProUGUI _);
 
         controller.notificationsLabel = SectionLabel(content, "settings.notifications");
         RectTransform notifications = UIFactory.Rect("NotificationsCard", content);
@@ -3089,11 +3234,12 @@ const float ReferenceWidth = 1080f;
         controller.aboutPage = SubPage(rt, "AboutPage", "settings.about", "sub.about.body");
         controller.badgesPage = BuildBadgesPage(rt);
         controller.securityPage = BuildSecurityPage(rt);
+        controller.blockedPage = BuildBlockedPage(rt);
 
         navigator.pages = new List<GameObject>
         {
             controller.sourcesPage, controller.aboutPage,
-            controller.badgesPage, controller.securityPage
+            controller.badgesPage, controller.securityPage, controller.blockedPage
         };
 
         RectTransform backRect = UIFactory.Rect("BackButton", rt);
@@ -3457,6 +3603,63 @@ const float ReferenceWidth = 1080f;
                                           TextAlignmentOptions.Left, null);
         view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
         UIFactory.ReservesButGrows(view.statusLabel.gameObject, 96f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        rt.gameObject.SetActive(false);
+        return rt.gameObject;
+    }
+
+    /// <summary>The people this reader blocked: one row each, with its way back.</summary>
+    static GameObject BuildBlockedPage(Transform parent)
+    {
+        RectTransform rt = PageFrame(parent, "BlockedPage", out RectTransform content);
+        BlockedListView view = rt.gameObject.AddComponent<BlockedListView>();
+
+        TextMeshProUGUI title = UIFactory.Text("Title", content, Title, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, "blocked.title",
+                                               FontStyles.Bold);
+        UIFactory.Size(title.gameObject, 84f);
+
+        TextMeshProUGUI lede = UIFactory.Text("Lede", content, Secondary, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.TopLeft, "blocked.lede");
+        lede.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.FitsItsText(lede);
+
+        RectTransform card = UIFactory.Rect("List", content);
+        UIFactory.Card(card, 34f, 0f);
+
+        view.emptyLabel = UIFactory.Text("Empty", card, Body, ThemeRole.TextMuted,
+                                         TextAlignmentOptions.Left, "blocked.none");
+        UIFactory.Size(view.emptyLabel.gameObject, Tap);
+
+        for (int i = 0; i < BlockedListView.MaxRows; i++)
+        {
+            RectTransform row = UIFactory.Rect("Row" + i, card);
+            UIFactory.Size(row.gameObject, Tap);
+            UIFactory.HorizontalStack(row, 18f, false);
+
+            view.rowLabels[i] = UIFactory.Text("Label", row, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, null);
+            UIFactory.Flexible(view.rowLabels[i].gameObject);
+            view.rowLabels[i].textWrappingMode = TextWrappingModes.NoWrap;
+            view.rowLabels[i].overflowMode = TextOverflowModes.Ellipsis;
+
+            RectTransform undo = UIFactory.Rect("Unblock", row);
+            UIFactory.Size(undo.gameObject, Tap, 220f).flexibleWidth = 0f;
+            view.unblockButtons[i] = UIFactory.Button(undo, ThemeRole.Surface, 0f);
+            TextMeshProUGUI undoLabel = UIFactory.Text("Label", undo, Body, ThemeRole.Accent,
+                                                       TextAlignmentOptions.Right,
+                                                       "blocked.unblock", FontStyles.Bold);
+            UIFactory.Stretch(undoLabel.rectTransform);
+
+            view.rows[i] = row.gameObject;
+            row.gameObject.SetActive(false);
+        }
+
+        view.statusLabel = UIFactory.Text("Status", content, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left, null);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 56f);
         view.statusLabel.gameObject.SetActive(false);
 
         rt.gameObject.SetActive(false);
@@ -4855,6 +5058,8 @@ const float ReferenceWidth = 1080f;
         flow.teamPanel = BuildTeamDoor(holder, flow, out TeamDoorView teamDoor);
         flow.accountPanel = BuildAccountDoor(holder, flow);
         flow.readyPanel = BuildReadyDoor(holder, flow);
+        flow.consentPanel = BuildConsentDoor(holder, flow, out ConsentDoorView consentView);
+        flow.consent = consentView;
         flow.coach = BuildCoach(holder, mapChrome, mapView);
         holder.gameObject.AddComponent<JoinLinks>();
 
@@ -5085,6 +5290,112 @@ const float ReferenceWidth = 1080f;
     /// Not dressed up. A non-skippable screen nobody reads is a dark pattern with
     /// extra steps, and the answer to that is short sentences, not illustration.
     /// </summary>
+    /// <summary>The height of the age question under the terms, pills and all.</summary>
+    const float AgeBlock = 200f;
+
+    static Button AgePill(Transform parent, string name, string key, out Image fill,
+                          out TextMeshProUGUI label)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        UIFactory.Size(rt.gameObject, Tap);
+        UIFactory.Flexible(rt.gameObject);
+
+        // Plain rather than themed: AgeChoiceView paints the chosen one in the
+        // accent, and a themed image would repaint it grey on the next theme swap.
+        fill = UIFactory.Plain(rt, ThemeManager.Get(ThemeRole.SurfaceAlt), UIShape.Pill);
+        Button button = rt.gameObject.AddComponent<Button>();
+        button.targetGraphic = fill;
+        button.transition = Selectable.Transition.None;
+        UIFactory.Feedback(button);
+
+        // Three to a row, and "12 или по-малко" is the longest of them: shrinks
+        // rather than wraps.
+        label = UIFactory.Text("Label", rt, Secondary, ThemeRole.TextPrimary,
+                               TextAlignmentOptions.Center, key, FontStyles.Bold);
+        UIFactory.Stretch(label.rectTransform);
+        label.enableAutoSizing = true;
+        label.fontSizeMax = Secondary;
+        label.fontSizeMin = Caption;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+
+        // AgeChoiceView colours the label with the pill - white on the chosen
+        // one. A themed label would put it back to the plain ink on the next
+        // theme change and leave dark text on the accent.
+        ThemedElement themed = label.GetComponent<ThemedElement>();
+        if (themed != null)
+            Object.DestroyImmediate(themed);
+
+        return button;
+    }
+
+    /// <summary>
+    /// Under 14 and no parent has agreed: ask for a parent's email, then wait.
+    /// </summary>
+    static GameObject BuildConsentDoor(Transform parent, DoorFlow flow, out ConsentDoorView made)
+    {
+        RectTransform panel = Door(parent, "Consent", plain: false, inner: out RectTransform inner);
+
+        ConsentDoorView view = panel.gameObject.AddComponent<ConsentDoorView>();
+        made = view;
+
+        RectTransform card = Card(inner, "Card", 22f);
+
+        // Typed into, so it moves out of the keyboard's way like the code card.
+        KeyboardAvoider avoider = card.gameObject.AddComponent<KeyboardAvoider>();
+        avoider.target = card;
+
+        RectTransform head = UIFactory.Rect("Head", card);
+        UIFactory.VerticalStack(head, 8f, false);
+
+        UIFactory.Text("Title", head, Display, ThemeRole.TextPrimary,
+                       TextAlignmentOptions.TopLeft, "consent.title", FontStyles.Bold);
+
+        UIFactory.Text("Body", head, Secondary, ThemeRole.TextSecondary,
+                       TextAlignmentOptions.TopLeft, "consent.body");
+
+        // --- asking
+        RectTransform ask = UIFactory.Rect("Ask", card);
+        UIFactory.VerticalStack(ask, 14f, false);
+        view.askGroup = ask.gameObject;
+
+        view.emailField = Field(ask, "ParentEmail", "consent.emailHint");
+        view.emailField.contentType = TMP_InputField.ContentType.EmailAddress;
+
+        view.sendButton = FullWidthButton(ask, "Send", "consent.send",
+                                          ThemeRole.Accent, ThemeRole.OnAccent);
+
+        // --- waiting
+        RectTransform wait = UIFactory.Rect("Wait", card);
+        UIFactory.VerticalStack(wait, 14f, false);
+        view.waitGroup = wait.gameObject;
+
+        view.waitLabel = UIFactory.Text("Waiting", wait, Body, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.TopLeft, null);
+        view.waitLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.FitsItsText(view.waitLabel);
+
+        view.checkButton = FullWidthButton(wait, "Check", "consent.check",
+                                           ThemeRole.Accent, ThemeRole.OnAccent);
+        view.changeButton = FullWidthButton(wait, "Change", "consent.change",
+                                            ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+        wait.gameObject.SetActive(false);
+
+        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left, null);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 56f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        // The two ways on that need nobody's permission: the demo, which sends
+        // nothing anywhere, and correcting the age answer.
+        QuietAction(card, "Demo", "consent.demo", flow.StartDemo, "consent demo");
+        Button age = QuietAction(card, "Age", "consent.age", flow.ReaskAge, "re-ask age");
+        age.gameObject.AddComponent<WayOut>();
+
+        panel.gameObject.SetActive(false);
+        return panel.gameObject;
+    }
+
     static GameObject BuildTerms(Transform parent, DoorFlow flow)
     {
         RectTransform panel = Door(parent, "Terms", plain: true, inner: out RectTransform inner);
@@ -5096,7 +5407,7 @@ const float ReferenceWidth = 1080f;
 
         RectTransform scrollHolder = UIFactory.Rect("Body", inner);
         UIFactory.Stretch(scrollHolder);
-        scrollHolder.offsetMin = new Vector2(0f, Tap + 34f);
+        scrollHolder.offsetMin = new Vector2(0f, Tap + 34f + AgeBlock);
         scrollHolder.offsetMax = new Vector2(0f, -124f);
 
         RectTransform content = UIFactory.ScrollList("Scroll", scrollHolder, 30f);
@@ -5123,6 +5434,36 @@ const float ReferenceWidth = 1080f;
 
         UIFactory.Text("Footer", content, Caption, ThemeRole.TextMuted,
                        TextAlignmentOptions.TopLeft, "terms.footer");
+
+        // How old - asked here because it decides what the terms allow. Two
+        // pills, nothing preselected; Accept will not go through without one.
+        RectTransform age = UIFactory.Rect("Age", inner);
+        UIFactory.BottomStretch(age, AgeBlock - 16f, Tap + 16f);
+        UIFactory.VerticalStack(age, 10f, false);
+        AgeChoiceView ageView = age.gameObject.AddComponent<AgeChoiceView>();
+        flow.termsAge = ageView;
+
+        TextMeshProUGUI ageQuestion = UIFactory.Text("Question", age, Body, ThemeRole.TextPrimary,
+                                                     TextAlignmentOptions.Left, "age.question",
+                                                     FontStyles.Bold);
+        UIFactory.Size(ageQuestion.gameObject, 52f);
+
+        RectTransform pills = UIFactory.Rect("Pills", age);
+        UIFactory.Size(pills.gameObject, Tap);
+        UIFactory.HorizontalStack(pills, 14f, true);
+
+        ageView.olderButton = AgePill(pills, "Older", "age.older", out ageView.olderFill,
+                                      out ageView.olderLabel);
+        ageView.thirteenButton = AgePill(pills, "Thirteen", "age.thirteen", out ageView.thirteenFill,
+                                         out ageView.thirteenLabel);
+        ageView.youngerButton = AgePill(pills, "Younger", "age.younger", out ageView.youngerFill,
+                                        out ageView.youngerLabel);
+
+        // No key: the view writes "choose one" or "13 and older" as it needs.
+        ageView.nagLabel = UIFactory.Text("Nag", age, Caption, ThemeRole.StatusPoor,
+                                          TextAlignmentOptions.Left, null);
+        UIFactory.Size(ageView.nagLabel.gameObject, 40f);
+        ageView.nagLabel.gameObject.SetActive(false);
 
         RectTransform accept = UIFactory.Rect("Accept", inner);
         UIFactory.BottomStretch(accept, Tap);
@@ -5483,6 +5824,17 @@ const float ReferenceWidth = 1080f;
             UIFactory.Size(view.boardPoints[i].gameObject, 56f, 150f).flexibleWidth = 0f;
             view.boardPoints[i].textWrappingMode = TextWrappingModes.NoWrap;
 
+            // The whole row is the target: a team name is what somebody would
+            // report, and it is the widest thing on the line. A clear image
+            // rather than TapFeedback, which would grey your own row out when
+            // DrawBoard turns its button off.
+            Image hit = row.gameObject.AddComponent<Image>();
+            hit.color = Color.clear;
+            Button tap = row.gameObject.AddComponent<Button>();
+            tap.targetGraphic = hit;
+            tap.transition = Selectable.Transition.None;
+            view.boardButtons[i] = tap;
+
             view.boardRows[i] = row;
             row.gameObject.SetActive(false);
         }
@@ -5554,6 +5906,10 @@ const float ReferenceWidth = 1080f;
 
         view.closeButton = QuietAction(card, "Close", "team.close", flow.Close, "close team");
         view.closeButton.gameObject.AddComponent<WayOut>();
+
+        // Its own chooser, built last so it draws over the card. The stop sheet's
+        // one lives under the doors and would open behind this.
+        view.reportSheet = BuildReportChooser(panel);
 
         return panel.gameObject;
     }

@@ -113,12 +113,79 @@ public class AccountSectionView : MonoBehaviour
         }
 
         SetBusy(_busy);
+        DrawPending();
+    }
+
+    /// <summary>
+    /// Waiting on a confirmation link. The two buttons change job rather than
+    /// the screen growing new ones: Create becomes "I've opened the link", and
+    /// Sign in becomes "Send it again". Both go back once the account is real.
+    /// </summary>
+    bool Pending
+    {
+        get
+        {
+            SupabaseAuth auth = SupabaseAuth.Instance;
+            return auth != null && auth.IsAnonymous && !string.IsNullOrEmpty(auth.PendingEmail);
+        }
+    }
+
+    static void Relabel(Button button, string key)
+    {
+        LocalizedLabel label = button != null ? button.GetComponentInChildren<LocalizedLabel>(true) : null;
+
+        if (label != null && label.key != key)
+        {
+            label.key = key;
+            label.Apply();
+        }
+    }
+
+    void DrawPending()
+    {
+        bool pending = Pending;
+
+        Relabel(signUpButton, pending ? "account.confirmedIt" : "account.create");
+        Relabel(signInButton, pending ? "account.resend" : "account.signIn");
+
+        if (pending && !_busy && statusLabel != null)
+        {
+            statusLabel.text = string.Format(AppStrings.Get("account.checkEmail"),
+                                             SupabaseAuth.Instance.PendingEmail);
+            statusLabel.color = ThemeManager.Get(ThemeRole.StatusGood);
+            statusLabel.gameObject.SetActive(true);
+        }
+    }
+
+    /// <summary>
+    /// Back from the browser, probably from opening the link: look once,
+    /// quietly. Only a success says anything; "not yet" is already on screen.
+    /// </summary>
+    void OnApplicationFocus(bool focused)
+    {
+        if (!focused || _busy || !Pending)
+            return;
+
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        auth.StartCoroutine(auth.CheckConfirmed(result =>
+        {
+            if (result == null)
+                Done(null);
+        }));
     }
 
     void SignUp()
     {
         if (_busy)
             return;
+
+        if (Pending)
+        {
+            SetBusy(true);
+            Say("account.working");
+            SupabaseAuth.Instance.StartCoroutine(SupabaseAuth.Instance.CheckConfirmed(Done));
+            return;
+        }
 
         string email = Value(emailField);
         string password = Value(passwordField);
@@ -156,6 +223,14 @@ public class AccountSectionView : MonoBehaviour
     {
         if (_busy)
             return;
+
+        if (Pending)
+        {
+            SetBusy(true);
+            Say("account.working");
+            SupabaseAuth.Instance.StartCoroutine(SupabaseAuth.Instance.ResendConfirmation(Done));
+            return;
+        }
 
         string email = Value(emailField);
         string password = Value(passwordField);
@@ -217,6 +292,21 @@ public class AccountSectionView : MonoBehaviour
     {
         SetBusy(false);
 
+        // Not failures: the link went out, went out again, or has not been
+        // opened yet. Said in the good colour or the plain one, never the red.
+        if (error == "account.checkEmail" || error == "account.resent" || error == "account.notYet")
+        {
+            Refresh();
+            if (error != "account.checkEmail" && statusLabel != null)
+            {
+                statusLabel.text = AppStrings.Get(error);
+                statusLabel.color = ThemeManager.Get(error == "account.resent"
+                    ? ThemeRole.StatusGood : ThemeRole.StatusFair);
+                statusLabel.gameObject.SetActive(true);
+            }
+            return;
+        }
+
         if (string.IsNullOrEmpty(error))
         {
             Say(null);
@@ -231,6 +321,8 @@ public class AccountSectionView : MonoBehaviour
                    : error.IndexOf("Invalid login", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.badLogin"
                    : error.IndexOf("already", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.taken"
                    : error.IndexOf("at least", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.shortPassword"
+                   : error.IndexOf("not confirmed", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.unconfirmed"
+                   : error.IndexOf("rate limit", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.slowDown"
                    : null;
 
         statusLabel.text = key != null ? AppStrings.Get(key) : error;

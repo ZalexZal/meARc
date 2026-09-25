@@ -82,6 +82,28 @@ public class MarkerSpawner : MonoBehaviour
         BuildingDatabase.OnBuildingsChanged -= HandleBuildingsChanged;
     }
 
+    /// <summary>
+    /// The marker standing in the world for this stop, or null when there is
+    /// none - out of range, still resolving, or Earth tracking not up. Capture
+    /// mode moves it inside its anchor, whose axes are east, up and south.
+    /// </summary>
+    public Transform MarkerFor(string buildingId)
+    {
+        return buildingId != null && _placed.TryGetValue(buildingId, out Placed placed) &&
+               placed.marker != null
+            ? placed.marker.transform
+            : null;
+    }
+
+    /// <summary>
+    /// Takes one marker down so the next sync places it again, at whatever
+    /// coordinates its BuildingData now holds. Used after a stop is moved.
+    /// </summary>
+    public void Replace(string buildingId)
+    {
+        Release(buildingId);
+    }
+
     void HandleBuildingsChanged()
     {
         // A building may have been unpublished or moved, so drop everything and let

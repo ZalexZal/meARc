@@ -208,7 +208,15 @@ public class SupabaseAuth : MonoBehaviour
         string body = "{\"email\":\"" + Escape(email) + "\"," +
                       "\"password\":\"" + Escape(password) + "\"" + named + "}";
 
-        using (UnityWebRequest request = Put(config.Endpoint("/auth/v1/user"), body))
+        bool held = false;
+
+        // redirect_to decides where the confirmation link lands: the website's
+        // page that says "confirmed, go back to the app". Ignored while email
+        // confirmation is off, because then no link is sent.
+        string url = config.Endpoint("/auth/v1/user?redirect_to=" +
+                                     UnityWebRequest.EscapeURL(SiteLink.Confirmed()));
+
+        using (UnityWebRequest request = Put(url, body))
         {
             yield return request.SendWebRequest();
 
@@ -218,9 +226,21 @@ public class SupabaseAuth : MonoBehaviour
                 Fail(done, Explain(request), request);
                 yield break;
             }
+
+            // With email confirmation on, the address is not the account's yet:
+            // the server sends a link, parks the address as new_email, and the
+            // account stays anonymous until the link is opened. Reporting that
+            // as success is how somebody ends up "signed up" with nothing to
+            // sign in with.
+            UserReply reply = null;
+            try { reply = JsonUtility.FromJson<UserReply>(request.downloadHandler.text); }
+            catch (Exception) { /* an unreadable reply is treated as the old shape */ }
+
+            held = reply != null && !string.IsNullOrEmpty(reply.new_email) &&
+                   string.IsNullOrEmpty(reply.email);
         }
 
-        // Same uid, now permanent. The session catches up here.
+        // Same uid, now permanent - or still anonymous, if held above.
         yield return Refresh();
 
         if (!string.IsNullOrWhiteSpace(displayName))
@@ -228,8 +248,86 @@ public class SupabaseAuth : MonoBehaviour
 
         _working = false;
 
+        if (held)
+        {
+            PendingEmail = email;
+            if (done != null)
+                done("account.checkEmail");
+            yield break;
+        }
+
+        PendingEmail = null;
+
         if (done != null)
             done(null);
+    }
+
+    /// <summary>
+    /// An address waiting on its confirmation link, or null. Set by SignUp when
+    /// the server holds the account back; cleared once it is no longer anonymous.
+    /// </summary>
+    public string PendingEmail { get; private set; }
+
+    [Serializable]
+    class UserReply
+    {
+        public string email;
+        public string new_email;
+    }
+
+    /// <summary>
+    /// After the link has been opened: asks for a fresh token, which says
+    /// whether the account is permanent now. "account.notYet" if it is not.
+    /// </summary>
+    public IEnumerator CheckConfirmed(Action<string> done)
+    {
+        _working = true;
+        yield return Refresh();
+        _working = false;
+
+        if (IsSignedIn && !IsAnonymous)
+        {
+            PendingEmail = null;
+            if (done != null) done(null);
+        }
+        else if (done != null)
+        {
+            done("account.notYet");
+        }
+    }
+
+    /// <summary>
+    /// Sends the confirmation link again. An account made from a guest is an
+    /// email change as far as the server is concerned, so that is the kind of
+    /// link asked for; a brand-new sign-up would be "signup".
+    /// </summary>
+    public IEnumerator ResendConfirmation(Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || string.IsNullOrEmpty(PendingEmail))
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        string body = "{\"type\":\"email_change\",\"email\":\"" + Escape(PendingEmail) + "\"}";
+
+        using (UnityWebRequest request =
+               Post(config.Endpoint("/auth/v1/resend?redirect_to=" +
+                                    UnityWebRequest.EscapeURL(SiteLink.Confirmed())), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Fail(done, Explain(request), request);
+                yield break;
+            }
+        }
+
+        if (done != null)
+            done("account.resent");
     }
 
     /// <summary>

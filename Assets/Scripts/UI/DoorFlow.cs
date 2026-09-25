@@ -44,7 +44,10 @@ public class DoorFlow : MonoBehaviour
         Account,
 
         /// <summary>The end of the demo: find a trail near you, or use a code.</summary>
-        Ready
+        Ready,
+
+        /// <summary>Under 14 and no parent has agreed yet.</summary>
+        Consent
     }
 
     [Header("Screens")]
@@ -62,6 +65,13 @@ public class DoorFlow : MonoBehaviour
 
     [Tooltip("The card at the end of the demo.")]
     public GameObject readyPanel;
+
+    [Tooltip("Asks an under-14 for a parent's email, then waits for the parent.")]
+    public GameObject consentPanel;
+    public ConsentDoorView consent;
+
+    [Tooltip("The age question on the terms screen. Accept waits for an answer.")]
+    public AgeChoiceView termsAge;
 
     [Tooltip("Runs the demo. On an object that stays active, so it keeps " +
              "listening while the camera tab is up.")]
@@ -130,6 +140,7 @@ public class DoorFlow : MonoBehaviour
         Hide(teamPanel);
         Hide(accountPanel);
         Hide(readyPanel);
+        Hide(consentPanel);
     }
 
     void OnDestroy()
@@ -141,6 +152,7 @@ public class DoorFlow : MonoBehaviour
     void OnEnable()
     {
         TermsService.OnAcceptedChanged += Evaluate;
+        ConsentService.OnChanged += Evaluate;
         TrailService.OnTrailsChanged += HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged += Evaluate;
         SupabaseAuth.OnSessionChanged += AccountMaybeMade;
@@ -149,6 +161,7 @@ public class DoorFlow : MonoBehaviour
     void OnDisable()
     {
         TermsService.OnAcceptedChanged -= Evaluate;
+        ConsentService.OnChanged -= Evaluate;
         TrailService.OnTrailsChanged -= HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged -= Evaluate;
         SupabaseAuth.OnSessionChanged -= AccountMaybeMade;
@@ -193,7 +206,7 @@ public class DoorFlow : MonoBehaviour
             return;
         }
 
-        if (_wantsCode)
+        if (_wantsCode && !NeedsParent)
         {
             _wantsCode = false;
             Show(Door.Code);
@@ -212,6 +225,14 @@ public class DoorFlow : MonoBehaviour
         {
             if (Current != Door.Ready)
                 Show(Door.None);
+            return;
+        }
+
+        // Under 14, and no parent has said yes: the one door that leads anywhere
+        // is the one that asks them. Everything past it would be refused.
+        if (NeedsParent)
+        {
+            Show(Door.Consent);
             return;
         }
 
@@ -277,7 +298,22 @@ public class DoorFlow : MonoBehaviour
     public void OpenLibrary()
     {
         _dismissed = false;
-        Show(Door.Trails);
+        Show(NeedsParent ? Door.Consent : Door.Trails);
+    }
+
+    static bool NeedsParent
+    {
+        get { return ConsentService.Instance != null && ConsentService.Instance.NeedsParent; }
+    }
+
+    /// <summary>
+    /// Consent: "Change my answer". Back to the terms, where the age question
+    /// is asked again. Self-declared either way; this only makes a slip fixable.
+    /// </summary>
+    public void ReaskAge()
+    {
+        _reopened = false;
+        Show(Door.Terms);
     }
 
     /// <summary>
@@ -290,20 +326,38 @@ public class DoorFlow : MonoBehaviour
         PassWelcome();
     }
 
-    /// <summary>Terms: "I accept".</summary>
+    /// <summary>Terms: "I accept". Only with the age question answered.</summary>
     public void AcceptTerms()
     {
+        bool? young = termsAge != null ? termsAge.Chosen : false;
+
+        // 12 or younger, or nothing chosen: the terms stay unaccepted and the
+        // question says why.
+        if (!young.HasValue || (termsAge != null && termsAge.TooYoung))
+        {
+            termsAge.Nag();
+            return;
+        }
+
         if (TermsService.Instance != null)
-            TermsService.Instance.Accept();
+        {
+            TermsService.Instance.Accept(young.Value);
+
+            // Accepting again with the same version does not raise a change, so
+            // an answer changed from the consent door would sit there unheard.
+            Evaluate();
+        }
         else
+        {
             Evaluate();   // no service in the scene: do not trap the reader here
+        }
     }
 
     /// <summary>Trails: "Join with a code", and the empty state's button.</summary>
     public void OpenCode()
     {
         _dismissed = false;
-        Show(Door.Code);
+        Show(NeedsParent ? Door.Consent : Door.Code);
     }
 
     /// <summary>Code: "Cancel".</summary>
@@ -325,7 +379,7 @@ public class DoorFlow : MonoBehaviour
     {
         _reopened = true;
         _dismissed = false;
-        Show(Door.Trails);
+        Show(NeedsParent ? Door.Consent : Door.Trails);
     }
 
     /// <summary>
@@ -473,6 +527,7 @@ public class DoorFlow : MonoBehaviour
         Hide(teamPanel);
         Hide(accountPanel);
         Hide(readyPanel);
+        Hide(consentPanel);
 
         // The app itself is up, which is the moment to ask where it is - not
         // cold over the welcome screen.
@@ -482,7 +537,7 @@ public class DoorFlow : MonoBehaviour
         // The two card doors are the ones the map shows through. Welcome and Terms
         // are plain: nothing behind them, because there is nothing yet to look at.
         bool wantsMap = door == Door.Trails || door == Door.Code || door == Door.Team ||
-                        door == Door.Account || door == Door.Ready;
+                        door == Door.Account || door == Door.Ready || door == Door.Consent;
 
         if (navBar != null)
             navBar.SetActive(door == Door.None);
@@ -570,6 +625,12 @@ public class DoorFlow : MonoBehaviour
 
             case Door.Ready:
                 Reveal(readyPanel);
+                break;
+
+            case Door.Consent:
+                Reveal(consentPanel);
+                if (consent != null)
+                    consent.Refresh();
                 break;
         }
     }

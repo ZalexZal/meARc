@@ -1,0 +1,417 @@
+using System.Collections;
+using System.Globalization;
+using TMPro;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+
+/// <summary>
+/// Capture mode: standing at a stop on your own trail and moving it to where
+/// it really is.
+///
+/// A stop placed on the website is placed on a map, and a map is a few metres
+/// out in a narrow street - which in the camera means a marker standing in the
+/// road instead of in front of the door it is about. Only somebody standing
+/// there can see that, so the fix is made from there: the marker moves one
+/// metre at a time relative to where the phone is facing, or jumps to where
+/// the phone is, and Save writes the new coordinates through move_marker, the
+/// same function the website's map uses. The server checks the editor role;
+/// the button only appears for owners and editors, but it is not the rule.
+///
+/// The preview is the marker itself, shifted inside its anchor. Terrain
+/// anchors are made with an identity rotation, which ARCore defines as
+/// east-up-south, so an offset of (east, 0, -north) metres is exactly where the
+/// stop will be once saved - without re-resolving an anchor for every nudge.
+/// </summary>
+public class CaptureMode : MonoBehaviour
+{
+    public TextMeshProUGUI titleLabel;
+    public TextMeshProUGUI statusLabel;
+
+    public Button forwardButton;
+    public Button backButton;
+    public Button leftButton;
+    public Button rightButton;
+    public Button hereButton;
+    public Button saveButton;
+    public Button cancelButton;
+
+    [Tooltip("Hidden while capturing: the dock's nearest-marker card sits where this bar does.")]
+    public GameObject[] hideWhileOpen = new GameObject[0];
+
+    public MarkerSpawner spawner;
+    public TabNavigationController tabs;
+
+    /// <summary>One press moves the stop this far.</summary>
+    const double StepMetres = 1d;
+
+    /// <summary>
+    /// Worse than this, a GPS fix is no improvement on a map. The camera's own
+    /// position is used whenever it is tracking, and is better than a metre.
+    /// </summary>
+    const double RoughestHere = 12d;
+
+    BuildingData _data;
+    double _lat0;
+    double _lng0;
+    double _east;
+    double _north;
+    bool _busy;
+    float _drawTimer;
+    string _said;
+
+    public bool Active { get { return _data != null; } }
+
+    /// <summary>Whether this reader may move this stop: its trail is theirs, or they edit it.</summary>
+    public static bool CanEdit(BuildingData data)
+    {
+        if (data == null || DemoTrail.Owns(data))
+            return false;
+
+        TrailService trails = TrailService.Instance;
+        TrailService.Trail trail = trails != null ? trails.Selected : null;
+
+        return trail != null && (trail.role == "owner" || trail.role == "editor");
+    }
+
+    void Awake()
+    {
+        Wire(forwardButton, () => Nudge(1f, 0f));
+        Wire(backButton, () => Nudge(-1f, 0f));
+        Wire(leftButton, () => Nudge(0f, -1f));
+        Wire(rightButton, () => Nudge(0f, 1f));
+        Wire(hereButton, Here);
+        Wire(saveButton, Save);
+        Wire(cancelButton, Cancel);
+    }
+
+    static void Wire(Button button, UnityEngine.Events.UnityAction action)
+    {
+        if (button != null)
+            button.onClick.AddListener(action);
+    }
+
+    public void Begin(BuildingData data)
+    {
+        if (data == null)
+            return;
+
+        // A second stop while one is open: put the first back where it was.
+        if (_data != null)
+            Preview(0d, 0d);
+
+        _data = data;
+        _lat0 = data.latitude;
+        _lng0 = data.longitude;
+        _east = 0d;
+        _north = 0d;
+        _busy = false;
+        _said = null;
+
+        if (tabs != null)
+            tabs.ShowCamera();
+
+        foreach (GameObject other in hideWhileOpen)
+            if (other != null) other.SetActive(false);
+
+        gameObject.SetActive(true);
+        Draw();
+    }
+
+    void End()
+    {
+        _data = null;
+
+        foreach (GameObject other in hideWhileOpen)
+            if (other != null) other.SetActive(true);
+
+        gameObject.SetActive(false);
+    }
+
+    void OnDisable()
+    {
+        // Leaving the camera tab mid-capture is a cancel, not a save. Coroutines
+        // stop with the object, so a save in flight is abandoned here too; if it
+        // had already landed, the next marker refresh brings the new position.
+        if (_data != null)
+        {
+            Preview(0d, 0d);
+            _data = null;
+            _busy = false;
+            SetInteractable(true);
+
+            foreach (GameObject other in hideWhileOpen)
+                if (other != null) other.SetActive(true);
+        }
+    }
+
+    void Update()
+    {
+        if (_data == null)
+            return;
+
+        // Every frame, because the spawner may have placed the marker - or
+        // placed it again - since the last press.
+        Preview(_east, _north);
+
+        _drawTimer += Time.unscaledDeltaTime;
+        if (_drawTimer >= 0.5f)
+        {
+            _drawTimer = 0f;
+            Draw();
+        }
+    }
+
+    // ------------------------------------------------------------------ moving
+
+    /// <summary>
+    /// One step forward, back, left or right, as the phone is facing.
+    ///
+    /// Through the camera when the marker is standing in the world - its
+    /// anchor's own axes, so "forward" is forward on the screen - and by the
+    /// compass when it is not.
+    /// </summary>
+    void Nudge(float forward, float right)
+    {
+        if (_data == null || _busy)
+            return;
+
+        Transform marker = spawner != null ? spawner.MarkerFor(_data.buildingId) : null;
+        Camera eye = Camera.main;
+
+        if (marker != null && marker.parent != null && eye != null)
+        {
+            Vector3 ahead = Flat(eye.transform.forward, eye.transform.up);
+            Vector3 side = Flat(eye.transform.right, eye.transform.right);
+            Vector3 local = marker.parent.InverseTransformDirection(ahead * forward + side * right);
+
+            _east += local.x * StepMetres;
+            _north += -local.z * StepMetres;
+        }
+        else
+        {
+            UserLocationService location = UserLocationService.Instance;
+            double bearing = location != null && location.HasHeading ? location.DeviceHeading : 0d;
+            double b = bearing * Mathf.Deg2Rad;
+
+            _east += (System.Math.Sin(b) * forward + System.Math.Cos(b) * right) * StepMetres;
+            _north += (System.Math.Cos(b) * forward - System.Math.Sin(b) * right) * StepMetres;
+        }
+
+        _said = null;
+        Draw();
+    }
+
+    /// <summary>Level with the ground, falling back when the phone points straight down.</summary>
+    static Vector3 Flat(Vector3 direction, Vector3 fallback)
+    {
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.01f)
+        {
+            direction = fallback;
+            direction.y = 0f;
+        }
+
+        return direction.normalized;
+    }
+
+    /// <summary>
+    /// Puts the stop where the phone is.
+    ///
+    /// The camera's position when the marker is in the world: that is the
+    /// same frame the marker is drawn in, good to well under a metre. Otherwise
+    /// the location service's fix, but only when it is good enough to beat the
+    /// map it would be replacing.
+    /// </summary>
+    void Here()
+    {
+        if (_data == null || _busy)
+            return;
+
+        Transform marker = spawner != null ? spawner.MarkerFor(_data.buildingId) : null;
+        Camera eye = Camera.main;
+        UserLocationService location = UserLocationService.Instance;
+
+        if (location != null && location.IsMocked)
+        {
+            _said = AppStrings.Get("task.position.mock");
+            Draw();
+            return;
+        }
+
+        if (marker != null && marker.parent != null && eye != null)
+        {
+            Vector3 local = marker.parent.InverseTransformPoint(eye.transform.position);
+            _east = local.x;
+            _north = -local.z;
+        }
+        else if (location != null && location.HasValidPose &&
+                 location.HorizontalAccuracy <= RoughestHere)
+        {
+            GeoMath.LocalOffsetMetres(_lat0, _lng0, location.Latitude, location.Longitude,
+                                      out _east, out _north);
+        }
+        else
+        {
+            _said = string.Format(AppStrings.Get("capture.tooRough"),
+                                  location != null && location.HasValidPose
+                                      ? Mathf.RoundToInt((float)location.HorizontalAccuracy).ToString()
+                                      : "?");
+            Draw();
+            return;
+        }
+
+        _said = null;
+        Draw();
+    }
+
+    void Preview(double east, double north)
+    {
+        Transform marker = spawner != null && _data != null ? spawner.MarkerFor(_data.buildingId) : null;
+
+        if (marker != null)
+            marker.localPosition = new Vector3((float)east, 0f, (float)-north);
+    }
+
+    // ------------------------------------------------------------------ saving
+
+    void Save()
+    {
+        if (_data == null || _busy)
+            return;
+
+        if (System.Math.Abs(_east) < 0.05d && System.Math.Abs(_north) < 0.05d)
+        {
+            Cancel();
+            return;
+        }
+
+        StartCoroutine(Post());
+    }
+
+    IEnumerator Post()
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+            yield break;
+
+        _busy = true;
+        SetInteractable(false);
+        _said = AppStrings.Get("capture.saving");
+        Draw();
+
+        GeoMath.OffsetToLatLon(_lat0, _lng0, _east, _north, out double lat, out double lng);
+
+        string body = string.Format(CultureInfo.InvariantCulture,
+            "{{\"p_marker\":\"{0}\",\"p_lat\":{1:R},\"p_lng\":{2:R}}}",
+            _data.buildingId.Replace("\"", ""), lat, lng);
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/move_marker"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            _busy = false;
+            SetInteractable(true);
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                string said = Postgrest.Said(request) ?? string.Empty;
+                Debug.LogWarning("[Capture] move_marker failed (" + request.responseCode + "): " + said);
+                _said = AppStrings.Get(said.Contains("not yours") ? "capture.notYours" : "report.failed");
+                Draw();
+                yield break;
+            }
+        }
+
+        // The stop now lives at the new coordinates. The marker is put back to
+        // its anchor's centre and the anchor itself re-resolved there, so what
+        // is on screen is what everybody else will see.
+        BuildingData moved = _data;
+        moved.latitude = lat;
+        moved.longitude = lng;
+
+        _east = 0d;
+        _north = 0d;
+        _lat0 = lat;
+        _lng0 = lng;
+        Preview(0d, 0d);
+
+        if (spawner != null)
+            spawner.Replace(moved.buildingId);
+
+        // Said on the bar for a moment rather than closing straight away: a
+        // save that vanishes without a word reads as a tap that missed.
+        _said = AppStrings.Get("capture.saved");
+        _busy = true;
+        SetInteractable(false);
+        Draw();
+
+        yield return new WaitForSeconds(1.2f);
+
+        _busy = false;
+        SetInteractable(true);
+
+        if (_data == moved)
+            End();
+    }
+
+    void Cancel()
+    {
+        if (_busy)
+            return;
+
+        Preview(0d, 0d);
+        End();
+    }
+
+    // ------------------------------------------------------------------ drawing
+
+    void Draw()
+    {
+        if (_data == null)
+            return;
+
+        if (titleLabel != null)
+            titleLabel.text = string.Format(AppStrings.Get("capture.title"), _data.DisplayName);
+
+        if (statusLabel == null)
+            return;
+
+        if (!string.IsNullOrEmpty(_said))
+        {
+            statusLabel.text = _said;
+            return;
+        }
+
+        bool placed = spawner != null && spawner.MarkerFor(_data.buildingId) != null;
+        double moved = System.Math.Sqrt(_east * _east + _north * _north);
+
+        string where = moved < 0.05d
+            ? AppStrings.Get("capture.unmoved")
+            : string.Format(AppStrings.Get("capture.moved"),
+                            Metres(System.Math.Abs(_north)),
+                            AppStrings.Get(_north >= 0d ? "capture.north" : "capture.south"),
+                            Metres(System.Math.Abs(_east)),
+                            AppStrings.Get(_east >= 0d ? "capture.east" : "capture.west"));
+
+        statusLabel.text = placed ? where : where + "\n" + AppStrings.Get("capture.noMarker");
+    }
+
+    static string Metres(double value)
+    {
+        return value.ToString(value < 10d ? "0.#" : "0", CultureInfo.InvariantCulture);
+    }
+
+    void SetInteractable(bool on)
+    {
+        foreach (Button button in new[] { forwardButton, backButton, leftButton, rightButton,
+                                          hereButton, saveButton, cancelButton })
+        {
+            if (button != null)
+                button.interactable = on;
+        }
+    }
+}

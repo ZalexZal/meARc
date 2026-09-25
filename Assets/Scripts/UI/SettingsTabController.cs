@@ -76,6 +76,10 @@ public class SettingsTabController : MonoBehaviour
     public Button securityButton;
     public GameObject securityPage;
 
+    [Tooltip("Opens the list of people this reader has blocked.")]
+    public Button blockedButton;
+    public GameObject blockedPage;
+
     [Tooltip("Open the website's own pages, in the app's language.")]
     public Button termsButton;
     public Button privacyButton;
@@ -131,6 +135,7 @@ public class SettingsTabController : MonoBehaviour
         WireHelpRow(aboutButton, aboutPage);
         WireHelpRow(allBadgesButton, badgesPage);
         WireHelpRow(securityButton, securityPage);
+        WireHelpRow(blockedButton, blockedPage);
 
         if (termsButton != null)
             termsButton.onClick.AddListener(() => Application.OpenURL(SiteLink.Terms()));

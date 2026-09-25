@@ -227,14 +227,48 @@ public static class BuildApk
     [MenuItem("Tools/Build/Android APK")]
     public static void Build()
     {
-        string path = Path.Combine(OutputFolder, "ARTrail.apk");
+        BuildTo("ARTrail.apk", bundle: false);
+    }
+
+    /// <summary>
+    /// The Android App Bundle Google Play takes, from the same scene, signed
+    /// with the same upload key. Play re-signs what it hands out with the app
+    /// signing key it keeps; this key only proves an upload is ours.
+    /// </summary>
+    [MenuItem("Tools/Build/Android App Bundle (Play)")]
+    public static void BuildBundle()
+    {
+        BuildTo("ARTrail.aab", bundle: true);
+    }
+
+    static void BuildTo(string file, bool bundle)
+    {
+        string path = Path.Combine(OutputFolder, file);
         Directory.CreateDirectory(OutputFolder);
+
+        bool wasBundle = EditorUserBuildSettings.buildAppBundle;
+        EditorUserBuildSettings.buildAppBundle = bundle;
+
+        try
+        {
+            BuildPlayer(path);
+        }
+        finally
+        {
+            EditorUserBuildSettings.buildAppBundle = wasBundle;
+        }
+    }
+
+    static void BuildPlayer(string path)
+    {
 
         // The scene on disk is generated output. Rebuilding it here is what keeps
         // "it compiles" and "it is in the player" from being different claims.
         EditorSceneManager.OpenScene(Scene, OpenSceneMode.Single);
         AppUIBuilder.BuildForPreview();
         EditorSceneManager.SaveOpenScenes();
+
+        AppIcons.Apply();
 
         ReportPreloads("as batch mode left it");
         RestorePreloadedAssets();

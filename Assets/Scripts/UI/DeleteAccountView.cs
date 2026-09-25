@@ -167,4 +167,10 @@ public static class SiteLink
     public static string Terms() { return Root + Lang + "/terms/"; }
     public static string Privacy() { return Root + Lang + "/privacy/"; }
     public static string Account() { return Root + Lang + "/account/"; }
+
+    /// <summary>Where an email confirmation link lands: "confirmed, go back to the app".</summary>
+    public static string Confirmed() { return Root + Lang + "/confirmed/"; }
+
+    /// <summary>The page a parent opens to agree, or not, to an under-14's account.</summary>
+    public static string Consent() { return Root + Lang + "/consent/"; }
 }

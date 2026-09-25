@@ -66,6 +66,12 @@ public class InfoPanelController : MonoBehaviour
              "it - the button lives beside the question, not on this sheet.")]
     public HintSheetView hintSheet;
 
+    [Tooltip("Capture mode: moving a stop on your own trail to where it really is. " +
+             "Only on screen for the trail's owner and editors.")]
+    public Button moveButton;
+    public TextMeshProUGUI moveLabel;
+    public CaptureMode capture;
+
     /// <summary>Raised before the sheet opens, so the Camera tab can close Nearby.</summary>
     public Action onWillOpen;
 
@@ -86,6 +92,9 @@ public class InfoPanelController : MonoBehaviour
 
         if (hideButton != null)
             hideButton.onClick.AddListener(HideThisMarker);
+
+        if (moveButton != null)
+            moveButton.onClick.AddListener(MoveThisMarker);
 
         if (reportButton != null)
         {
@@ -115,6 +124,7 @@ public class InfoPanelController : MonoBehaviour
         AppStrings.OnLanguageChanged += RefreshLabels;
         GuidanceService.OnGuidanceChanged += RefreshLabels;
         DoorFlow.OnDoorChanged += CloseUnderDoor;
+        ReportSheetView.OnBlocked += CloseAfterBlock;
 
         RefreshLabels();
     }
@@ -124,6 +134,29 @@ public class InfoPanelController : MonoBehaviour
         AppStrings.OnLanguageChanged -= RefreshLabels;
         GuidanceService.OnGuidanceChanged -= RefreshLabels;
         DoorFlow.OnDoorChanged -= CloseUnderDoor;
+        ReportSheetView.OnBlocked -= CloseAfterBlock;
+    }
+
+    /// <summary>
+    /// Opens capture mode for this stop. The sheet closes: the job is done
+    /// looking through the camera at the street, not at this card.
+    /// </summary>
+    public void MoveThisMarker()
+    {
+        BuildingData data = currentBuilding;
+
+        if (data == null || capture == null)
+            return;
+
+        ClosePanel();
+        capture.Begin(data);
+    }
+
+    /// <summary>A stop made by somebody just blocked is not one to leave on screen.</summary>
+    void CloseAfterBlock()
+    {
+        if (currentBuilding != null)
+            ClosePanel();
     }
 
     /// <summary>Raised when a stop's sheet opens, with the stop.</summary>
@@ -215,10 +248,15 @@ public class InfoPanelController : MonoBehaviour
     /// </summary>
     static bool MayCredit(BuildingData data, bool fromMarker)
     {
+        UserLocationService location = UserLocationService.Instance;
+
+        // A faked position reaches nothing, by either route. The phone says so
+        // itself; see UserLocationService.IsMocked.
+        if (location != null && location.IsMocked)
+            return false;
+
         if (fromMarker)
             return true;
-
-        UserLocationService location = UserLocationService.Instance;
 
         if (location == null || !location.HasValidPose)
             return false;
@@ -291,11 +329,18 @@ public class InfoPanelController : MonoBehaviour
         // would put a stop that does not exist in the moderators' queue.
         bool demo = DemoTrail.Owns(data);
 
+        // A stop on the reader's own trail - or one they edit - is theirs to put
+        // right, not to hide from themselves or to report to somebody else.
+        bool editable = !demo && capture != null && CaptureMode.CanEdit(data);
+
+        if (moveButton != null)
+            moveButton.gameObject.SetActive(editable);
+
         if (hideButton != null)
-            hideButton.gameObject.SetActive(!demo);
+            hideButton.gameObject.SetActive(!demo && !editable);
 
         if (reportButton != null)
-            reportButton.gameObject.SetActive(reportSheet != null && !demo);
+            reportButton.gameObject.SetActive(reportSheet != null && !demo && !editable);
 
         RenderBuilding(data);
 

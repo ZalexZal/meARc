@@ -38,6 +38,23 @@ public class TermsService : MonoBehaviour
     /// </summary>
     const string DeviceKey = "terms_device_version";
 
+    /// <summary>
+    /// The answer to "how old are you?", asked with the terms: "under14", "14+",
+    /// or absent. Kept on the phone as well as on the profile, for the same
+    /// reason as the terms: the next door has to be chosen with no signal.
+    /// </summary>
+    const string AgeKey = "age_band";
+
+    /// <summary>True, false, or null when the question has not been answered here.</summary>
+    public bool? Under14
+    {
+        get
+        {
+            string band = PlayerPrefs.GetString(AgeKey, string.Empty);
+            return band == "under14" ? true : band == "14+" ? (bool?)false : null;
+        }
+    }
+
     public static TermsService Instance { get; private set; }
 
     public static event Action OnAcceptedChanged;
@@ -138,9 +155,10 @@ public class TermsService : MonoBehaviour
 
         _askedFor = auth.UserId;
 
-        if (auth.IsAnonymous && PlayerPrefs.GetString(DeviceKey, string.Empty) == RequiredVersion)
+        if (auth.IsAnonymous && PlayerPrefs.GetString(DeviceKey, string.Empty) == RequiredVersion &&
+            Under14.HasValue)
         {
-            Accept();
+            Accept(Under14.Value);
             return;
         }
 
@@ -156,7 +174,7 @@ public class TermsService : MonoBehaviour
 
         Checking = true;
 
-        string url = config.Endpoint("/rest/v1/profiles?select=terms_version&id=eq." +
+        string url = config.Endpoint("/rest/v1/profiles?select=terms_version,age_band&id=eq." +
                                      UnityWebRequest.EscapeURL(userId));
 
         using (UnityWebRequest request = SupabaseAuth.Get(url))
@@ -166,8 +184,18 @@ public class TermsService : MonoBehaviour
             bool same = SupabaseAuth.Instance != null && SupabaseAuth.Instance.UserId == userId;
             string wanted = "\"terms_version\":\"" + RequiredVersion + "\"";
 
-            if (same && request.result == UnityWebRequest.Result.Success &&
-                request.downloadHandler.text.Contains(wanted))
+            // An account that answered the age question elsewhere has answered it.
+            // Without the answer the terms are not accepted here either, so the
+            // door asks both, once.
+            string text = request.result == UnityWebRequest.Result.Success
+                ? request.downloadHandler.text : string.Empty;
+            string band = text.Contains("\"age_band\":\"under14\"") ? "under14"
+                        : text.Contains("\"age_band\":\"14+\"") ? "14+" : null;
+
+            if (same && band != null)
+                PlayerPrefs.SetString(AgeKey, band);
+
+            if (same && band != null && text.Contains(wanted))
             {
                 PlayerPrefs.SetString(DeviceKey, RequiredVersion);
                 PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
@@ -182,8 +210,9 @@ public class TermsService : MonoBehaviour
             OnAcceptedChanged();
     }
 
-    public void Accept()
+    public void Accept(bool under14)
     {
+        PlayerPrefs.SetString(AgeKey, under14 ? "under14" : "14+");
         PlayerPrefs.SetString(DeviceKey, RequiredVersion);
         PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
         PlayerPrefs.Save();
@@ -205,7 +234,10 @@ public class TermsService : MonoBehaviour
         }
 
         string version = RequiredVersion;
-        string body = "{\"p_version\":\"" + version + "\"}";
+        bool? young = Under14;
+        string body = "{\"p_version\":\"" + version + "\"" +
+                      (young.HasValue ? ",\"p_under14\":" + (young.Value ? "true" : "false") : string.Empty) +
+                      "}";
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/accept_terms"), body, null))

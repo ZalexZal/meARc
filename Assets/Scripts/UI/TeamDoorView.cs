@@ -73,6 +73,11 @@ public class TeamDoorView : MonoBehaviour
     public TextMeshProUGUI[] boardPoints = new TextMeshProUGUI[MaxRows];
     public Image[] boardHighlight = new Image[MaxRows];
 
+    [Tooltip("Each row, as a button. Tapping another team's row opens the report " +
+             "sheet for its name, which is also where it can be blocked.")]
+    public Button[] boardButtons = new Button[MaxRows];
+    public ReportSheetView reportSheet;
+
     [Header("Both")]
     public TextMeshProUGUI statusLabel;
     public Button closeButton;
@@ -107,6 +112,7 @@ public class TeamDoorView : MonoBehaviour
         // network, with no device here to try it on. Fifteen seconds is a few
         // seconds of staleness nobody in a room will notice.
         MarkerTaskService.OnProgressChanged += Reload;
+        ReportSheetView.OnBlocked += Reload;
         _polling = StartCoroutine(Poll());
 
         // Asked every time it opens. A board that is one walk out of date is
@@ -138,6 +144,7 @@ public class TeamDoorView : MonoBehaviour
         TeamService.OnTeamChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
         MarkerTaskService.OnProgressChanged -= Reload;
+        ReportSheetView.OnBlocked -= Reload;
 
         // Stopped with the card. A poll that outlives the screen it feeds is a
         // request every fifteen seconds for the rest of the walk.
@@ -420,8 +427,23 @@ public class TeamDoorView : MonoBehaviour
             if (boardRank[i] != null)
                 boardRank[i].text = row.rank.ToString();
 
+            // No name means its founder is somebody this reader blocked. The row
+            // stays, because the ranks under it are still true.
             if (boardName[i] != null)
-                boardName[i].text = row.team_name;
+                boardName[i].text = string.IsNullOrEmpty(row.team_name)
+                    ? AppStrings.Get("board.hidden")
+                    : row.team_name;
+
+            if (boardButtons[i] != null)
+            {
+                string teamId = row.team_id;
+                boardButtons[i].onClick.RemoveAllListeners();
+                boardButtons[i].interactable = !row.is_mine && reportSheet != null &&
+                                               !string.IsNullOrEmpty(row.team_name);
+
+                if (boardButtons[i].interactable)
+                    boardButtons[i].onClick.AddListener(delegate { reportSheet.OpenTeam(teamId); });
+            }
 
             if (boardPoints[i] != null)
                 boardPoints[i].text = row.points.ToString();

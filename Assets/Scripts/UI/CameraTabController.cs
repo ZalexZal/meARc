@@ -124,6 +124,12 @@ public class CameraTabController : MonoBehaviour
         if (infoPanel != null)
             infoPanel.onWillOpen = CloseNearby;
 
+        if (arNoticeContinue != null)
+            arNoticeContinue.onClick.AddListener(AcceptArNotice);
+
+        if (arNoticeLearnMore != null)
+            arNoticeLearnMore.onClick.AddListener(() => Application.OpenURL(ArLearnMore));
+
         // Nothing is switched off here.
         //
         // This tab is inactive at launch - the app opens on the map - so Awake
@@ -174,8 +180,27 @@ public class CameraTabController : MonoBehaviour
     /// </summary>
     const string CameraPermission = "android.permission.CAMERA";
 
+    /// <summary>
+    /// Google's own words, before the first Geospatial session - its terms for
+    /// ARCore require them "in connection with" turning the API on, with a link
+    /// to how Play Services for AR handles the data. Once per install.
+    /// </summary>
+    const string ArNoticeKey = "arcore_notice_seen";
+    const string ArLearnMore = "https://support.google.com/ar?p=how-google-play-services-for-ar-handles-your-data";
+
+    [Header("ARCore notice")]
+    public GameObject arNotice;
+    public Button arNoticeContinue;
+    public Button arNoticeLearnMore;
+
     void WakeCamera()
     {
+        if (PlayerPrefs.GetInt(ArNoticeKey, 0) == 0 && arNotice != null)
+        {
+            arNotice.SetActive(true);
+            return;
+        }
+
         // isActiveAndEnabled, not enabled.
         //
         // The session ships on a switched-off GameObject, and a component's own
@@ -208,6 +233,17 @@ public class CameraTabController : MonoBehaviour
 
 
         StartSession();
+    }
+
+    void AcceptArNotice()
+    {
+        PlayerPrefs.SetInt(ArNoticeKey, 1);
+        PlayerPrefs.Save();
+
+        if (arNotice != null)
+            arNotice.SetActive(false);
+
+        WakeCamera();
     }
 
     void StartSession()

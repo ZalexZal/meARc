@@ -184,11 +184,104 @@ public class UserLocationService : MonoBehaviour
         DeviceHeading = Mathf.Repeat(DeviceHeading + delta * Mathf.Clamp01(Time.deltaTime * 8f), 360f);
     }
 
+    // ------------------------------------------------------------------ fake location
+
+    /// <summary>
+    /// True when Android says the position comes from a mock provider - a
+    /// fake-location app, or the emulator's own. Sent with every answer, and the
+    /// server refuses answers on a scored trail while it is set. It also stops
+    /// the map fallback from counting a stop as reached.
+    /// </summary>
+    public bool IsMocked { get; private set; }
+
+    float _mockTimer = MockEvery;
+
+    /// <summary>Seconds between checks. Four JNI calls; cheap, but not free.</summary>
+    const float MockEvery = 4f;
+
+    /// <summary>Fixes older than this say nothing about where the phone is now.</summary>
+    const double MockFreshSeconds = 90d;
+
+    void CheckMock()
+    {
+        _mockTimer += pollInterval;
+        if (_mockTimer < MockEvery)
+            return;
+
+        _mockTimer = 0f;
+        bool mocked = ReadMockFlag();
+
+        if (mocked != IsMocked)
+            Debug.Log("[Location] Mock location " + (mocked ? "detected" : "gone"));
+
+        IsMocked = mocked;
+    }
+
+    /// <summary>
+    /// Asks the platform whether its latest fixes are simulated.
+    ///
+    /// Unity's own location API does not carry the flag, so this reads the last
+    /// fix of each provider straight from LocationManager: Location.isMock() on
+    /// Android 12 and later, isFromMockProvider() before it. Only fresh fixes
+    /// count - a provider's last fix can be an hour old, and a fake-location app
+    /// switched off at lunchtime should not follow somebody round all afternoon.
+    /// Any failure reads as "not mocked": the server has its own distance and
+    /// speed checks, and a phone that cannot be asked should not be locked out.
+    /// </summary>
+    static bool ReadMockFlag()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            using (var manager = activity.Call<AndroidJavaObject>("getSystemService", "location"))
+            using (var version = new AndroidJavaClass("android.os.Build$VERSION"))
+            using (var clock = new AndroidJavaClass("android.os.SystemClock"))
+            {
+                int sdk = version.GetStatic<int>("SDK_INT");
+                long nowNanos = clock.CallStatic<long>("elapsedRealtimeNanos");
+
+                foreach (string provider in new[] { "gps", "network", "fused" })
+                {
+                    AndroidJavaObject fix;
+
+                    // "fused" is not a LocationManager provider on every phone,
+                    // and asking for one that is missing throws.
+                    try { fix = manager.Call<AndroidJavaObject>("getLastKnownLocation", provider); }
+                    catch (Exception) { continue; }
+
+                    if (fix == null)
+                        continue;
+
+                    using (fix)
+                    {
+                        double age = (nowNanos - fix.Call<long>("getElapsedRealtimeNanos")) / 1e9;
+                        if (age > MockFreshSeconds)
+                            continue;
+
+                        bool mock = sdk >= 31 ? fix.Call<bool>("isMock")
+                                              : fix.Call<bool>("isFromMockProvider");
+                        if (mock)
+                            return true;
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Location] Could not check for a mock location: " + exception.Message);
+        }
+#endif
+        return false;
+    }
+
     // ------------------------------------------------------------------ polling
 
     void Poll()
     {
         VpsStatus previous = Status;
+        CheckMock();
 
         // Geospatial first, always. It is strictly better than GPS when available -
         // GPS is a floor, not a supplement.

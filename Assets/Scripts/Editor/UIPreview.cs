@@ -416,6 +416,9 @@ public static class UIPreview
         // --- the way in ---
         Pieces.TrailsState(canvas.transform, "Rows");
         Shoot(canvas, rig, "10-welcome" + t, "Doors/Welcome");
+        AgeChoiceView age = canvas.GetComponentInChildren<AgeChoiceView>(true);
+        if (age != null)
+            age.Draw();
         Shoot(canvas, rig, "11-terms" + t, "Doors/Terms");
         Shoot(canvas, rig, "12-trails" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
 
@@ -493,6 +496,8 @@ public static class UIPreview
 
         // --- the demo ---
         Shoot(canvas, rig, "39-ready" + t, "MapPanel", "Doors/Backdrop", "Doors/Ready");
+
+        StageTwo(canvas, rig, t);
 
         DemoCoach coach = canvas.GetComponentInChildren<DemoCoach>(true);
         if (coach != null && coach.card != null)
@@ -925,6 +930,141 @@ public static class UIPreview
                 B("summit", false), B("sharp_eye", false, 6, 10),
             },
         };
+    }
+
+    /// <summary>
+    /// The screens stage 2 added: the parent's consent, reporting and blocking,
+    /// capture mode, Google's ARCore notice, and the list of blocked people.
+    /// Filled by hand, like the team card, because each draws itself from a
+    /// service that only exists while the app runs.
+    /// </summary>
+    static void StageTwo(Canvas canvas, Rig rig, string t)
+    {
+        ConsentDoorView consent = canvas.GetComponentInChildren<ConsentDoorView>(true);
+
+        if (consent != null)
+        {
+            if (consent.askGroup != null) consent.askGroup.SetActive(true);
+            if (consent.waitGroup != null) consent.waitGroup.SetActive(false);
+            Shoot(canvas, rig, "40-consent" + t, "MapPanel", "Doors/Backdrop", "Doors/Consent");
+
+            if (consent.askGroup != null) consent.askGroup.SetActive(false);
+            if (consent.waitGroup != null) consent.waitGroup.SetActive(true);
+            if (consent.waitLabel != null)
+                consent.waitLabel.text = string.Format(AppStrings.Get("consent.waiting"), "parent@example.com");
+            Shoot(canvas, rig, "41-consent-wait" + t, "MapPanel", "Doors/Backdrop", "Doors/Consent");
+
+            if (consent.askGroup != null) consent.askGroup.SetActive(true);
+            if (consent.waitGroup != null) consent.waitGroup.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning("[Preview] No consent door to draw.");
+        }
+
+        // Reporting a stop, with Block under the reasons - first as it opens,
+        // then armed, saying what a block does.
+        ReportSheetView report = null;
+        foreach (ReportSheetView candidate in canvas.GetComponentsInChildren<ReportSheetView>(true))
+        {
+            if (candidate.transform.parent != null && candidate.transform.parent.name == "Safe")
+                report = candidate;
+        }
+
+        if (report != null)
+        {
+            if (report.titleLabel != null) report.titleLabel.text = AppStrings.Get("report.title");
+            if (report.blockLabel != null) report.blockLabel.text = AppStrings.Get("block.creator");
+            Shoot(canvas, rig, "42-report-block" + t, "MapPanel",
+                  "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim", "InfoSheet/Safe/ReportChooser");
+
+            if (report.blockLabel != null) report.blockLabel.text = AppStrings.Get("block.confirm");
+            Shoot(canvas, rig, "43-report-armed" + t, "MapPanel",
+                  "InfoSheet/Safe/Sheet", "InfoSheet/InfoScrim", "InfoSheet/Safe/ReportChooser");
+            report.gameObject.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning("[Preview] No stop report sheet to draw.");
+        }
+
+        // A team's name, reported from the board: the place-only reasons go.
+        TeamDoorView door = canvas.GetComponentInChildren<TeamDoorView>(true);
+        if (door != null && door.reportSheet != null)
+        {
+            ReportSheetView teamReport = door.reportSheet;
+            if (teamReport.titleLabel != null) teamReport.titleLabel.text = AppStrings.Get("report.titleTeam");
+            if (teamReport.blockLabel != null) teamReport.blockLabel.text = AppStrings.Get("block.team");
+
+            for (int i = 0; i < teamReport.reasonButtons.Length && i < ReportSheetView.Reasons.Length; i++)
+            {
+                string reason = ReportSheetView.Reasons[i];
+                bool place = reason == "private_property" || reason == "unsafe" || reason == "wrong_place";
+                if (teamReport.reasonButtons[i] != null) teamReport.reasonButtons[i].gameObject.SetActive(!place);
+                if (reason == "offensive" && teamReport.reasonLabels[i] != null)
+                    teamReport.reasonLabels[i].text = AppStrings.Get("report.reason.offensiveName");
+            }
+
+            Shoot(canvas, rig, "44-team-report" + t, "MapPanel", "Doors/Backdrop", "Doors/Team",
+                  "Doors/Team/ReportChooser");
+            teamReport.gameObject.SetActive(false);
+        }
+
+        // Capture mode's bar where the dock was.
+        CaptureMode capture = canvas.GetComponentInChildren<CaptureMode>(true);
+        CameraTabController camera = canvas.GetComponentInChildren<CameraTabController>(true);
+
+        if (capture != null)
+        {
+            foreach (GameObject other in capture.hideWhileOpen)
+                if (other != null) other.SetActive(false);
+
+            capture.gameObject.SetActive(true);
+            if (capture.titleLabel != null)
+                capture.titleLabel.text = string.Format(AppStrings.Get("capture.title"), "Безистенът");
+            if (capture.statusLabel != null)
+                capture.statusLabel.text = string.Format(AppStrings.Get("capture.moved"), "2",
+                    AppStrings.Get("capture.north"), "1", AppStrings.Get("capture.east"));
+
+            Shoot(canvas, rig, "45-capture" + t, "CameraPanel");
+
+            capture.gameObject.SetActive(false);
+            foreach (GameObject other in capture.hideWhileOpen)
+                if (other != null) other.SetActive(true);
+        }
+        else
+        {
+            Debug.LogWarning("[Preview] No capture bar to draw.");
+        }
+
+        if (camera != null && camera.arNotice != null)
+        {
+            camera.arNotice.SetActive(true);
+            Shoot(canvas, rig, "46-arcore-notice" + t, "CameraPanel");
+            camera.arNotice.SetActive(false);
+        }
+
+        // Settings → Blocked people, with two rows.
+        SubPanelNavigator pages = canvas.GetComponentInChildren<SubPanelNavigator>(true);
+        BlockedListView blocked = canvas.GetComponentInChildren<BlockedListView>(true);
+
+        if (pages != null && blocked != null)
+        {
+            pages.ShowPage(blocked.gameObject);
+            string[] sample = { string.Format(AppStrings.Get("blocked.via.trail"), "Нощен Ямбол"),
+                                string.Format(AppStrings.Get("blocked.via.team"), "Зелените") };
+
+            if (blocked.emptyLabel != null) blocked.emptyLabel.gameObject.SetActive(false);
+            for (int i = 0; i < blocked.rows.Length; i++)
+            {
+                bool used = i < sample.Length;
+                if (blocked.rows[i] != null) blocked.rows[i].SetActive(used);
+                if (used && blocked.rowLabels[i] != null) blocked.rowLabels[i].text = sample[i];
+            }
+
+            Shoot(canvas, rig, "47-blocked" + t, "SettingsPanel");
+            pages.ShowRoot();
+        }
     }
 
     static void Shoot(Canvas canvas, Rig rig, string name, params string[] visible)

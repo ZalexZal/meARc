@@ -322,7 +322,7 @@ public class MarkerTaskService : MonoBehaviour
         // argument NAMES, so this call has never found it and every answer any
         // reader has ever given came back Unavailable.
         string body = "{\"p_marker\":\"" + Escape(markerId) + "\"," +
-                      "\"p_submitted\":\"" + Escape(answer) + "\"}";
+                      "\"p_submitted\":\"" + Escape(answer) + "\"" + Where() + "}";
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/check_answer"), body, null))
@@ -363,6 +363,28 @@ public class MarkerTaskService : MonoBehaviour
     }
 
     /// <summary>
+    /// Where the phone is, as the extra arguments check_answer takes.
+    ///
+    /// On a scored trail the server refuses an answer with no position, one the
+    /// phone says is simulated, one from far off the stop, and one that implies
+    /// travelling faster than anybody can (0045). Guides ignore all four. Sent
+    /// in the invariant culture: a Bulgarian phone writes 42,48, which is not a
+    /// number in JSON.
+    /// </summary>
+    static string Where()
+    {
+        UserLocationService location = UserLocationService.Instance;
+
+        if (location == null || !location.HasValidPose)
+            return string.Empty;
+
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            ",\"p_lat\":{0:R},\"p_lng\":{1:R},\"p_accuracy\":{2:0.#},\"p_mock\":{3}",
+            location.Latitude, location.Longitude, location.HorizontalAccuracy,
+            location.IsMocked ? "true" : "false");
+    }
+
+    /// <summary>
     /// Reads the verdict and files it. Anything unparseable is Unavailable, not
     /// Wrong - the reader should never be marked down for our JSON.
     /// </summary>
@@ -382,6 +404,20 @@ public class MarkerTaskService : MonoBehaviour
 
         if (reply == null)
             return new Result { verdict = Verdict.Unavailable, progress = Progress(markerId) };
+
+        // Refused for where the phone was, not for what it said. Nothing was
+        // judged or recorded, so nothing here changes; the reader is told which
+        // of the four it was, in words they can act on.
+        if (string.Equals(reply.verdict, "position", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Result
+            {
+                verdict = Verdict.Unavailable,
+                refusal = AppStrings.Get("task.position." +
+                                         (string.IsNullOrEmpty(reply.problem) ? "far" : reply.problem)),
+                progress = Progress(markerId)
+            };
+        }
 
         Verdict verdict = Read(reply.verdict);
         MarkerProgress progress = Progress(markerId);
@@ -576,8 +612,11 @@ public class MarkerTaskService : MonoBehaviour
     [Serializable]
     class AnswerReply
     {
-        /// <summary>correct | incorrect | wait | pending_review.</summary>
+        /// <summary>correct | incorrect | wait | pending_review | position.</summary>
         public string verdict;
+
+        /// <summary>On "position": mock | far | fast | no_position.</summary>
+        public string problem;
 
         public int points;
 
