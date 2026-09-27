@@ -17,6 +17,10 @@ public class ConsentDoorView : MonoBehaviour
     public TMP_InputField emailField;
     public Button sendButton;
 
+    [Tooltip("A code from a parent account on the website: the parent agreed when they made it.")]
+    public TMP_InputField codeField;
+    public Button codeButton;
+
     [Header("Waiting")]
     public GameObject waitGroup;
     public TextMeshProUGUI waitLabel;
@@ -32,6 +36,12 @@ public class ConsentDoorView : MonoBehaviour
     void Awake()
     {
         if (sendButton != null) sendButton.onClick.AddListener(Send);
+        if (codeButton != null) codeButton.onClick.AddListener(UseCode);
+
+        // Codes are capitals; a phone keyboard starts in lower case. Set here,
+        // because a delegate given in the builder does not survive the scene save.
+        if (codeField != null)
+            codeField.onValidateInput = (text, index, c) => char.ToUpperInvariant(c);
         if (checkButton != null) checkButton.onClick.AddListener(Check);
         if (changeButton != null) changeButton.onClick.AddListener(Change);
 
@@ -76,7 +86,7 @@ public class ConsentDoorView : MonoBehaviour
         if (emailField != null && _changing && string.IsNullOrEmpty(emailField.text) && consent != null)
             emailField.text = consent.ParentEmail ?? string.Empty;
 
-        foreach (Button button in new[] { sendButton, checkButton, changeButton })
+        foreach (Button button in new[] { sendButton, codeButton, checkButton, changeButton })
             if (button != null) button.interactable = !_busy;
     }
 
@@ -108,6 +118,37 @@ public class ConsentDoorView : MonoBehaviour
             else
                 SayText(error, ThemeRole.StatusPoor);
 
+            Draw();
+        }));
+    }
+
+    void UseCode()
+    {
+        ConsentService consent = ConsentService.Instance;
+        string code = codeField != null ? codeField.text.Trim() : string.Empty;
+
+        if (_busy || consent == null)
+            return;
+
+        if (code.Length < 6)
+        {
+            Say("consent.badCode", ThemeRole.StatusPoor);
+            return;
+        }
+
+        _busy = true;
+        Say("account.working", ThemeRole.TextMuted);
+        Draw();
+
+        // Success needs no words here: the state turns to granted and DoorFlow
+        // takes the door away.
+        consent.StartCoroutine(consent.Redeem(code, error =>
+        {
+            _busy = false;
+            if (error != null)
+                SayText(error, ThemeRole.StatusPoor);
+            else
+                Say(null, ThemeRole.TextMuted);
             Draw();
         }));
     }

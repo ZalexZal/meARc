@@ -201,6 +201,50 @@ public class ConsentService : MonoBehaviour
             done(null);
     }
 
+    /// <summary>
+    /// A code from a parent's account on the website: the parent agreed when
+    /// they made it, so this is the whole of the consent. Null on success.
+    /// </summary>
+    public IEnumerator Redeem(string code, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        string clean = (code ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (config == null || clean.Length < 6)
+        {
+            if (done != null) done(AppStrings.Get("consent.badCode"));
+            yield break;
+        }
+
+        string body = "{\"p_code\":\"" + Escape(clean) + "\"}";
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/redeem_child_invite"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                string said = Postgrest.Said(request) ?? string.Empty;
+                Debug.LogWarning("[Consent] Code refused: " + said);
+
+                if (done != null)
+                {
+                    done(AppStrings.Get(said.Contains("already agreed") ? "consent.alreadyAgreed"
+                                        : said.Contains("does not work") ? "consent.badCode"
+                                        : "report.failed"));
+                }
+                yield break;
+            }
+        }
+
+        Set("granted", ParentEmail);
+        Refresh();
+
+        if (done != null)
+            done(null);
+    }
+
     static string Escape(string value)
     {
         return (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");

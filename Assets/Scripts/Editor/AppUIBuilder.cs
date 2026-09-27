@@ -5364,6 +5364,18 @@ const float ReferenceWidth = 1080f;
         view.sendButton = FullWidthButton(ask, "Send", "consent.send",
                                           ThemeRole.Accent, ThemeRole.OnAccent);
 
+        // Or the parent started it: a code from their parent account.
+        TextMeshProUGUI or = UIFactory.Text("Or", ask, Caption, ThemeRole.TextMuted,
+                                            TextAlignmentOptions.Left, "consent.orCode");
+        or.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.FitsItsText(or);
+
+        view.codeField = Field(ask, "ParentCode", "consent.codeHint");
+        view.codeField.characterLimit = 12;
+
+        view.codeButton = FullWidthButton(ask, "UseCode", "consent.useCode",
+                                          ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+
         // --- waiting
         RectTransform wait = UIFactory.Rect("Wait", card);
         UIFactory.VerticalStack(wait, 14f, false);
@@ -5386,11 +5398,11 @@ const float ReferenceWidth = 1080f;
         UIFactory.ReservesButGrows(view.statusLabel.gameObject, 56f);
         view.statusLabel.gameObject.SetActive(false);
 
-        // The two ways on that need nobody's permission: the demo, which sends
-        // nothing anywhere, and correcting the age answer.
-        QuietAction(card, "Demo", "consent.demo", flow.StartDemo, "consent demo");
-        Button age = QuietAction(card, "Age", "consent.age", flow.ReaskAge, "re-ask age");
-        age.gameObject.AddComponent<WayOut>();
+        // The way on that needs nobody's permission: the demo, which sends
+        // nothing anywhere. No "I'm actually 14" - that was a one-tap way past
+        // the parent, and the server no longer takes it (0051).
+        Button demo = QuietAction(card, "Demo", "consent.demo", flow.StartDemo, "consent demo");
+        demo.gameObject.AddComponent<WayOut>();
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;

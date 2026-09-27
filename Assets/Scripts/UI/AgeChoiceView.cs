@@ -33,6 +33,22 @@ public class AgeChoiceView : MonoBehaviour
     const int None = 0, Older = 1, Thirteen = 2, Younger = 3;
     int _choice;
 
+    /// <summary>
+    /// Set once "12 or younger" has been accepted on this phone, so the age
+    /// question cannot simply be answered again with a bigger number - the
+    /// neutral age screen children's-privacy rules expect. Only a reinstall
+    /// clears it; nothing is sent anywhere.
+    /// </summary>
+    const string LockKey = "age_too_young";
+
+    public static bool Locked { get { return PlayerPrefs.GetInt(LockKey, 0) == 1; } }
+
+    public static void Lock()
+    {
+        PlayerPrefs.SetInt(LockKey, 1);
+        PlayerPrefs.Save();
+    }
+
     /// <summary>Whether a parent has to agree: true at 13, false at 14 or older, null otherwise.</summary>
     public bool? Chosen
     {
@@ -58,6 +74,15 @@ public class AgeChoiceView : MonoBehaviour
         _choice = under14 == true ? Thirteen : under14 == false ? Older : None;
 
         Say(null);
+
+        if (Locked)
+        {
+            _choice = Younger;
+            foreach (Button b in new[] { olderButton, thirteenButton, youngerButton })
+                if (b != null) b.interactable = false;
+            Say("age.tooYoungHere");
+        }
+
         ThemeManager.OnThemeChanged += Draw;
         Draw();
     }
@@ -69,6 +94,9 @@ public class AgeChoiceView : MonoBehaviour
 
     void Choose(int choice)
     {
+        if (Locked)
+            return;
+
         _choice = choice;
         Say(choice == Younger ? "age.tooYoung" : null);
         Draw();
@@ -76,7 +104,7 @@ public class AgeChoiceView : MonoBehaviour
 
     public void Nag()
     {
-        Say(TooYoung ? "age.tooYoung" : "age.nag");
+        Say(Locked ? "age.tooYoungHere" : TooYoung ? "age.tooYoung" : "age.nag");
     }
 
     void Say(string key)

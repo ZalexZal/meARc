@@ -306,15 +306,6 @@ public class DoorFlow : MonoBehaviour
         get { return ConsentService.Instance != null && ConsentService.Instance.NeedsParent; }
     }
 
-    /// <summary>
-    /// Consent: "Change my answer". Back to the terms, where the age question
-    /// is asked again. Self-declared either way; this only makes a slip fixable.
-    /// </summary>
-    public void ReaskAge()
-    {
-        _reopened = false;
-        Show(Door.Terms);
-    }
 
     /// <summary>
     /// Welcome: "I have a code". Still goes through the terms - a reader with a
@@ -335,6 +326,9 @@ public class DoorFlow : MonoBehaviour
         // question says why.
         if (!young.HasValue || (termsAge != null && termsAge.TooYoung))
         {
+            if (termsAge != null && termsAge.TooYoung)
+                AgeChoiceView.Lock();
+
             termsAge.Nag();
             return;
         }
