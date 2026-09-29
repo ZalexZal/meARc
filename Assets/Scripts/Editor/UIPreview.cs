@@ -264,6 +264,20 @@ public static class UIPreview
             Shoot(canvas, rig, "37-security" + t, "SettingsPanel");
         }
 
+        // Send feedback, as an account with an email sees it: the reply switch on
+        // show, and what goes with the message spelled out.
+        FeedbackView feedback = canvas.GetComponentInChildren<FeedbackView>(true);
+        if (pages != null && feedback != null)
+        {
+            pages.ShowPage(feedback.gameObject);
+            if (feedback.attachedLabel != null)
+                feedback.attachedLabel.text = string.Format(AppStrings.Get("feedback.attached"),
+                                                            "0.3.0", "SM-A546B");
+            if (feedback.replyRow != null)
+                feedback.replyRow.SetActive(true);
+            Shoot(canvas, rig, "39-feedback" + t, "SettingsPanel");
+        }
+
         if (pages != null)
             pages.ShowRoot();
 
@@ -1423,7 +1437,7 @@ public static class UIPreview
 
         if (view.teamName != null) view.teamName.text = "Северняците";
         if (view.teamMeta != null) view.teamMeta.text = "5 стъпки · 210 точки";
-        if (view.inviteCode != null) view.inviteCode.text = "MKRA3C";
+        TeamDoorView.ShowCode(view.inviteCells, "MKRA3C");
         if (view.capacityLabel != null) view.capacityLabel.text = "4 от 6 души";
 
         // A moderator has been at them, which is the state worth looking at:

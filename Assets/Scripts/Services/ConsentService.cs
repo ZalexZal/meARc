@@ -40,8 +40,19 @@ public class ConsentService : MonoBehaviour
             if (State == "needed" || State == "pending")
                 return true;
 
-            return State == "unknown" && TermsService.Instance != null &&
-                   TermsService.Instance.Under14 == true;
+            // "not_needed" can be an answer to a question asked too early: the
+            // read goes out the moment the terms are accepted, while the "13"
+            // is still on its way to the server, which then says no parent is
+            // needed - and a 13-year-old saw every door open. The phone's own
+            // answer stands until the server says "granted".
+            if (TermsService.Instance == null)
+                return false;
+
+            // Before the server answers at all, the phone's last answer stands in.
+            if (State == "unknown")
+                return TermsService.Instance.Under14 == true;
+
+            return State == "not_needed" && TermsService.Instance.Under14ForThisAccount == true;
         }
     }
 

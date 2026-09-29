@@ -545,8 +545,14 @@ public class TrailService : MonoBehaviour
                 // 400. Anything else is a real fault worth showing differently.
                 bool unknownCode = request.responseCode == 400 || request.responseCode == 404;
 
+                // The consent trigger refuses a 13-year-old nobody has agreed for
+                // yet. That is a 403 and not a fault of the network.
+                bool needsParent = request.responseCode == 403 &&
+                    request.downloadHandler != null && request.downloadHandler.text != null &&
+                    request.downloadHandler.text.Contains("parent needs to agree");
+
                 if (done != null)
-                    done(false, unknownCode ? "unknown" : request.error);
+                    done(false, needsParent ? "parent" : unknownCode ? "unknown" : request.error);
 
                 yield break;
             }

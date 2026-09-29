@@ -18,6 +18,30 @@ using UnityEngine.UI;
 /// </summary>
 public class TeamDoorView : MonoBehaviour
 {
+    public const int CodeLength = 6;
+
+    /// <summary>
+    /// A team code as it is drawn: one character per cell, each centred.
+    ///
+    /// It is read out across a room, so every character has to sit the same
+    /// distance from the next. Tracking left a hole after a digit (Inter's
+    /// digits are tabular, its letters are not: "GAAT5 N"), and TMP's mspace
+    /// left-aligns each glyph in its slot, so narrow letters floated and a W
+    /// crowded its neighbours ("S T X YWK"). Cells are what the trail code's
+    /// six boxes already do.
+    /// </summary>
+    public static void ShowCode(TextMeshProUGUI[] cells, string code)
+    {
+        if (cells == null)
+            return;
+
+        for (int i = 0; i < cells.Length; i++)
+        {
+            if (cells[i] != null)
+                cells[i].text = code != null && i < code.Length ? code[i].ToString() : string.Empty;
+        }
+    }
+
     // Fifty-odd people at a launch, in teams the creator sizes: about twenty
     // teams on the board, and twelve is the largest team the database allows.
     // Both lists scroll, so these are the ceiling rather than what is drawn.
@@ -49,7 +73,7 @@ public class TeamDoorView : MonoBehaviour
     public GameObject teamGroupTail;
     public TextMeshProUGUI teamName;
     public TextMeshProUGUI teamMeta;
-    public TextMeshProUGUI inviteCode;
+    public TextMeshProUGUI[] inviteCells = new TextMeshProUGUI[CodeLength];
     public Button leaveButton;
 
     [Tooltip("One row per member, built once. Extra rows are switched off.")]
@@ -275,8 +299,7 @@ public class TeamDoorView : MonoBehaviour
 
             DrawMoved(team);
 
-            if (inviteCode != null)
-                inviteCode.text = team.invite_code;
+            ShowCode(inviteCells, team.invite_code);
 
             for (int i = 0; i < memberRows.Length; i++)
             {

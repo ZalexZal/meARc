@@ -11,9 +11,10 @@ using UnityEngine.UI;
 /// and Accept will not go through until one is.
 ///
 /// Why three: at 14 the law lets somebody agree for themselves; at 13 a parent
-/// has to agree (Bulgaria, GDPR art. 8); and Google Play does not allow an app
-/// that collects location to take in children under 13, which this app cannot
-/// do without. So 12 and under is told so, and the terms cannot be accepted.
+/// has to agree (Bulgaria, GDPR art. 8); and Google's ARCore terms forbid the
+/// Geospatial API in a service directed to children under 13 (COPPA), which
+/// this app is built on. So 12 and under is told so, and the terms cannot be
+/// accepted.
 /// </summary>
 public class AgeChoiceView : MonoBehaviour
 {
@@ -29,6 +30,9 @@ public class AgeChoiceView : MonoBehaviour
 
     [Tooltip("Says so when Accept was pressed without an answer, or with too young a one.")]
     public TextMeshProUGUI nagLabel;
+
+    [Tooltip("The terms screen's Accept. Gone once this phone is locked: a button that can never work is a button that looks broken.")]
+    public GameObject acceptButton;
 
     const int None = 0, Older = 1, Thirteen = 2, Younger = 3;
     int _choice;
@@ -83,6 +87,9 @@ public class AgeChoiceView : MonoBehaviour
             Say("age.tooYoungHere");
         }
 
+        if (acceptButton != null)
+            acceptButton.SetActive(!Locked);
+
         ThemeManager.OnThemeChanged += Draw;
         Draw();
     }
@@ -105,6 +112,9 @@ public class AgeChoiceView : MonoBehaviour
     public void Nag()
     {
         Say(Locked ? "age.tooYoungHere" : TooYoung ? "age.tooYoung" : "age.nag");
+
+        if (Locked && acceptButton != null)
+            acceptButton.SetActive(false);
     }
 
     void Say(string key)

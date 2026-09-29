@@ -45,6 +45,11 @@ public class TermsService : MonoBehaviour
     /// </summary>
     const string AgeKey = "age_band";
 
+    /// <summary>Whose answer <see cref="AgeKey"/> is. The answer is kept per phone
+    /// so a guest after sign-out is not asked again; this says whether it was
+    /// given for the account signed in now.</summary>
+    const string AgeOwnerKey = "age_band_owner";
+
     /// <summary>True, false, or null when the question has not been answered here.</summary>
     public bool? Under14
     {
@@ -53,6 +58,12 @@ public class TermsService : MonoBehaviour
             string band = PlayerPrefs.GetString(AgeKey, string.Empty);
             return band == "under14" ? true : band == "14+" ? (bool?)false : null;
         }
+    }
+
+    /// <summary><see cref="Under14"/>, but only when it was answered for this account.</summary>
+    public bool? Under14ForThisAccount
+    {
+        get { return PlayerPrefs.GetString(AgeOwnerKey, string.Empty) == AccountScope.Who ? Under14 : null; }
     }
 
     public static TermsService Instance { get; private set; }
@@ -193,7 +204,10 @@ public class TermsService : MonoBehaviour
                         : text.Contains("\"age_band\":\"14+\"") ? "14+" : null;
 
             if (same && band != null)
+            {
                 PlayerPrefs.SetString(AgeKey, band);
+                PlayerPrefs.SetString(AgeOwnerKey, AccountScope.Who);
+            }
 
             if (same && band != null && text.Contains(wanted))
             {
@@ -213,6 +227,7 @@ public class TermsService : MonoBehaviour
     public void Accept(bool under14)
     {
         PlayerPrefs.SetString(AgeKey, under14 ? "under14" : "14+");
+        PlayerPrefs.SetString(AgeOwnerKey, AccountScope.Who);
         PlayerPrefs.SetString(DeviceKey, RequiredVersion);
         PlayerPrefs.SetString(AccountScope.Key(AcceptedKey), RequiredVersion);
         PlayerPrefs.Save();
@@ -235,6 +250,12 @@ public class TermsService : MonoBehaviour
 
         string version = RequiredVersion;
         bool? young = Under14;
+
+        // Sent for this account, so from here on it is this account's answer -
+        // including one given on a first run before sign-in had finished.
+        if (young.HasValue)
+            PlayerPrefs.SetString(AgeOwnerKey, AccountScope.Who);
+
         string body = "{\"p_version\":\"" + version + "\"" +
                       (young.HasValue ? ",\"p_under14\":" + (young.Value ? "true" : "false") : string.Empty) +
                       "}";

@@ -152,7 +152,10 @@ public class MarkerPieceController : MonoBehaviour
         if (tooFarLabel != null)
         {
             Set(tooFarLabel.gameObject, true);
-            tooFarLabel.text = AppStrings.Get("piece.tooFar");
+            // Standing on the stop with a fake-location app on reads as "come
+            // closer" otherwise - a sentence that cannot be acted on at 0 m.
+            bool mocked = UserLocationService.Instance != null && UserLocationService.Instance.IsMocked;
+            tooFarLabel.text = AppStrings.Get(mocked ? "piece.mocked" : "piece.tooFar");
         }
 
         for (int i = 0; i < _rows.Count; i++)

@@ -1013,6 +1013,12 @@ const float ReferenceWidth = 1080f;
                                          FontStyles.Bold);
         UIFactory.FitsItsText(view.titleLabel);
 
+        // ReportSheetView writes the title - stop, trail or team - and relabels
+        // on a language change. A LocalizedLabel here rewrote it to "this stop"
+        // the moment the sheet was shown, so a trail report opened asking about
+        // a stop (found on the phone).
+        DropLocalizer(view.titleLabel);
+
         for (int i = 0; i < ReportSheetView.Reasons.Length; i++)
         {
             string key = "report.reason." + ReportSheetView.Reasons[i];
@@ -1035,6 +1041,7 @@ const float ReferenceWidth = 1080f;
         view.blockButton = FullWidthButton(card, "Block", "block.creator",
                                            ThemeRole.SurfaceAlt, ThemeRole.StatusPoor);
         view.blockLabel = view.blockButton.GetComponentInChildren<TextMeshProUGUI>();
+        DropLocalizer(view.blockLabel);   // same reason as the title
         view.blockLabel.textWrappingMode = TextWrappingModes.Normal;
         view.blockLabel.fontSizeMax = Body;
         view.blockLabel.enableAutoSizing = true;
@@ -3204,6 +3211,8 @@ const float ReferenceWidth = 1080f;
         controller.helpLabel = SectionLabel(content, "settings.help");
         RectTransform help = UIFactory.Rect("HelpCard", content);
         UIFactory.Card(help, 34f, 0f);
+        controller.feedbackButton = HelpRow(help, "settings.feedback", out TextMeshProUGUI _);
+        Divider(help);
         controller.tutorialButton = HelpRow(help, "settings.replayTutorial",
                                             out controller.tutorialRowLabel);
         Divider(help);
@@ -3235,11 +3244,13 @@ const float ReferenceWidth = 1080f;
         controller.badgesPage = BuildBadgesPage(rt);
         controller.securityPage = BuildSecurityPage(rt);
         controller.blockedPage = BuildBlockedPage(rt);
+        controller.feedbackPage = BuildFeedbackPage(rt);
 
         navigator.pages = new List<GameObject>
         {
             controller.sourcesPage, controller.aboutPage,
-            controller.badgesPage, controller.securityPage, controller.blockedPage
+            controller.badgesPage, controller.securityPage, controller.blockedPage,
+            controller.feedbackPage
         };
 
         RectTransform backRect = UIFactory.Rect("BackButton", rt);
@@ -3645,16 +3656,75 @@ const float ReferenceWidth = 1080f;
             view.rowLabels[i].overflowMode = TextOverflowModes.Ellipsis;
 
             RectTransform undo = UIFactory.Rect("Unblock", row);
-            UIFactory.Size(undo.gameObject, Tap, 220f).flexibleWidth = 0f;
+            // 220 held "Unblock" and broke "Отблокирай" in two on the phone.
+            UIFactory.Size(undo.gameObject, Tap, 300f).flexibleWidth = 0f;
             view.unblockButtons[i] = UIFactory.Button(undo, ThemeRole.Surface, 0f);
             TextMeshProUGUI undoLabel = UIFactory.Text("Label", undo, Body, ThemeRole.Accent,
                                                        TextAlignmentOptions.Right,
                                                        "blocked.unblock", FontStyles.Bold);
+            undoLabel.textWrappingMode = TextWrappingModes.NoWrap;
             UIFactory.Stretch(undoLabel.rectTransform);
 
             view.rows[i] = row.gameObject;
             row.gameObject.SetActive(false);
         }
+
+        view.statusLabel = UIFactory.Text("Status", content, Secondary, ThemeRole.TextMuted,
+                                          TextAlignmentOptions.Left, null);
+        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 56f);
+        view.statusLabel.gameObject.SetActive(false);
+
+        rt.gameObject.SetActive(false);
+        return rt.gameObject;
+    }
+
+    /// <summary>You → Send feedback: a message, what is sent with it, and Send.</summary>
+    static GameObject BuildFeedbackPage(Transform parent)
+    {
+        RectTransform rt = PageFrame(parent, "FeedbackPage", out RectTransform content);
+        FeedbackView view = rt.gameObject.AddComponent<FeedbackView>();
+
+        TextMeshProUGUI title = UIFactory.Text("Title", content, Title, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, "feedback.title",
+                                               FontStyles.Bold);
+        UIFactory.Size(title.gameObject, 84f);
+
+        TextMeshProUGUI lede = UIFactory.Text("Lede", content, Secondary, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.TopLeft, "feedback.lede");
+        lede.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.FitsItsText(lede);
+
+        RectTransform card = UIFactory.Rect("Card", content);
+        UIFactory.Card(card, 34f, 20f);
+
+        // A paragraph, not a line: several lines tall, wrapping, and Enter is a
+        // new line rather than a send.
+        view.messageField = Field(card, "Message", "feedback.placeholder");
+        UIFactory.Size(view.messageField.gameObject, 340f);
+        view.messageField.lineType = TMP_InputField.LineType.MultiLineNewline;
+        view.messageField.characterLimit = 2000;
+        view.messageField.textComponent.textWrappingMode = TextWrappingModes.Normal;
+        view.messageField.textComponent.alignment = TextAlignmentOptions.TopLeft;
+
+        if (view.messageField.placeholder is TextMeshProUGUI hint)
+        {
+            hint.textWrappingMode = TextWrappingModes.Normal;
+            hint.alignment = TextAlignmentOptions.TopLeft;
+        }
+
+        // No key: the view fills in the version and the phone model.
+        view.attachedLabel = UIFactory.Text("Attached", card, Caption, ThemeRole.TextMuted,
+                                            TextAlignmentOptions.TopLeft, null);
+        view.attachedLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.FitsItsText(view.attachedLabel);
+
+        RowLabel(card, "feedback.reply", out RectTransform replyRow);
+        view.replyToggle = UIFactory.Switch("Toggle", replyRow);
+        view.replyRow = replyRow.gameObject;
+
+        view.sendButton = FullWidthButton(card, "Send", "feedback.send",
+                                          ThemeRole.Accent, ThemeRole.OnAccent);
 
         view.statusLabel = UIFactory.Text("Status", content, Secondary, ThemeRole.TextMuted,
                                           TextAlignmentOptions.Left, null);
@@ -5291,7 +5361,18 @@ const float ReferenceWidth = 1080f;
     /// extra steps, and the answer to that is short sentences, not illustration.
     /// </summary>
     /// <summary>The height of the age question under the terms, pills and all.</summary>
-    const float AgeBlock = 200f;
+    // Question, pills, and room for a two-line refusal under them - at 200 the
+    // "13 and older" sentence sat behind the Accept button, found on a phone.
+    const float AgeBlock = 290f;
+
+    /// <summary>For a label its view writes itself: a LocalizedLabel would rewrite it on enable.</summary>
+    static void DropLocalizer(TextMeshProUGUI label)
+    {
+        LocalizedLabel localizer = label != null ? label.GetComponent<LocalizedLabel>() : null;
+
+        if (localizer != null)
+            Object.DestroyImmediate(localizer);
+    }
 
     static Button AgePill(Transform parent, string name, string key, out Image fill,
                           out TextMeshProUGUI label)
@@ -5474,13 +5555,15 @@ const float ReferenceWidth = 1080f;
         // No key: the view writes "choose one" or "13 and older" as it needs.
         ageView.nagLabel = UIFactory.Text("Nag", age, Caption, ThemeRole.StatusPoor,
                                           TextAlignmentOptions.Left, null);
-        UIFactory.Size(ageView.nagLabel.gameObject, 40f);
+        ageView.nagLabel.textWrappingMode = TextWrappingModes.Normal;
+        UIFactory.Size(ageView.nagLabel.gameObject, 84f);
         ageView.nagLabel.gameObject.SetActive(false);
 
         RectTransform accept = UIFactory.Rect("Accept", inner);
         UIFactory.BottomStretch(accept, Tap);
         Button acceptButton = UIFactory.Button(accept, ThemeRole.Accent, 1f, UIShape.Rounded);
         Wire(acceptButton.onClick, flow.AcceptTerms, "Accept terms");
+        ageView.acceptButton = accept.gameObject;
 
         TextMeshProUGUI acceptLabel = UIFactory.Text("Label", accept, Body, ThemeRole.OnAccent,
                                                      TextAlignmentOptions.Center, "terms.accept",
@@ -5762,10 +5845,18 @@ const float ReferenceWidth = 1080f;
         UIFactory.Text("InviteLabel", mine, Caption, ThemeRole.TextMuted,
                        TextAlignmentOptions.Left, "team.invite");
 
-        view.inviteCode = UIFactory.Text("Invite", mine, Display, ThemeRole.Accent,
-                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
-        view.inviteCode.characterSpacing = 14f;
-        UIFactory.Size(view.inviteCode.gameObject, 92f);
+        // One centred cell per character - see TeamDoorView.ShowCode.
+        RectTransform codeRow = UIFactory.Rect("Invite", mine);
+        UIFactory.Size(codeRow.gameObject, 92f);
+        UIFactory.HorizontalStack(codeRow, 4f, false);
+
+        for (int i = 0; i < TeamDoorView.CodeLength; i++)
+        {
+            TextMeshProUGUI cell = UIFactory.Text("Char" + i, codeRow, Display, ThemeRole.Accent,
+                                                  TextAlignmentOptions.Center, null, FontStyles.Bold);
+            UIFactory.Size(cell.gameObject, 92f, 76f).flexibleWidth = 0f;
+            view.inviteCells[i] = cell;
+        }
 
         // Said plainly, because this is the code people confuse with the trail's
         // and then wonder why nobody can join them.

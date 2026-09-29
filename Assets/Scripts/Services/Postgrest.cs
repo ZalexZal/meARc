@@ -72,6 +72,39 @@ public static class Postgrest
             || (payload != null && payload.Contains("issued at future"));
     }
 
+    /// <summary>
+    /// A string made safe to put between quotes in a JSON body, line breaks kept.
+    /// The older per-class Escape helpers flatten them to spaces, which is fine
+    /// for a team name and wrong for a paragraph somebody typed.
+    /// </summary>
+    public static string Json(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder(text.Length + 8);
+
+        foreach (char c in text)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (c < ' ')
+                        sb.Append("\\u").Append(((int)c).ToString("x4"));
+                    else
+                        sb.Append(c);
+                    break;
+            }
+        }
+
+        return sb.ToString();
+    }
+
     [Serializable]
     class Body
     {

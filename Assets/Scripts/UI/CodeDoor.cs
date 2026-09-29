@@ -113,6 +113,18 @@ public class CodeDoor : MonoBehaviour
         // to argue with whoever gave them a perfectly good code.
         bool theirs = detail == "unknown";
 
+        // Refused because a parent has not agreed yet: say so, and ask again so
+        // the parent door takes over from here.
+        if (detail == "parent")
+        {
+            SetMessage(AppStrings.Get("code.parent"));
+
+            if (ConsentService.Instance != null)
+                ConsentService.Instance.Refresh();
+
+            return;
+        }
+
         SetMessage(AppStrings.Get(theirs ? "code.unknown" : "code.failed"));
 
         if (boxes == null)

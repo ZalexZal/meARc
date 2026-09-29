@@ -80,6 +80,10 @@ public class SettingsTabController : MonoBehaviour
     public Button blockedButton;
     public GameObject blockedPage;
 
+    [Tooltip("Opens Send feedback.")]
+    public Button feedbackButton;
+    public GameObject feedbackPage;
+
     [Tooltip("Open the website's own pages, in the app's language.")]
     public Button termsButton;
     public Button privacyButton;
@@ -136,6 +140,7 @@ public class SettingsTabController : MonoBehaviour
         WireHelpRow(allBadgesButton, badgesPage);
         WireHelpRow(securityButton, securityPage);
         WireHelpRow(blockedButton, blockedPage);
+        WireHelpRow(feedbackButton, feedbackPage);
 
         if (termsButton != null)
             termsButton.onClick.AddListener(() => Application.OpenURL(SiteLink.Terms()));

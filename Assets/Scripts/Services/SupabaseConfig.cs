@@ -27,7 +27,7 @@ public class SupabaseConfig : MonoBehaviour
     [Header("Terms")]
     [Tooltip("Bumping this makes every reader accept again. It is written to " +
              "profiles.terms_version, so it is also the record of what they agreed to.")]
-    public string termsVersion = "2026-09-27";
+    public string termsVersion = "2026-09-29";
 
     [Tooltip("The website, no trailing slash. The app links to its terms, privacy " +
              "policy and account page, in the language the app is set to.")]
