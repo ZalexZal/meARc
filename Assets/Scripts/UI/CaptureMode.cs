@@ -79,7 +79,15 @@ public class CaptureMode : MonoBehaviour
 
     public bool Active { get { return _data != null || _placing; } }
 
+    /// <summary>The bar is on screen. It is active exactly while it is open.</summary>
+    public static bool IsOpen { get; private set; }
+
     bool _placing;
+
+    void OnEnable()
+    {
+        IsOpen = true;
+    }
 
     /// <summary>Whether this reader may move this stop: its trail is theirs, or they edit it.</summary>
     public static bool CanEdit(BuildingData data)
@@ -140,6 +148,10 @@ public class CaptureMode : MonoBehaviour
         _busy = false;
         _said = null;
 
+        // Add a stop here greys the bar while it places; the stop it made comes
+        // back through here, and was left with nothing to press.
+        SetInteractable(true);
+
         if (tabs != null)
             tabs.ShowCamera();
 
@@ -162,6 +174,7 @@ public class CaptureMode : MonoBehaviour
 
     void OnDisable()
     {
+        IsOpen = false;
         _placing = false;
 
         // Leaving the camera tab mid-capture is a cancel, not a save. Coroutines
@@ -556,9 +569,12 @@ public class CaptureMode : MonoBehaviour
 
         GeoMath.OffsetToLatLon(_lat0, _lng0, _east, _north, out double lat, out double lng);
 
-        string body = string.Format(CultureInfo.InvariantCulture,
-            "{{\"p_marker\":\"{0}\",\"p_lat\":{1:R},\"p_lng\":{2:R}}}",
-            _data.buildingId.Replace("\"", ""), lat, lng);
+        // Concatenated, not string.Format: in Unity's runtime "{2:R}}}" reads the
+        // "}}" as part of the format, so the number came out wrong, the JSON had
+        // no closing brace, and every Save was refused "Empty or invalid json".
+        string body = "{\"p_marker\":\"" + _data.buildingId.Replace("\"", "") +
+                      "\",\"p_lat\":" + lat.ToString("R", CultureInfo.InvariantCulture) +
+                      ",\"p_lng\":" + lng.ToString("R", CultureInfo.InvariantCulture) + "}";
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/move_marker"), body, null))

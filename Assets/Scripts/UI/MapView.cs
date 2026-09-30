@@ -458,7 +458,21 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         GuidanceService.Validate();
         ApplySelection();
         MarkDirty();
+
+        // A trail just opened: frame its nearest stop, as the first fix does.
+        // Joining one kept the zoom the last trail needed - 25 m across, with all
+        // five of the new trail's stops 300 m away and off the screen. The demo
+        // frames its own stops.
+        string trail = TrailService.Instance != null ? TrailService.Instance.SelectedId : null;
+
+        if (!DemoTrail.Active && all.Count > 0 && trail != _framedTrail)
+        {
+            _framedTrail = trail;
+            Recentre();
+        }
     }
+
+    string _framedTrail;
 
     void Repaint()
     {

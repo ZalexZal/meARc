@@ -105,9 +105,20 @@ public class ProximityToast : MonoBehaviour
         BuildingDatabase.OnBuildingsChanged -= DropIfGone;
     }
 
+    /// <summary>
+    /// A stop sheet or the capture bar is open. The card rests over the bottom of
+    /// the screen, which is exactly where their buttons are: on the phone it sat
+    /// on a sheet's Hide and Report, and on the capture bar's Save and Cancel.
+    /// </summary>
+    bool Covering()
+    {
+        return CaptureMode.IsOpen ||
+               (infoPanel != null && infoPanel.sheet != null && infoPanel.sheet.IsOpen);
+    }
+
     public void Show(BuildingData marker)
     {
-        if (marker == null || card == null)
+        if (marker == null || card == null || Covering())
             return;
 
         _marker = marker;
@@ -142,7 +153,16 @@ public class ProximityToast : MonoBehaviour
 
         Slide();
 
-        if (_leaving || _sliding)
+        if (_leaving)
+            return;
+
+        if (Covering())
+        {
+            Dismiss();
+            return;
+        }
+
+        if (_sliding)
             return;
 
         RefreshDistance();

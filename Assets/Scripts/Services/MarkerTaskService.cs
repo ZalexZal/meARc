@@ -244,6 +244,8 @@ public class MarkerTaskService : MonoBehaviour
 
             if (rows != null)
             {
+                HashSet<string> solvedThere = new HashSet<string>();
+
                 for (int i = 0; i < rows.Length; i++)
                 {
                     if (rows[i] == null || string.IsNullOrEmpty(rows[i].marker_id))
@@ -252,6 +254,32 @@ public class MarkerTaskService : MonoBehaviour
                     MarkerProgress row = Progress(rows[i].marker_id);
                     row.solved = true;
                     row.points = rows[i].points;
+                    solvedThere.Add(rows[i].marker_id);
+                }
+
+                // And the other way. A team's answers go with the team, so after
+                // leaving one every question it had solved stayed solved on this
+                // phone and the server had no record of it: no Check, no verdict,
+                // nothing to press, for good. On a game the server's record is the
+                // record; a guide scores nothing and keeps its answers here.
+                TrailService trails = TrailService.Instance;
+
+                if (trails != null && trails.SelectedId == worldId && trails.SelectedIsGame)
+                {
+                    var here = BuildingDatabase.AllBuildings;
+
+                    for (int i = 0; i < here.Count; i++)
+                    {
+                        if (here[i] == null || solvedThere.Contains(here[i].buildingId) ||
+                            !_progress.TryGetValue(here[i].buildingId, out MarkerProgress stale) ||
+                            !stale.solved)
+                        {
+                            continue;
+                        }
+
+                        stale.solved = false;
+                        stale.points = 0;
+                    }
                 }
 
                 SaveCache();

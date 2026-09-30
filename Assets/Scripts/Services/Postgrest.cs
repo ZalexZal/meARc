@@ -50,6 +50,26 @@ public static class Postgrest
     }
 
     /// <summary>
+    /// What the server said, in the reader's language.
+    ///
+    /// The database words its refusals in English, lower case, and a Bulgarian
+    /// reader was shown them exactly so: "make or join a team first". A sentence
+    /// it is known to send has its own string under "server." + the sentence;
+    /// anything else still shows as it came, with a capital.
+    /// </summary>
+    public static string InWords(string said)
+    {
+        if (string.IsNullOrWhiteSpace(said))
+            return said;
+
+        said = said.Trim();
+        string key = "server." + said;
+        string words = AppStrings.Get(key);
+
+        return words != key ? words : char.ToUpperInvariant(said[0]) + said.Substring(1);
+    }
+
+    /// <summary>
     /// Whether this failure is worth one more try in a moment.
     ///
     /// Supabase mints the token on one machine and checks it on another, and

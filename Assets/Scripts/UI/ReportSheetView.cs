@@ -258,7 +258,7 @@ public class ReportSheetView : MonoBehaviour
 
                     if (statusLabel != null)
                     {
-                        statusLabel.text = said;
+                        statusLabel.text = Postgrest.InWords(said);
                         statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
                         statusLabel.gameObject.SetActive(true);
                     }

@@ -226,7 +226,7 @@ public class HintSheetView : MonoBehaviour
                 // account. The server answered "a competitive trail needs a real
                 // account" and the sheet said "That did not unlock", which is
                 // true, useless, and reads as a fault of ours.
-                Failed(Postgrest.Said(request));
+                Failed(Postgrest.InWords(Postgrest.Said(request)));
                 yield break;
             }
 

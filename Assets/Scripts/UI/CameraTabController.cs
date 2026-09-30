@@ -477,15 +477,20 @@ public class CameraTabController : MonoBehaviour
     {
         if (addStopButton != null)
         {
-            addStopButton.gameObject.SetActive(capture != null && !capture.Active &&
+            // IsOpen, not Active: a refused placing leaves the bar up with
+            // nothing in it, and the button stood on top of it.
+            addStopButton.gameObject.SetActive(capture != null && !CaptureMode.IsOpen &&
                                                CaptureMode.CanAddHere());
         }
 
         if (dock == null)
             return;
 
-        if (_selected == null || HiddenMarkers.IsHidden(_selected))
-            _selected = Nearest();
+        // Looked up again by id: a stop from the trail walked before this one is
+        // no longer in the database, and the dock went on naming it - "The Eski
+        // Mosque, 218 m" on a trail with one stop 13 m away.
+        BuildingData current = _selected != null ? BuildingDatabase.GetById(_selected.buildingId) : null;
+        _selected = current != null && !HiddenMarkers.IsHidden(current) ? current : Nearest();
 
         bool has = _selected != null;
 

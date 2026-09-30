@@ -355,7 +355,14 @@ public class MarkerQuestionView : MonoBehaviour
             string said = result != null ? result.refusal : null;
 
             if (!string.IsNullOrWhiteSpace(said))
-                Bubble(said, ThemeRole.StatusFair, false);
+            {
+                Bubble(Postgrest.InWords(said), ThemeRole.StatusFair, false);
+
+                // The team sheet can be closed on the way in, and nothing on a
+                // question says where it went. Open it rather than describe it.
+                if (said.Contains("team first") && DoorFlow.Instance != null)
+                    DoorFlow.Instance.OpenTeam();
+            }
             else
                 Bubble("task.offline", ThemeRole.TextSecondary);
 
