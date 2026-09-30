@@ -111,16 +111,19 @@ public class VpsIndicatorController : MonoBehaviour
 
         string key = KeyFor(_status);
 
+        // Written whether or not the bubble is open: this is the chip on the
+        // camera screen, and it is the only calibration state most readers see.
+        // It sat below the return that follows, so the chip said what the
+        // builder wrote - "Cannot calibrate here", in English - whatever the
+        // camera knew and whatever the language.
+        if (dotLabel != null)
+            dotLabel.text = AppStrings.Get(key + ".title");
+
         if (bubbleRoot == null || !bubbleRoot.activeSelf)
             return;
 
         if (bubbleDot != null)
             bubbleDot.color = colour;
-
-        // Written whether or not the bubble is open: this is the chip on the
-        // camera screen, and it is the only calibration state most readers see.
-        if (dotLabel != null)
-            dotLabel.text = AppStrings.Get(key + ".title");
 
         if (bubbleTitle != null)
             bubbleTitle.text = AppStrings.Get(key + ".title");
