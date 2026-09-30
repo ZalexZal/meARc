@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 /// <summary>
@@ -9,6 +10,9 @@ public class MarkerView : MonoBehaviour
     [Header("Appearance")]
     [Tooltip("Renderers tinted by the building's or category's marker colour.")]
     public Renderer[] tintedRenderers;
+
+    [Tooltip("The words on a sign-shaped marker. Empty on every other shape.")]
+    public TextMeshPro signLabel;
 
     [Header("Scale")]
     [Tooltip("Real-world size in metres at close range.")]
@@ -108,6 +112,17 @@ public class MarkerView : MonoBehaviour
             if (_colliders[i] != null)
                 _colliders[i].enabled = visible;
         }
+    }
+
+    /// <summary>What a sign says. Does nothing on a shape with nowhere to write.</summary>
+    public void SetSign(string words)
+    {
+        if (signLabel == null)
+            return;
+
+        // "Name · date" breaks after the dot, not before it.
+        signLabel.text = (words ?? string.Empty).Replace(" · ", " · ");
+        signLabel.ForceMeshUpdate();
     }
 
     /// <summary>

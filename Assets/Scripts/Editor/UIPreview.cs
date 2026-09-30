@@ -272,7 +272,7 @@ public static class UIPreview
             pages.ShowPage(feedback.gameObject);
             if (feedback.attachedLabel != null)
                 feedback.attachedLabel.text = string.Format(AppStrings.Get("feedback.attached"),
-                                                            "0.3.0", "SM-A546B");
+                                                            "0.4.0", "SM-A546B");
             if (feedback.replyRow != null)
                 feedback.replyRow.SetActive(true);
             Shoot(canvas, rig, "39-feedback" + t, "SettingsPanel");
@@ -1039,12 +1039,36 @@ public static class UIPreview
             if (capture.statusLabel != null)
                 capture.statusLabel.text = string.Format(AppStrings.Get("capture.moved"), "2",
                     AppStrings.Get("capture.north"), "1", AppStrings.Get("capture.east"));
+            if (capture.shapeLabel != null)
+                capture.shapeLabel.text = string.Format(AppStrings.Get("capture.shape"),
+                                                        AppStrings.Get("shape.sign"));
 
             Shoot(canvas, rig, "45-capture" + t, "CameraPanel");
+
+            // A stop just made on site: a draft, and it says so.
+            if (capture.titleLabel != null)
+                capture.titleLabel.text = string.Format(AppStrings.Get("capture.title"),
+                                                        AppStrings.Get("capture.newTitle"));
+            if (capture.statusLabel != null)
+                capture.statusLabel.text = AppStrings.Get("capture.added") + "\n" +
+                                           AppStrings.Get("capture.draftNote");
+            if (capture.shapeLabel != null)
+                capture.shapeLabel.text = string.Format(AppStrings.Get("capture.shape"),
+                                                        AppStrings.Get("shape.pin"));
+
+            Shoot(canvas, rig, "46-capture-new" + t, "CameraPanel");
 
             capture.gameObject.SetActive(false);
             foreach (GameObject other in capture.hideWhileOpen)
                 if (other != null) other.SetActive(true);
+
+            // The camera as a trail's creator sees it: Add a stop here above the dock.
+            if (camera != null && camera.addStopButton != null)
+            {
+                camera.addStopButton.gameObject.SetActive(true);
+                Shoot(canvas, rig, "47-camera-creator" + t, "CameraPanel");
+                camera.addStopButton.gameObject.SetActive(false);
+            }
         }
         else
         {
@@ -1323,10 +1347,10 @@ public static class UIPreview
 
         Set(root, Sheet + "Head/TitleText", "Безистен");
         Set(root, Sheet + "Distance/Value", "180 m");
-        Set(root, Sheet + "MetaText", "15 век  ·  Неизвестен  ·  Търговски");
+        Set(root, Sheet + "MetaText", "1509–1510  ·  Неизвестен  ·  Търговски");
         Set(root, Sheet + "DescriptionText",
             "Ямболският безистен е един от малкото запазени покрити пазари на " +
-            "Балканския полуостров. Построен е през XV век и дълго време е бил " +
+            "Балканския полуостров. Построен е около 1509–1510 г. и дълго време е бил " +
             "търговското сърце на града.");
 
         Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Name", "Ямбол — център");

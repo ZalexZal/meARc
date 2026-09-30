@@ -76,6 +76,14 @@ public class BuildingData : ScriptableObject
              "#C2483A. Blank means use the Category's colour.")]
     public string markerColourHex;
 
+    [Tooltip("Made on site and not yet filled in on the website. Only the trail's " +
+             "owner and editors are ever sent one.")]
+    public bool isDraft;
+
+    [Tooltip("The words on a sign-shaped marker (content.<lang>.sign). Blank shows the name.")]
+    public string signText;
+    public string signTextBg;
+
     [Header("Content")]
     [Tooltip("Uploaded video and audio, in the order the creator arranged them. A " +
              "marker with several is a small sequence rather than a page.")]
@@ -154,6 +162,16 @@ public class BuildingData : ScriptableObject
     public string YearBuilt { get { return Pick(yearBuilt, yearBuiltBg); } }
     public string Architect { get { return Pick(architect, architectBg); } }
     public string ExternalLink { get { return Pick(externalLinkURL, externalLinkURLBg); } }
+
+    /// <summary>What a sign-shaped marker says: its own words, or the stop's name.</summary>
+    public string SignText
+    {
+        get
+        {
+            string words = Pick(signText, signTextBg);
+            return string.IsNullOrWhiteSpace(words) ? DisplayName : words;
+        }
+    }
 
     /// <summary>
     /// Bulgarian when it is both selected and written; English otherwise. The

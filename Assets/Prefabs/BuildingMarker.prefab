@@ -71,6 +71,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MarkerView
   tintedRenderers:
   - {fileID: 6953372231593954574}
+  signLabel: {fileID: 0}
   baseScale: 1.5
   clampDistance: 60
   billboard: 0

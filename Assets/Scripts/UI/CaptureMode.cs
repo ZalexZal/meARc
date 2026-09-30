@@ -22,6 +22,16 @@ using UnityEngine.UI;
 /// anchors are made with an identity rotation, which ARCore defines as
 /// east-up-south, so an offset of (east, 0, -north) metres is exactly where the
 /// stop will be once saved - without re-resolving an anchor for every nudge.
+///
+/// Two more things a creator standing in the street needs (0054):
+///
+///   Add a stop here - a new stop where the phone is, as a draft only the
+///   trail's owner and editors are sent, straight into this bar to be nudged.
+///   Its words are written on the website, which publishes it.
+///
+///   Shape - pin, sphere, cone, cube, sign, one press each, saved through
+///   set_marker_shape and swapped in the camera at once, so the choice is made
+///   looking at the thing itself.
 /// </summary>
 public class CaptureMode : MonoBehaviour
 {
@@ -35,6 +45,13 @@ public class CaptureMode : MonoBehaviour
     public Button hereButton;
     public Button saveButton;
     public Button cancelButton;
+
+    [Tooltip("Cycles the stop's shape and saves it.")]
+    public Button shapeButton;
+    public TextMeshProUGUI shapeLabel;
+
+    /// <summary>The shapes, in the order the button goes through them (0054).</summary>
+    public static readonly string[] Shapes = { "pin", "sphere", "cone", "cube", "sign" };
 
     [Tooltip("Hidden while capturing: the dock's nearest-marker card sits where this bar does.")]
     public GameObject[] hideWhileOpen = new GameObject[0];
@@ -60,7 +77,9 @@ public class CaptureMode : MonoBehaviour
     float _drawTimer;
     string _said;
 
-    public bool Active { get { return _data != null; } }
+    public bool Active { get { return _data != null || _placing; } }
+
+    bool _placing;
 
     /// <summary>Whether this reader may move this stop: its trail is theirs, or they edit it.</summary>
     public static bool CanEdit(BuildingData data)
@@ -74,8 +93,21 @@ public class CaptureMode : MonoBehaviour
         return trail != null && (trail.role == "owner" || trail.role == "editor");
     }
 
+    /// <summary>Whether this reader may add stops to the open trail: it is theirs, or they edit it.</summary>
+    public static bool CanAddHere()
+    {
+        if (DemoTrail.Active)
+            return false;
+
+        TrailService trails = TrailService.Instance;
+        TrailService.Trail trail = trails != null ? trails.Selected : null;
+
+        return trail != null && (trail.role == "owner" || trail.role == "editor");
+    }
+
     void Awake()
     {
+        Wire(shapeButton, CycleShape);
         Wire(forwardButton, () => Nudge(1f, 0f));
         Wire(backButton, () => Nudge(-1f, 0f));
         Wire(leftButton, () => Nudge(0f, -1f));
@@ -130,6 +162,8 @@ public class CaptureMode : MonoBehaviour
 
     void OnDisable()
     {
+        _placing = false;
+
         // Leaving the camera tab mid-capture is a cancel, not a save. Coroutines
         // stop with the object, so a save in flight is abandoned here too; if it
         // had already landed, the next marker refresh brings the new position.
@@ -274,6 +308,224 @@ public class CaptureMode : MonoBehaviour
             marker.localPosition = new Vector3((float)east, 0f, (float)-north);
     }
 
+    // --------------------------------------------------------------- adding one
+
+    /// <summary>
+    /// Camera: "Add a stop here". The bar opens at once and says it is placing,
+    /// because the request and the refetch take a second or two and a button
+    /// that does nothing visible for that long gets pressed again.
+    /// </summary>
+    public void AddHere()
+    {
+        if (_busy || _placing || !CanAddHere())
+            return;
+
+        if (_data != null)
+        {
+            Preview(0d, 0d);
+            _data = null;
+        }
+
+        _placing = true;
+        _said = null;
+
+        if (tabs != null)
+            tabs.ShowCamera();
+
+        foreach (GameObject other in hideWhileOpen)
+            if (other != null) other.SetActive(false);
+
+        gameObject.SetActive(true);
+        SetInteractable(false);
+        if (cancelButton != null)
+            cancelButton.interactable = true;
+
+        Say(AppStrings.Get("capture.newTitle"), AppStrings.Get("capture.placing"));
+        StartCoroutine(Place());
+    }
+
+    IEnumerator Place()
+    {
+        UserLocationService location = UserLocationService.Instance;
+        TrailService trails = TrailService.Instance;
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (location == null || trails == null || config == null || string.IsNullOrEmpty(trails.SelectedId))
+        {
+            Refuse(AppStrings.Get("report.failed"));
+            yield break;
+        }
+
+        // The same rules as "put it where I'm standing": never a faked position,
+        // and never a fix too rough to be better than a map.
+        if (location.IsMocked)
+        {
+            Refuse(AppStrings.Get("task.position.mock"));
+            yield break;
+        }
+
+        if (!location.HasValidPose || location.HorizontalAccuracy > RoughestHere)
+        {
+            Refuse(string.Format(AppStrings.Get("capture.tooRough"),
+                                 location.HasValidPose
+                                     ? Mathf.RoundToInt((float)location.HorizontalAccuracy).ToString()
+                                     : "?"));
+            yield break;
+        }
+
+        // Named in both languages whatever this phone is set to: the stop belongs
+        // to the trail, and its readers may read either.
+        string body = string.Format(CultureInfo.InvariantCulture,
+            "{{\"p_world\":\"{0}\",\"p_lat\":{1:R},\"p_lng\":{2:R}," +
+            "\"p_content\":{{\"bg\":{{\"title\":\"Нова спирка\"}},\"en\":{{\"title\":\"New stop\"}}}}," +
+            "\"p_style_key\":\"pin\",\"p_status\":\"draft\",\"p_radius_m\":30}}",
+            trails.SelectedId.Replace("\"", ""), location.Latitude, location.Longitude);
+
+        string id = null;
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/place_marker"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                string said = Postgrest.Said(request) ?? string.Empty;
+                Debug.LogWarning("[Capture] place_marker failed (" + request.responseCode + "): " + said);
+                Refuse(AppStrings.Get(said.Contains("not yours") ? "capture.notYours"
+                                    : said.Contains("200 stops") ? "capture.daily"
+                                    : "report.failed"));
+                yield break;
+            }
+
+            // One row comes back; PostgREST may send it bare or in a list.
+            string text = request.downloadHandler.text.Trim();
+            if (text.StartsWith("["))
+                text = text.Substring(1, text.Length - 2);
+
+            PlacedRow row = JsonUtility.FromJson<PlacedRow>(text);
+            id = row != null ? row.id : null;
+        }
+
+        if (string.IsNullOrEmpty(id))
+        {
+            Refuse(AppStrings.Get("report.failed"));
+            yield break;
+        }
+
+        // Fetched like every other stop, so what is moved is exactly what the
+        // spawner draws. Bounded: the stop exists either way, and the website has it.
+        RemoteMarkerSource source = FindAnyObjectByType<RemoteMarkerSource>();
+        if (source != null)
+            source.Refresh();
+
+        BuildingData made = null;
+        float waited = 0f;
+
+        while (made == null && waited < 12f)
+        {
+            yield return new WaitForSeconds(0.5f);
+            waited += 0.5f;
+            made = BuildingDatabase.GetById(id);
+        }
+
+        _placing = false;
+
+        if (made == null)
+        {
+            Refuse(AppStrings.Get("capture.placedNotShown"));
+            yield break;
+        }
+
+        Begin(made);
+        _said = AppStrings.Get("capture.added");
+        Draw();
+    }
+
+    [System.Serializable]
+    class PlacedRow
+    {
+        public string id;
+    }
+
+    /// <summary>A placing that did not happen: said on the bar, with only Cancel left.</summary>
+    void Refuse(string message)
+    {
+        _placing = false;
+        Say(AppStrings.Get("capture.newTitle"), message);
+        SetInteractable(false);
+
+        if (cancelButton != null)
+            cancelButton.interactable = true;
+    }
+
+    void Say(string title, string status)
+    {
+        if (titleLabel != null) titleLabel.text = title;
+        if (statusLabel != null) statusLabel.text = status;
+    }
+
+    // ------------------------------------------------------------------ shape
+
+    static string ShapeOf(BuildingData data)
+    {
+        string key = data != null ? data.markerStyle : null;
+        return string.IsNullOrEmpty(key) || key == "default" ? "pin" : key;
+    }
+
+    void CycleShape()
+    {
+        if (_data == null || _busy)
+            return;
+
+        int at = System.Array.IndexOf(Shapes, ShapeOf(_data));
+        StartCoroutine(SaveShape(Shapes[(at + 1) % Shapes.Length]));
+    }
+
+    IEnumerator SaveShape(string key)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || _data == null)
+            yield break;
+
+        BuildingData data = _data;
+        _busy = true;
+        SetInteractable(false);
+
+        string body = "{\"p_marker\":\"" + data.buildingId.Replace("\"", "") +
+                      "\",\"p_style_key\":\"" + key + "\"}";
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/set_marker_shape"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            _busy = false;
+            SetInteractable(true);
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                string said = Postgrest.Said(request) ?? string.Empty;
+                Debug.LogWarning("[Capture] set_marker_shape failed (" + request.responseCode + "): " + said);
+                _said = AppStrings.Get(said.Contains("not yours") ? "capture.notYours" : "report.failed");
+                Draw();
+                yield break;
+            }
+        }
+
+        // Swapped in the camera now: the spawner drops this stop's marker and
+        // places it again from the new shape on its next pass. The move being
+        // made, if any, is re-applied every frame by Update.
+        data.markerStyle = key;
+
+        if (spawner != null)
+            spawner.Replace(data.buildingId);
+
+        _said = null;
+        Draw();
+    }
+
     // ------------------------------------------------------------------ saving
 
     void Save()
@@ -344,7 +596,7 @@ public class CaptureMode : MonoBehaviour
 
         // Said on the bar for a moment rather than closing straight away: a
         // save that vanishes without a word reads as a tap that missed.
-        _said = AppStrings.Get("capture.saved");
+        _said = AppStrings.Get(moved.isDraft ? "capture.savedDraft" : "capture.saved");
         _busy = true;
         SetInteractable(false);
         Draw();
@@ -363,6 +615,7 @@ public class CaptureMode : MonoBehaviour
         if (_busy)
             return;
 
+        _placing = false;
         Preview(0d, 0d);
         End();
     }
@@ -376,6 +629,10 @@ public class CaptureMode : MonoBehaviour
 
         if (titleLabel != null)
             titleLabel.text = string.Format(AppStrings.Get("capture.title"), _data.DisplayName);
+
+        if (shapeLabel != null)
+            shapeLabel.text = string.Format(AppStrings.Get("capture.shape"),
+                                            AppStrings.Get("shape." + ShapeOf(_data)));
 
         if (statusLabel == null)
             return;
@@ -397,7 +654,14 @@ public class CaptureMode : MonoBehaviour
                             Metres(System.Math.Abs(_east)),
                             AppStrings.Get(_east >= 0d ? "capture.east" : "capture.west"));
 
-        statusLabel.text = placed ? where : where + "\n" + AppStrings.Get("capture.noMarker");
+        string said = placed ? where : where + "\n" + AppStrings.Get("capture.noMarker");
+
+        // A stop made here is a draft until it has words: say so, every time,
+        // so nobody walks off thinking walkers can already see it.
+        if (_data.isDraft)
+            said += "\n" + AppStrings.Get("capture.draftNote");
+
+        statusLabel.text = said;
     }
 
     static string Metres(double value)
@@ -408,7 +672,7 @@ public class CaptureMode : MonoBehaviour
     void SetInteractable(bool on)
     {
         foreach (Button button in new[] { forwardButton, backButton, leftButton, rightButton,
-                                          hereButton, saveButton, cancelButton })
+                                          hereButton, saveButton, cancelButton, shapeButton })
         {
             if (button != null)
                 button.interactable = on;

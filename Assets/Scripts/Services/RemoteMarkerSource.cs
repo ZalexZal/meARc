@@ -469,9 +469,11 @@ public class RemoteMarkerSource : MonoBehaviour
         marker.name = row.id;
         marker.buildingId = row.id;
 
-        // The RPC already filters to published rows, so anything that arrives is
-        // meant to be seen.
+        // Everything that arrives is meant to be seen by whoever asked: the server
+        // sends drafts only to the trail's owner and editors (0054), who placed
+        // them. So it is all "published" to this phone, and a draft says so.
         marker.isPublished = true;
+        marker.isDraft = row.status == "draft";
 
         marker.latitude = row.lat;
         marker.longitude = row.lng;
@@ -494,6 +496,8 @@ public class RemoteMarkerSource : MonoBehaviour
         marker.descriptionBg = bg != null ? bg.body : null;
         marker.externalLinkURL = en != null ? en.link : null;
         marker.externalLinkURLBg = bg != null ? bg.link : null;
+        marker.signText = en != null ? en.sign : null;
+        marker.signTextBg = bg != null ? bg.sign : null;
 
         // Media, hints and the question are NOT read from content any more.
         //
@@ -567,6 +571,9 @@ public class RemoteMarkerSource : MonoBehaviour
         public MarkerContent content;
         public int version;
         public double distance_m;
+
+        // Absent before 0054. Empty means published, which is all it could be then.
+        public string status;
     }
 
     [System.Serializable]
@@ -588,5 +595,6 @@ public class RemoteMarkerSource : MonoBehaviour
         public string title;
         public string body;
         public string link;
+        public string sign;
     }
 }

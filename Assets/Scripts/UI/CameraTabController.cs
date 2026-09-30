@@ -74,6 +74,10 @@ public class CameraTabController : MonoBehaviour
              "Tapping it opens that marker's sheet.")]
     public GameObject dock;
     public Button dockButton;
+
+    [Tooltip("\"Add a stop here\", for the open trail's owner and editors.")]
+    public Button addStopButton;
+    public CaptureMode capture;
     public Image dockDot;
     public Image dockRing;
     public TextMeshProUGUI dockName;
@@ -471,6 +475,12 @@ public class CameraTabController : MonoBehaviour
     /// </summary>
     void RefreshDock()
     {
+        if (addStopButton != null)
+        {
+            addStopButton.gameObject.SetActive(capture != null && !capture.Active &&
+                                               CaptureMode.CanAddHere());
+        }
+
         if (dock == null)
             return;
 

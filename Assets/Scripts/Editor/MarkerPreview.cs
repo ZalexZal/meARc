@@ -107,6 +107,27 @@ public static class MarkerPreview
 
             // Looking down, as somebody holding a phone at chest height does.
             Shoot(cam, prefab, colours, new Vector3(0f, 2.2f, -3.0f), 22f, "down");
+
+            // Every shape a creator can pick, side by side in the colours they
+            // would be given, and the sign close enough to read.
+            string[] keys = { "Sphere", "Cone", "Cube", "Sign" };
+            GameObject[] all = new GameObject[keys.Length + 1];
+            all[0] = prefab;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                all[i + 1] = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Marker" + keys[i] + ".prefab");
+                if (all[i + 1] == null)
+                    throw new System.Exception("No Marker" + keys[i] + " prefab after the build.");
+            }
+
+            Color[] five =
+            {
+                colours[0], colours[1], colours[2],
+                new Color(0.20f, 0.45f, 0.85f), new Color(0.85f, 0.25f, 0.35f),
+            };
+
+            ShootRow(cam, all, five, 1.55f, new Vector3(0f, 1.6f, -6.5f), 6f, "shapes");
+            ShootRow(cam, new[] { all[4] }, new[] { five[4] }, 0f, new Vector3(0f, 1.7f, -3.2f), 4f, "sign");
         }
         finally
         {
@@ -119,17 +140,32 @@ public static class MarkerPreview
     static void Shoot(Camera cam, GameObject prefab, Color[] colours,
                       Vector3 from, float pitch, string name)
     {
+        GameObject[] same = new GameObject[colours.Length];
+        for (int i = 0; i < same.Length; i++)
+            same[i] = prefab;
+
+        ShootRow(cam, same, colours, 1.5f, from, pitch, name);
+    }
+
+    /// <summary>A row of markers, one prefab and one colour each, photographed from one spot.</summary>
+    static void ShootRow(Camera cam, GameObject[] prefabs, Color[] colours, float spacing,
+                         Vector3 from, float pitch, string name)
+    {
         GameObject[] pins = new GameObject[colours.Length];
 
         for (int i = 0; i < colours.Length; i++)
         {
-            pins[i] = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            pins[i].transform.position = new Vector3((i - 1) * 1.5f, 0f, 0f);
+            pins[i] = (GameObject)PrefabUtility.InstantiatePrefab(prefabs[i]);
+            pins[i].transform.position = new Vector3((i - (colours.Length - 1) * 0.5f) * spacing, 0f, 0f);
             pins[i].transform.localScale = Vector3.one * 1.5f;
 
             MarkerView view = pins[i].GetComponent<MarkerView>();
             if (view != null)
+            {
                 view.SetColour(colours[i]);
+                if (view.signLabel != null)
+                    view.SetSign("Безистенът · 1509–1510");
+            }
 
             // Says what is actually there. A shot of an empty field and a shot
             // of three pins that failed to load look identical.

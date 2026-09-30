@@ -165,6 +165,78 @@ public static class MarkerShapes
         return mesh;
     }
 
+    /// <summary>
+    /// A cone standing on its base, like a traffic cone, point up.
+    ///
+    /// The side's normals are worked out from the slope rather than averaged by
+    /// Unity: averaging runs them through the apex, and a cone lit that way
+    /// looks like a crumpled paper hat. Each side quad gets its own apex vertex
+    /// for the same reason. The base is a separate disc facing down, so the
+    /// seam between side and base is a hard edge, as it is on a real cone.
+    /// </summary>
+    public static Mesh Cone(float radius, float height, int segments = 32)
+    {
+        Mesh mesh = new Mesh { name = "MarkerCone" };
+
+        var verts = new System.Collections.Generic.List<Vector3>();
+        var normals = new System.Collections.Generic.List<Vector3>();
+        var tris = new System.Collections.Generic.List<int>();
+
+        // Outward and up in proportion to the slope: for a cone of this radius
+        // and height, (cos, r/h, sin) normalised is perpendicular to the side.
+        float rise = radius / height;
+
+        for (int x = 0; x < segments; x++)
+        {
+            float a0 = (float)x / segments * Mathf.PI * 2f;
+            float a1 = (float)(x + 1) / segments * Mathf.PI * 2f;
+            float mid = (a0 + a1) * 0.5f;
+
+            int start = verts.Count;
+
+            verts.Add(new Vector3(0f, height, 0f));
+            normals.Add(new Vector3(Mathf.Cos(mid), rise, Mathf.Sin(mid)).normalized);
+
+            verts.Add(new Vector3(Mathf.Cos(a0) * radius, 0f, Mathf.Sin(a0) * radius));
+            normals.Add(new Vector3(Mathf.Cos(a0), rise, Mathf.Sin(a0)).normalized);
+
+            verts.Add(new Vector3(Mathf.Cos(a1) * radius, 0f, Mathf.Sin(a1) * radius));
+            normals.Add(new Vector3(Mathf.Cos(a1), rise, Mathf.Sin(a1)).normalized);
+
+            // Wound so the side faces out (the same care the pin's cone needed).
+            tris.Add(start);
+            tris.Add(start + 2);
+            tris.Add(start + 1);
+        }
+
+        // The base, facing the ground.
+        int centre = verts.Count;
+        verts.Add(Vector3.zero);
+        normals.Add(Vector3.down);
+
+        int ring = verts.Count;
+        for (int x = 0; x <= segments; x++)
+        {
+            float a = (float)x / segments * Mathf.PI * 2f;
+            verts.Add(new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius));
+            normals.Add(Vector3.down);
+        }
+
+        for (int x = 0; x < segments; x++)
+        {
+            tris.Add(centre);
+            tris.Add(ring + x);
+            tris.Add(ring + x + 1);
+        }
+
+        mesh.SetVertices(verts);
+        mesh.SetNormals(normals);
+        mesh.SetTriangles(tris, 0);
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+
     /// <summary>Writes a mesh into the project so a prefab can reference it.</summary>
     public static Mesh Save(Mesh mesh, string name)
     {

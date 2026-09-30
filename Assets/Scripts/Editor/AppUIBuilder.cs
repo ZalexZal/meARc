@@ -428,6 +428,7 @@ const float ReferenceWidth = 1080f;
         spawner.anchorManager =
             Object.FindFirstObjectByType<ARAnchorManager>(FindObjectsInactive.Include);
         spawner.defaultPrefab = CreateMarkerPrefab();
+        spawner.styles = CreateShapeStyles(spawner.defaultPrefab);
         spawner.altitudeAboveTerrain = 1.5;
         spawner.spawnRadiusMetres = 500d;
         spawner.releaseRadiusMetres = 650d;
@@ -1638,6 +1639,11 @@ const float ReferenceWidth = 1080f;
         controller.guidance = BuildGuidanceBanner(dockArea, location,
                                                   BearingArrow.Frame.DeviceRelative);
 
+        // For the trail's owner and editors only; the controller shows it.
+        controller.addStopButton = FullWidthButton(dockArea, "AddStop", "capture.addHere",
+                                                   ThemeRole.Accent, ThemeRole.OnAccent);
+        controller.addStopButton.gameObject.SetActive(false);
+
         RectTransform dock = UIFactory.Rect("Dock", dockArea);
         UIFactory.Size(dock.gameObject, 150f);
         controller.dockButton = UIFactory.Button(dock, ThemeRole.Surface, 1f, UIShape.Rounded);
@@ -1692,6 +1698,9 @@ const float ReferenceWidth = 1080f;
         info.capture = BuildCaptureBar(dockArea);
         info.capture.hideWhileOpen = new[] { dock.gameObject, controller.radar != null
                                                  ? controller.radar.gameObject : null };
+
+        controller.capture = info.capture;
+        Wire(controller.addStopButton.onClick, info.capture.AddHere, "Add a stop here");
         EditorUtility.SetDirty(info);
 
         // Siblings render in hierarchy order, so the sheet is raised last - otherwise
@@ -1767,6 +1776,13 @@ const float ReferenceWidth = 1080f;
                                               TextAlignmentOptions.Left, "capture.hint");
         hint.textWrappingMode = TextWrappingModes.Normal;
         UIFactory.FitsItsText(hint);
+
+        // Pin, sphere, cone, cube, sign - one press each, saved and swapped in
+        // the camera at once. CaptureMode writes the label ("Shape: Cone").
+        view.shapeButton = FullWidthButton(card, "Shape", "shape.pin",
+                                           ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
+        view.shapeLabel = view.shapeButton.GetComponentInChildren<TextMeshProUGUI>();
+        DropLocalizer(view.shapeLabel);
 
         RectTransform pad = UIFactory.Rect("Pad", card);
         UIFactory.Size(pad.gameObject, Tap);
@@ -4217,6 +4233,146 @@ const float ReferenceWidth = 1080f;
         Object.DestroyImmediate(temp);
 
         return saved;
+    }
+
+    /// <summary>
+    /// The shapes a creator can pick on the website (0054), keyed exactly as the
+    /// database keys them. "default" and "pin" are both the pin, so a stop that
+    /// predates shapes looks the way it always did.
+    /// </summary>
+    static List<MarkerSpawner.MarkerStyle> CreateShapeStyles(GameObject pin)
+    {
+        var styles = new List<MarkerSpawner.MarkerStyle>
+        {
+            new MarkerSpawner.MarkerStyle { key = "default", prefab = pin },
+            new MarkerSpawner.MarkerStyle { key = "pin", prefab = pin },
+        };
+
+        foreach (string key in new[] { "sphere", "cone", "cube", "sign" })
+            styles.Add(new MarkerSpawner.MarkerStyle { key = key, prefab = CreateShapePrefab(key) });
+
+        return styles;
+    }
+
+    /// <summary>
+    /// One shape, standing on the same ring as the pin - the ring is what says
+    /// where the stop is, whatever stands on it.
+    ///
+    /// Sphere, cube and the sign's parts are Unity's own meshes; the cone is
+    /// generated, like the pin. The part that carries the creator's colour is the
+    /// one tinted: the ball, the cone, the box, the sign's frame. A sign's face
+    /// stays white so its words read, and a sign turns to face the reader - the
+    /// other shapes look the same from every side and do not need to.
+    /// </summary>
+    static GameObject CreateShapePrefab(string key)
+    {
+        GameObject temp = new GameObject("Marker_" + key);
+
+        Material body = MarkerShapes.Surface("MarkerBody", Color.white, 0.35f);
+        Material pale = MarkerShapes.Surface("MarkerRing", new Color(0.96f, 0.97f, 0.98f), 0.2f);
+
+        ShapePart(temp.transform, "Ring", MarkerShapes.Save(MarkerShapes.Torus(0.5f, 0.045f), "MarkerRing"),
+                  pale, Vector3.zero, Vector3.one);
+
+        Renderer tinted;
+        BoxCollider collider = temp.AddComponent<BoxCollider>();
+        collider.center = new Vector3(0f, 0.5f, 0f);
+        collider.size = new Vector3(2f, 2f, 2f);
+
+        MarkerView view = temp.AddComponent<MarkerView>();
+        view.baseScale = 1.5f;
+        view.clampDistance = 60f;
+        view.billboard = false;
+
+        switch (key)
+        {
+            case "sphere":
+                // Hovering a little above the ring, so it reads as a ball over a
+                // place rather than one lying on the pavement.
+                tinted = ShapePart(temp.transform, "Ball", Builtin("Sphere.fbx"), body,
+                                   new Vector3(0f, 0.62f, 0f), Vector3.one * 0.6f);
+                break;
+
+            case "cone":
+                tinted = ShapePart(temp.transform, "Cone",
+                                   MarkerShapes.Save(MarkerShapes.Cone(0.32f, 0.95f), "MarkerCone"),
+                                   body, Vector3.zero, Vector3.one);
+                break;
+
+            case "cube":
+                tinted = ShapePart(temp.transform, "Box", Builtin("Cube.fbx"), body,
+                                   new Vector3(0f, 0.3f, 0f), Vector3.one * 0.6f);
+                break;
+
+            default: // "sign"
+                ShapePart(temp.transform, "Post", Builtin("Cylinder.fbx"), pale,
+                          new Vector3(0f, 0.35f, 0f), new Vector3(0.06f, 0.35f, 0.06f));
+
+                tinted = ShapePart(temp.transform, "Board", Builtin("Cube.fbx"), body,
+                                   new Vector3(0f, 1.1f, 0f), new Vector3(1.3f, 0.78f, 0.06f));
+
+                // The face, on the side that turns towards the reader: MarkerView
+                // points a billboard's +Z away from the camera, and a quad faces -Z.
+                ShapePart(temp.transform, "Face", Builtin("Quad.fbx"),
+                          MarkerShapes.Surface("MarkerSignFace", Color.white, 0.1f),
+                          new Vector3(0f, 1.1f, -0.032f), new Vector3(1.18f, 0.66f, 1f));
+
+                GameObject words = new GameObject("Words");
+                words.transform.SetParent(temp.transform, false);
+                words.transform.localPosition = new Vector3(0f, 1.1f, -0.036f);
+
+                TextMeshPro label = words.AddComponent<TextMeshPro>();
+                TMP_FontAsset face = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                    "Assets/Fonts/Inter/Inter-SemiBold SDF.asset");
+                if (face != null)
+                    label.font = face;
+
+                label.rectTransform.sizeDelta = new Vector2(1.06f, 0.56f);
+                label.alignment = TextAlignmentOptions.Center;
+                label.textWrappingMode = TextWrappingModes.Normal;
+                label.enableAutoSizing = true;
+                label.fontSizeMin = 0.8f;
+                label.fontSizeMax = 2.6f;
+                label.color = new Color(0.11f, 0.11f, 0.12f);
+                // Seen in the preview; on a phone the spawner writes the stop's own words.
+                label.text = "AR Trail";
+
+                view.signLabel = label;
+                view.billboard = true;
+
+                collider.center = new Vector3(0f, 0.9f, 0f);
+                collider.size = new Vector3(2f, 2.4f, 1.2f);
+                break;
+        }
+
+        view.tintedRenderers = new[] { tinted };
+        temp.AddComponent<TappableObject>();
+
+        string path = PrefabFolder + "/Marker" + char.ToUpperInvariant(key[0]) + key.Substring(1) + ".prefab";
+        GameObject saved = PrefabUtility.SaveAsPrefabAsset(temp, path);
+        Object.DestroyImmediate(temp);
+
+        return saved;
+    }
+
+    static Mesh Builtin(string file)
+    {
+        return Resources.GetBuiltinResource<Mesh>(file);
+    }
+
+    static Renderer ShapePart(Transform parent, string name, Mesh mesh, Material material,
+                              Vector3 position, Vector3 scale)
+    {
+        GameObject part = new GameObject(name);
+        part.transform.SetParent(parent, false);
+        part.transform.localPosition = position;
+        part.transform.localScale = scale;
+
+        part.AddComponent<MeshFilter>().sharedMesh = mesh;
+        MeshRenderer renderer = part.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = material;
+
+        return renderer;
     }
 
     static BuildingRowView CreateRowPrefab()

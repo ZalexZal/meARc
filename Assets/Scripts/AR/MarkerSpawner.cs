@@ -201,7 +201,10 @@ public class MarkerSpawner : MonoBehaviour
 
         MarkerView view = marker.GetComponent<MarkerView>();
         if (view != null)
+        {
             view.SetColour(ChooseColour(building));
+            view.SetSign(building.SignText);
+        }
 
         _placed[building.buildingId] = new Placed
         {
