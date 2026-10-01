@@ -272,7 +272,7 @@ public static class UIPreview
             pages.ShowPage(feedback.gameObject);
             if (feedback.attachedLabel != null)
                 feedback.attachedLabel.text = string.Format(AppStrings.Get("feedback.attached"),
-                                                            "0.4.1", "SM-A546B");
+                                                            "0.4.2", "SM-A546B");
             if (feedback.replyRow != null)
                 feedback.replyRow.SetActive(true);
             Shoot(canvas, rig, "39-feedback" + t, "SettingsPanel");

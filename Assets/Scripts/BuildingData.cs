@@ -84,6 +84,10 @@ public class BuildingData : ScriptableObject
     public string signText;
     public string signTextBg;
 
+    [Tooltip("The stop asks a question (content.<lang>.question). Known from the list, " +
+             "before the stop is ever opened, unlike task.")]
+    public bool hasQuestion;
+
     [Header("Content")]
     [Tooltip("Uploaded video and audio, in the order the creator arranged them. A " +
              "marker with several is a small sequence rather than a page.")]

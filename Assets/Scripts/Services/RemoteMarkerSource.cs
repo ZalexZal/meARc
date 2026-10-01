@@ -499,6 +499,12 @@ public class RemoteMarkerSource : MonoBehaviour
         marker.signText = en != null ? en.sign : null;
         marker.signTextBg = bg != null ? bg.sign : null;
 
+        // Only whether there is a question - the editor writes its words into
+        // content and removes them with the question. The question itself still
+        // comes from MarkerDetailService, below.
+        marker.hasQuestion = (en != null && !string.IsNullOrWhiteSpace(en.question)) ||
+                             (bg != null && !string.IsNullOrWhiteSpace(bg.question));
+
         // Media, hints and the question are NOT read from content any more.
         //
         // They were, and nothing ever wrote them there: the website puts uploads
@@ -596,5 +602,6 @@ public class RemoteMarkerSource : MonoBehaviour
         public string body;
         public string link;
         public string sign;
+        public string question;
     }
 }

@@ -89,6 +89,7 @@ public class NextStopStrip : MonoBehaviour
         BuildingDatabase.OnBuildingsChanged += Refresh;
         AppStrings.OnLanguageChanged += Refresh;
         TrailService.OnTrailsChanged += Refresh;
+        MarkerTaskService.OnProgressChanged += Refresh;
 
         if (locationService != null)
             locationService.OnPoseUpdated += Refresh;
@@ -101,6 +102,7 @@ public class NextStopStrip : MonoBehaviour
         BuildingDatabase.OnBuildingsChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
         TrailService.OnTrailsChanged -= Refresh;
+        MarkerTaskService.OnProgressChanged -= Refresh;
 
         if (locationService != null)
             locationService.OnPoseUpdated -= Refresh;
@@ -178,6 +180,26 @@ public class NextStopStrip : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Finished with a stop. On a trail with points that includes its question:
+    /// "Trail complete" once every stop had been found sent teams home with
+    /// questions still unanswered, and it pointed nowhere when one was left.
+    /// Solved, skipped or sent for review all count, as they do on the question.
+    /// </summary>
+    static bool Done(BuildingData stop)
+    {
+        if (!DiscoveryTracker.IsDiscovered(stop))
+            return false;
+
+        TrailService trails = TrailService.Instance;
+        MarkerTaskService tasks = MarkerTaskService.Instance;
+
+        if (!stop.hasQuestion || trails == null || !trails.SelectedIsGame || tasks == null)
+            return true;
+
+        return tasks.Progress(stop.buildingId).IsFinished;
+    }
+
     /// <summary>A trail with an order: next is the next step nobody has found.</summary>
     void DrawRoute(List<BuildingData> route)
     {
@@ -188,7 +210,7 @@ public class NextStopStrip : MonoBehaviour
 
         for (int i = 0; i < route.Count; i++)
         {
-            if (DiscoveryTracker.IsDiscovered(route[i]))
+            if (Done(route[i]))
             {
                 found++;
 
@@ -235,7 +257,7 @@ public class NextStopStrip : MonoBehaviour
             if (all[i] == null)
                 continue;
 
-            if (DiscoveryTracker.IsDiscovered(all[i]))
+            if (Done(all[i]))
             {
                 found++;
                 continue;
