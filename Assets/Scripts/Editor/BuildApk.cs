@@ -319,6 +319,26 @@ public static class BuildApk
         return key;
     }
 
+    /// <summary>
+    /// Refuses a scene whose ARCore session would start with Geospatial off.
+    ///
+    /// On 21 September the ARCore sample folder was deleted, and with it the
+    /// config asset the scene's ARCore Extensions pointed at. Every build after
+    /// that ran ARCore's defaults - Geospatial disabled - and placed no marker,
+    /// while the builder only noted "No ARCoreExtensionsConfig linked".
+    /// </summary>
+    static void RequireGeospatial()
+    {
+        var extensions = UnityEngine.Object.FindFirstObjectByType<Google.XR.ARCoreExtensions.ARCoreExtensions>(
+            FindObjectsInactive.Include);
+        var config = extensions != null ? extensions.ARCoreExtensionsConfig : null;
+
+        if (config == null || config.GeospatialMode != Google.XR.ARCoreExtensions.GeospatialMode.Enabled)
+            throw new BuildFailedException(
+                "The scene's ARCore Extensions has " + (config == null ? "no config" : "Geospatial off in " + config.name) +
+                ". Assets/Settings/ARTrailGeospatialConfig.asset is the one it should use.");
+    }
+
     static void BuildPlayer(string path)
     {
 
@@ -327,6 +347,8 @@ public static class BuildApk
         EditorSceneManager.OpenScene(Scene, OpenSceneMode.Single);
         AppUIBuilder.BuildForPreview();
         EditorSceneManager.SaveOpenScenes();
+
+        RequireGeospatial();
 
         AppIcons.Apply();
 
