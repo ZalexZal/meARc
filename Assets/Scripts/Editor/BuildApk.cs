@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -249,6 +250,15 @@ public static class BuildApk
         bool wasBundle = EditorUserBuildSettings.buildAppBundle;
         EditorUserBuildSettings.buildAppBundle = bundle;
 
+        // The Google key ARCore's Geospatial service needs, from the keys folder
+        // and only for the length of the build: ARCore writes it into the
+        // manifest from its settings in memory, and the settings file in the
+        // repository is saved back without it, whatever happened in between.
+        var arcore = Google.XR.ARCoreExtensions.Internal.ARCoreExtensionsProjectSettings.Instance;
+        arcore.AndroidAuthenticationStrategySetting =
+            Google.XR.ARCoreExtensions.Internal.AndroidAuthenticationStrategy.ApiKey;
+        arcore.AndroidCloudServicesApiKey = ArcoreKey();
+
         try
         {
             BuildPlayer(path);
@@ -256,7 +266,57 @@ public static class BuildApk
         finally
         {
             EditorUserBuildSettings.buildAppBundle = wasBundle;
+            arcore.AndroidCloudServicesApiKey = string.Empty;
+            arcore.Save();
         }
+    }
+
+    /// <summary>
+    /// The ARCore API key, from keys\arcore-api-key.txt in the user's folder.
+    ///
+    /// Refuses to build without one, or with one Google says does not exist:
+    /// the key in the project was deleted in Google Cloud in September, every
+    /// build after that shipped a camera that could never place a marker, and
+    /// the app only said "Cannot calibrate here". Offline, it warns and builds.
+    /// </summary>
+    static string ArcoreKey()
+    {
+        string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                   "keys", "arcore-api-key.txt");
+
+        string key = File.Exists(file) ? File.ReadAllText(file).Trim() : string.Empty;
+
+        if (!key.StartsWith("AIza") || key.Length != 39)
+            throw new BuildFailedException("No ARCore API key in " + file +
+                                           " (one line, starting AIza). Without it the camera cannot place markers.");
+
+        // Any call on the ARCore API checks the key, and the discovery document
+        // needs nothing else. A key restricted to the app is "403 blocked" here,
+        // without the app's certificate, and that is the expected answer; only a
+        // key Google does not know at all is "400 not valid".
+        try
+        {
+            using (var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) })
+            {
+                int status = (int)http.GetAsync(
+                    "https://arcore.googleapis.com/$discovery/rest?version=v1&key=" + key).Result.StatusCode;
+
+                if (status == 400)
+                    throw new BuildFailedException("Google says the ARCore API key in " + file +
+                                                   " is not valid (deleted or mistyped). Make a new one in Google Cloud.");
+            }
+        }
+        catch (BuildFailedException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Build] Could not check the ARCore key with Google (" +
+                             exception.GetBaseException().Message + "). Building anyway.");
+        }
+
+        return key;
     }
 
     static void BuildPlayer(string path)

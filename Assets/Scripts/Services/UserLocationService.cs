@@ -12,7 +12,14 @@ public enum VpsStatus
     Unavailable,
     Poor,
     Fair,
-    Good
+    Good,
+
+    /// <summary>
+    /// Google's AR service refused this session outright - not authorised, out of
+    /// quota, ARCore too old. No marker can be placed until that changes, and it
+    /// is not something walking to an open square will fix.
+    /// </summary>
+    Refused
 }
 
 /// <summary>Where the current position came from. They are not interchangeable.</summary>
@@ -94,6 +101,13 @@ public class UserLocationService : MonoBehaviour
     public double Longitude { get; private set; }
     public double HorizontalAccuracy { get; private set; }
     public VpsStatus Status { get; private set; } = VpsStatus.Unavailable;
+
+    /// <summary>
+    /// Why Geospatial was refused, while it is; null while it works or is still
+    /// starting. A deleted API key read as "Cannot calibrate here" for weeks,
+    /// because a refusal and a dark street looked the same from here.
+    /// </summary>
+    public EarthState? EarthProblem { get; private set; }
 
     /// <summary>
     /// Which way the phone is pointing, in degrees clockwise from true north, or
@@ -305,7 +319,8 @@ public class UserLocationService : MonoBehaviour
             // Deliberately Unavailable rather than Poor. Visual positioning genuinely
             // is unavailable, Start stays disabled, and the existing copy - "markers
             // use GPS only and may be well off" - is already exactly true.
-            Status = VpsStatus.Unavailable;
+            // Unless Google refused the session: then there are no markers at all.
+            Status = EarthProblem != null ? VpsStatus.Refused : VpsStatus.Unavailable;
         }
         else
         {
@@ -337,7 +352,23 @@ public class UserLocationService : MonoBehaviour
         // first frames on device, that throws rather than returning a state.
         try
         {
-            if (earthManager.EarthState != EarthState.Enabled)
+            EarthState state = earthManager.EarthState;
+
+            // Not ready yet is a wait; everything else is a refusal, said once
+            // in the log with its name so it can be found.
+            bool refused = state != EarthState.Enabled &&
+                           state != EarthState.ErrorEarthNotReady &&
+                           state != EarthState.ErrorSessionNotReady;
+
+            if (refused && EarthProblem != state)
+                Debug.LogError("[Location] Geospatial refused: " + state +
+                               (state == EarthState.ErrorNotAuthorized
+                                   ? " - the ARCore API key is missing, deleted or not allowed for this app"
+                                   : string.Empty));
+
+            EarthProblem = refused ? state : (EarthState?)null;
+
+            if (state != EarthState.Enabled)
                 return false;
 
             if (earthManager.EarthTrackingState != TrackingState.Tracking)

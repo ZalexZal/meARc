@@ -220,6 +220,8 @@ public static class AppStrings
         { "vps.none.body", "No visual positioning here. Markers use GPS only and may be well off." },
         { "vps.accuracy", "±{0} m" },
         { "vps.unavailable", "Unavailable" },
+        { "vps.refused.title", "AR is switched off" },
+        { "vps.refused.body", "Google's AR service refused this app, so no markers can be placed in the camera. The map still works. Please tell the people who run AR Trail (You, Send feedback)." },
 
         { "info.learnMore", "Learn more" },
 
@@ -763,6 +765,8 @@ public static class AppStrings
         { "vps.none.body", "Няма визуално позициониране тук. Маркерите използват само GPS и може да са неточни." },
         { "vps.accuracy", "±{0} м" },
         { "vps.unavailable", "Недостъпно" },
+        { "vps.refused.title", "Добавената реалност е изключена" },
+        { "vps.refused.body", "Услугата на Google за добавена реалност отказа достъп на приложението, затова маркерите не могат да се покажат в камерата. Картата работи. Моля, съобщи на екипа на AR Trail (Ти, Изпрати мнение)." },
 
         { "info.learnMore", "Научи повече" },
 

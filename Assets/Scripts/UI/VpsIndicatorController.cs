@@ -148,7 +148,8 @@ public class VpsIndicatorController : MonoBehaviour
         {
             case VpsStatus.Good: return ThemeRole.StatusGood;
             case VpsStatus.Fair: return ThemeRole.StatusFair;
-            case VpsStatus.Poor: return ThemeRole.StatusPoor;
+            case VpsStatus.Poor:
+            case VpsStatus.Refused: return ThemeRole.StatusPoor;
             default: return ThemeRole.StatusNone;
         }
     }
@@ -160,6 +161,7 @@ public class VpsIndicatorController : MonoBehaviour
             case VpsStatus.Good: return "vps.good";
             case VpsStatus.Fair: return "vps.fair";
             case VpsStatus.Poor: return "vps.poor";
+            case VpsStatus.Refused: return "vps.refused";
             default: return "vps.none";
         }
     }
