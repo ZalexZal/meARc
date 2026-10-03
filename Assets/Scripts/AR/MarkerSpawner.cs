@@ -72,6 +72,27 @@ public class MarkerSpawner : MonoBehaviour
             locationService.OnPoseUpdated += Sync;
 
         BuildingDatabase.OnBuildingsChanged += HandleBuildingsChanged;
+
+        LightFromAmbientColour();
+
+        if (verboseLogging)
+            Debug.Log("[Markers] Ambient light " + RenderSettings.ambientMode + " " +
+                      RenderSettings.ambientProbe[0, 0].ToString("F2"));
+    }
+
+    /// <summary>
+    /// A phone keeps the scene's ambient colour but not the light made from it:
+    /// without generated lighting the ambient probe loads as zeros (seen in
+    /// 0.4.4's log), and every side of a marker the sun misses renders black.
+    /// So the probe is built from the colour, as AR Foundation's light
+    /// estimation samples do. MarkerPreview calls this too, so it shows what a
+    /// phone shows.
+    /// </summary>
+    public static void LightFromAmbientColour()
+    {
+        var ambient = new UnityEngine.Rendering.SphericalHarmonicsL2();
+        ambient.AddAmbientLight(RenderSettings.ambientLight);
+        RenderSettings.ambientProbe = ambient;
     }
 
     void OnDisable()

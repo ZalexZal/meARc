@@ -47,7 +47,7 @@ public static class MarkerPreview
 
         try
         {
-            // A ground plane, because the ring only means anything against one.
+            // A ground plane, to catch the shadows.
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.transform.SetParent(stage.transform);
             ground.transform.localScale = Vector3.one * 4f;
@@ -64,23 +64,15 @@ public static class MarkerPreview
             block.SetColor("_Color", new Color(0.55f, 0.53f, 0.50f));
             groundRenderer.SetPropertyBlock(block);
 
-            // Batch mode starts with no ambient light and no skybox, so every
-            // surface the sun does not hit directly renders black - which made
-            // the ring look like a painted line rather than a lit object. The
-            // real app has the camera feed and ARCore's estimated lighting; this
-            // is the nearest honest stand-in.
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.62f, 0.72f, 0.86f);
-            RenderSettings.ambientEquatorColor = new Color(0.52f, 0.54f, 0.56f);
-            RenderSettings.ambientGroundColor = new Color(0.34f, 0.32f, 0.30f);
-
-            GameObject sun = new GameObject("Sun");
-            sun.transform.SetParent(stage.transform);
-            Light light = sun.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1.15f;
-            light.shadows = LightShadows.Soft;
-            sun.transform.rotation = Quaternion.Euler(48f, 35f, 0f);
+            // Lit the way a phone is lit, nothing added here. This used to bring
+            // its own light, so it showed coloured shapes while the phone showed
+            // black ones. The editor works the ambient light out for itself and
+            // a phone does not, so start from none, as a phone does, and let
+            // the app's own code supply it.
+            RenderSettings.ambientProbe = new UnityEngine.Rendering.SphericalHarmonicsL2();
+            MarkerSpawner.LightFromAmbientColour();
+            if (RenderSettings.ambientProbe[0, 0] <= 0.01f)
+                throw new System.Exception("The scene has no ambient light: every side the sun misses will render black.");
 
             GameObject camera = new GameObject("Camera");
             camera.transform.SetParent(stage.transform);
@@ -120,13 +112,26 @@ public static class MarkerPreview
                     throw new System.Exception("No Marker" + keys[i] + " prefab after the build.");
             }
 
+            // The shapes are designed to one width so none outweighs the rest;
+            // the sign is meant to be wider. A mesh of the wrong native size
+            // (the old 2 m sphere) fails here rather than on a street.
+            for (int i = 0; i < 4; i++)
+            {
+                MarkerView view = all[i].GetComponent<MarkerView>();
+                Bounds b = view.tintedRenderers[0].GetComponent<MeshFilter>().sharedMesh.bounds;
+                float width = b.size.x * view.tintedRenderers[0].transform.localScale.x;
+                Debug.Log("[MarkerPreview] " + all[i].name + " width=" + width.ToString("F2"));
+                if (width > 0.7f)
+                    throw new System.Exception(all[i].name + " is " + width.ToString("F2") + " wide; the shapes are meant to be at most 0.7.");
+            }
+
             Color[] five =
             {
                 colours[0], colours[1], colours[2],
                 new Color(0.20f, 0.45f, 0.85f), new Color(0.85f, 0.25f, 0.35f),
             };
 
-            ShootRow(cam, all, five, 1.55f, new Vector3(0f, 1.6f, -6.5f), 6f, "shapes");
+            ShootRow(cam, all, five, 1.55f, new Vector3(0f, 1.6f, -9.5f), 6f, "shapes");
             ShootRow(cam, new[] { all[4] }, new[] { five[4] }, 0f, new Vector3(0f, 1.7f, -3.2f), 4f, "sign");
         }
         finally
@@ -189,6 +194,12 @@ public static class MarkerPreview
 
         cam.transform.position = from;
         cam.transform.rotation = Quaternion.Euler(pitch, 0f, 0f);
+
+        // The app's sun rides on its camera; stand that camera where this one
+        // is, so the light falls the way it does on the phone.
+        Camera app = Camera.main;
+        if (app != null && app != cam)
+            app.transform.SetPositionAndRotation(cam.transform.position, cam.transform.rotation);
 
         RenderTexture target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32)
         {

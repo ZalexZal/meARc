@@ -8,158 +8,81 @@ using UnityEngine;
 /// shapes built from arithmetic. A cube floating over a pavement is the single
 /// thing most likely to read as unfinished to somebody trying this for the first
 /// time, and a pin is a few dozen lines.
-///
-/// One shape for now, done properly. Flag, plaque and post are the same
-/// machinery with different numbers and can follow.
 /// </summary>
 public static class MarkerShapes
 {
     const string Folder = "Assets/Generated";
 
     /// <summary>
-    /// A ring lying flat on the ground.
+    /// The pin: one smooth surface turned on a lathe, a ball whose sides run
+    /// straight down to a point.
     ///
-    /// This is the part that says "the marker is HERE" rather than "somewhere
-    /// over there": it touches the pavement, so a reader reads its position off
-    /// the ground rather than guessing at the depth of a floating object. It is
-    /// also the part that survives bad localisation - a pin a metre out still
-    /// has a ring around roughly the right paving slab.
+    /// The straight sides leave the ball exactly where they touch it, and the
+    /// normals carry across that line, so it reads as a single drop. The pin
+    /// before this was a sphere with a cone pushed into it, and looked like
+    /// two shapes glued together.
     /// </summary>
-    public static Mesh Torus(float radius, float tube, int around = 40, int through = 12)
-    {
-        Mesh mesh = new Mesh { name = "MarkerRing" };
-
-        Vector3[] vertices = new Vector3[(around + 1) * (through + 1)];
-        Vector3[] normals = new Vector3[vertices.Length];
-        Vector2[] uv = new Vector2[vertices.Length];
-
-        for (int i = 0; i <= around; i++)
-        {
-            float u = (float)i / around * Mathf.PI * 2f;
-            Vector3 centre = new Vector3(Mathf.Cos(u), 0f, Mathf.Sin(u)) * radius;
-
-            for (int j = 0; j <= through; j++)
-            {
-                float v = (float)j / through * Mathf.PI * 2f;
-
-                // The tube's own circle, swept around the ring. Its "up" is the
-                // world's up and its "out" is the direction away from the centre,
-                // which is what keeps the ring lying flat rather than standing.
-                Vector3 outward = new Vector3(Mathf.Cos(u), 0f, Mathf.Sin(u));
-                Vector3 offset = outward * (Mathf.Cos(v) * tube) + Vector3.up * (Mathf.Sin(v) * tube);
-
-                int index = i * (through + 1) + j;
-                vertices[index] = centre + offset;
-                normals[index] = offset.normalized;
-                uv[index] = new Vector2((float)i / around, (float)j / through);
-            }
-        }
-
-        int[] triangles = new int[around * through * 6];
-        int t = 0;
-
-        for (int i = 0; i < around; i++)
-        {
-            for (int j = 0; j < through; j++)
-            {
-                int a = i * (through + 1) + j;
-                int b = a + through + 1;
-
-                triangles[t++] = a;
-                triangles[t++] = b;
-                triangles[t++] = a + 1;
-
-                triangles[t++] = a + 1;
-                triangles[t++] = b;
-                triangles[t++] = b + 1;
-            }
-        }
-
-        mesh.vertices = vertices;
-        mesh.normals = normals;
-        mesh.uv = uv;
-        mesh.triangles = triangles;
-        mesh.RecalculateBounds();
-
-        return mesh;
-    }
-
-    /// <summary>
-    /// The pin's body: a sphere with a cone under it, tip down.
-    ///
-    /// Built as one mesh rather than two objects so the whole head tints as a
-    /// single surface. Two renderers would tint in two draws and show a seam
-    /// wherever the shading differs.
-    /// </summary>
-    public static Mesh Pin(float headRadius, float neck, float height, int segments = 28)
+    public static Mesh Pin(float headRadius, float height, int segments = 40, int arcSteps = 24)
     {
         Mesh mesh = new Mesh { name = "MarkerPin" };
 
-        // The sphere sits at the top; the cone runs from the sphere's lower
-        // tangent down to a point at the origin. `neck` is how much of the
-        // sphere the cone meets, which is what stops the join looking pinched.
-        float centreY = height - headRadius;
+        // The outline in (distance from the axis, height), tip at the origin.
+        // A line from the tip touches the ball at angle `a` below its middle,
+        // where sin a = radius / (distance from tip to the ball's centre).
+        float centre = height - headRadius;
+        float a = Mathf.Asin(headRadius / centre);
+
+        var outline = new System.Collections.Generic.List<Vector2>();
+        var facing = new System.Collections.Generic.List<Vector2>();
+
+        // The straight part in short bands: one band from the tip right up to
+        // the ball shades in stripes, its triangles are too long and thin.
+        Vector2 touch = new Vector2(headRadius * Mathf.Cos(a), centre - headRadius * Mathf.Sin(a));
+        for (int i = 0; i < 8; i++)
+        {
+            outline.Add(touch * (i / 8f));
+            facing.Add(new Vector2(Mathf.Cos(a), -Mathf.Sin(a)));
+        }
+
+        for (int i = 0; i <= arcSteps; i++)
+        {
+            float phi = Mathf.Lerp(-a, Mathf.PI * 0.5f, (float)i / arcSteps);
+            Vector2 n = new Vector2(Mathf.Cos(phi), Mathf.Sin(phi));
+            outline.Add(new Vector2(0f, centre) + n * headRadius);
+            facing.Add(n);
+        }
 
         var verts = new System.Collections.Generic.List<Vector3>();
+        var normals = new System.Collections.Generic.List<Vector3>();
         var tris = new System.Collections.Generic.List<int>();
 
-        // ---- the head, a UV sphere
-        int rings = segments / 2;
-
-        for (int y = 0; y <= rings; y++)
+        for (int j = 0; j < outline.Count; j++)
         {
-            float phi = (float)y / rings * Mathf.PI;
-
-            for (int x = 0; x <= segments; x++)
+            for (int k = 0; k <= segments; k++)
             {
-                float theta = (float)x / segments * Mathf.PI * 2f;
-
-                verts.Add(new Vector3(
-                    Mathf.Sin(phi) * Mathf.Cos(theta) * headRadius,
-                    centreY + Mathf.Cos(phi) * headRadius,
-                    Mathf.Sin(phi) * Mathf.Sin(theta) * headRadius));
+                float theta = (float)k / segments * Mathf.PI * 2f;
+                float cos = Mathf.Cos(theta), sin = Mathf.Sin(theta);
+                verts.Add(new Vector3(outline[j].x * cos, outline[j].y, outline[j].x * sin));
+                normals.Add(new Vector3(facing[j].x * cos, facing[j].y, facing[j].x * sin));
             }
         }
 
-        for (int y = 0; y < rings; y++)
+        // Wound so the surface faces out (as the cone below).
+        for (int j = 0; j < outline.Count - 1; j++)
         {
-            for (int x = 0; x < segments; x++)
+            for (int k = 0; k < segments; k++)
             {
-                int a = y * (segments + 1) + x;
-                int b = a + segments + 1;
+                int v = j * (segments + 1) + k;
+                int up = v + segments + 1;
 
-                tris.Add(a); tris.Add(b); tris.Add(a + 1);
-                tris.Add(a + 1); tris.Add(b); tris.Add(b + 1);
+                tris.Add(v); tris.Add(up); tris.Add(v + 1);
+                tris.Add(v + 1); tris.Add(up); tris.Add(up + 1);
             }
-        }
-
-        // ---- the cone, from a circle on the sphere down to the ground
-        int tip = verts.Count;
-        verts.Add(Vector3.zero);
-
-        int first = verts.Count;
-        float ringY = centreY - headRadius * neck;
-        float ringR = headRadius * Mathf.Sqrt(Mathf.Max(0f, 1f - neck * neck));
-
-        for (int x = 0; x <= segments; x++)
-        {
-            float theta = (float)x / segments * Mathf.PI * 2f;
-            verts.Add(new Vector3(Mathf.Cos(theta) * ringR, ringY, Mathf.Sin(theta) * ringR));
-        }
-
-        // Wound so the normals face out. The other way round renders the cone's
-        // inside: backface culling removes the wall between the camera and the
-        // sphere, and the pin looks like a scoop with a ball sitting in it.
-        for (int x = 0; x < segments; x++)
-        {
-            tris.Add(tip);
-            tris.Add(first + x);
-            tris.Add(first + x + 1);
         }
 
         mesh.SetVertices(verts);
+        mesh.SetNormals(normals);
         mesh.SetTriangles(tris, 0);
-        mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
         return mesh;

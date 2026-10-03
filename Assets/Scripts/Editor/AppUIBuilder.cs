@@ -429,6 +429,7 @@ const float ReferenceWidth = 1080f;
             Object.FindFirstObjectByType<ARAnchorManager>(FindObjectsInactive.Include);
         spawner.defaultPrefab = CreateMarkerPrefab();
         spawner.styles = CreateShapeStyles(spawner.defaultPrefab);
+        LightMarkers();
         spawner.altitudeAboveTerrain = 1.5;
         spawner.spawnRadiusMetres = 500d;
         spawner.releaseRadiusMetres = 650d;
@@ -4170,19 +4171,10 @@ const float ReferenceWidth = 1080f;
     }
 
     /// <summary>
-    /// A pin standing on a ring, rather than a cube floating over the pavement.
+    /// A pin, point down, in the creator's colour.
     ///
-    /// The ring is the important half. It lies flat on the ground, so a reader
-    /// takes the marker's position off the paving rather than guessing at the
-    /// depth of something hanging in the air - and when localisation is a metre
-    /// out, a ring around roughly the right slab still reads as a place.
-    ///
-    /// The pin is what carries the creator's colour. The ring stays near-white
-    /// on purpose: it has to separate the marker from whatever is under it, and
-    /// a ring in the same colour as the pin separates nothing.
-    ///
-    /// One shape. Flag, plaque and post are the same machinery with different
-    /// numbers and can follow once this one has been seen outdoors.
+    /// It used to stand on a white ring on the ground; seen outdoors the ring
+    /// read as clutter rather than as a place, and it went (2 Oct).
     /// </summary>
     static GameObject CreateMarkerPrefab()
     {
@@ -4194,22 +4186,10 @@ const float ReferenceWidth = 1080f;
 
         MeshFilter pinMesh = pin.AddComponent<MeshFilter>();
         pinMesh.sharedMesh = MarkerShapes.Save(
-            MarkerShapes.Pin(0.22f, 0.48f, 1.0f), "MarkerPin");
+            MarkerShapes.Pin(0.24f, 1.0f), "MarkerPin");
 
         MeshRenderer pinRenderer = pin.AddComponent<MeshRenderer>();
         pinRenderer.sharedMaterial = MarkerShapes.Surface("MarkerBody", Color.white, 0.35f);
-
-        // --- the ring
-        GameObject ring = new GameObject("Ring");
-        ring.transform.SetParent(temp.transform, false);
-
-        MeshFilter ringMesh = ring.AddComponent<MeshFilter>();
-        ringMesh.sharedMesh = MarkerShapes.Save(
-            MarkerShapes.Torus(0.5f, 0.045f), "MarkerRing");
-
-        MeshRenderer ringRenderer = ring.AddComponent<MeshRenderer>();
-        ringRenderer.sharedMaterial = MarkerShapes.Surface(
-            "MarkerRing", new Color(0.96f, 0.97f, 0.98f), 0.2f);
 
         // Generous hit area: the visual is about a metre and a half but the
         // collider is wider, because a marker 80 m away is only a few pixels of
@@ -4220,8 +4200,6 @@ const float ReferenceWidth = 1080f;
 
         MarkerView view = temp.AddComponent<MarkerView>();
 
-        // The pin only. Tinting the ring as well would give the marker one
-        // colour and nothing to read it against.
         view.tintedRenderers = new[] { (Renderer)pinRenderer };
         view.baseScale = 1.5f;
         view.clampDistance = 60f;
@@ -4255,8 +4233,7 @@ const float ReferenceWidth = 1080f;
     }
 
     /// <summary>
-    /// One shape, standing on the same ring as the pin - the ring is what says
-    /// where the stop is, whatever stands on it.
+    /// One shape, the same size as the pin.
     ///
     /// Sphere, cube and the sign's parts are Unity's own meshes; the cone is
     /// generated, like the pin. The part that carries the creator's colour is the
@@ -4269,10 +4246,7 @@ const float ReferenceWidth = 1080f;
         GameObject temp = new GameObject("Marker_" + key);
 
         Material body = MarkerShapes.Surface("MarkerBody", Color.white, 0.35f);
-        Material pale = MarkerShapes.Surface("MarkerRing", new Color(0.96f, 0.97f, 0.98f), 0.2f);
-
-        ShapePart(temp.transform, "Ring", MarkerShapes.Save(MarkerShapes.Torus(0.5f, 0.045f), "MarkerRing"),
-                  pale, Vector3.zero, Vector3.one);
+        Material pale = MarkerShapes.Surface("MarkerPost", new Color(0.96f, 0.97f, 0.98f), 0.2f);
 
         Renderer tinted;
         BoxCollider collider = temp.AddComponent<BoxCollider>();
@@ -4287,9 +4261,9 @@ const float ReferenceWidth = 1080f;
         switch (key)
         {
             case "sphere":
-                // Hovering a little above the ring, so it reads as a ball over a
-                // place rather than one lying on the pavement.
-                tinted = ShapePart(temp.transform, "Ball", Builtin("Sphere.fbx"), body,
+                // Hovering a little, so it reads as a ball over a place rather
+                // than one lying on the pavement.
+                tinted = ShapePart(temp.transform, "Ball", Builtin("New-Sphere.fbx"), body,
                                    new Vector3(0f, 0.62f, 0f), Vector3.one * 0.6f);
                 break;
 
@@ -4305,7 +4279,7 @@ const float ReferenceWidth = 1080f;
                 break;
 
             default: // "sign"
-                ShapePart(temp.transform, "Post", Builtin("Cylinder.fbx"), pale,
+                ShapePart(temp.transform, "Post", Builtin("New-Cylinder.fbx"), pale,
                           new Vector3(0f, 0.35f, 0f), new Vector3(0.06f, 0.35f, 0.06f));
 
                 tinted = ShapePart(temp.transform, "Board", Builtin("Cube.fbx"), body,
@@ -4355,6 +4329,51 @@ const float ReferenceWidth = 1080f;
         return saved;
     }
 
+    /// <summary>
+    /// Light from every side, not only from the one sun.
+    ///
+    /// The scene took its ambient light from the skybox, and a skybox lights
+    /// nothing until lighting is generated, which it never was: the ambient
+    /// probe was all zeros. Outdoors every side of a marker the sun missed came
+    /// out black, the creator's colour with it. MarkerPreview used to add its
+    /// own ambient light, which is why the preview looked right and the street
+    /// did not.
+    ///
+    /// The sun goes on the camera, shining from over the reader's shoulder. In
+    /// a fixed direction it lit whichever side of a marker happened to face it,
+    /// and somebody standing on the other side saw the creator's colour at half
+    /// strength against a sunlit street. A marker is a sign, not a sculpture:
+    /// the side being read is the side that gets the light.
+    /// </summary>
+    static void LightMarkers()
+    {
+        // One flat colour, because on a phone MarkerSpawner rebuilds the light
+        // from it (see there) and a flat colour is exact to rebuild.
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.55f, 0.57f, 0.60f);
+
+        Light sun = null;
+        foreach (Light light in Object.FindObjectsByType<Light>(FindObjectsInactive.Include))
+            if (light.type == LightType.Directional)
+                sun = light;
+
+        if (sun == null || Camera.main == null)
+        {
+            _notes.Add("No directional light or MainCamera - markers are lit by ambient light only.");
+            return;
+        }
+
+        sun.transform.SetParent(Camera.main.transform, false);
+        sun.transform.localPosition = Vector3.zero;
+        sun.transform.localRotation = Quaternion.Euler(30f, 20f, 0f);
+    }
+
+    /// <summary>
+    /// One of Unity's own meshes. "New-Sphere" and "New-Cylinder" are the ones
+    /// GameObject.CreatePrimitive uses (1 m across); plain "Sphere.fbx" and
+    /// "Cylinder.fbx" are older meshes twice that size, which made the ball
+    /// twice its intended size and sat it on the ring.
+    /// </summary>
     static Mesh Builtin(string file)
     {
         return Resources.GetBuiltinResource<Mesh>(file);
