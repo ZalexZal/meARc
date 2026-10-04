@@ -72,6 +72,33 @@ public class InfoPanelController : MonoBehaviour
     public TextMeshProUGUI moveLabel;
     public CaptureMode capture;
 
+    [Header("Daylight v2")]
+    [Tooltip("The stop's number on its colour.")]
+    public TextMeshProUGUI numberLabel;
+
+    [Tooltip("Green beside \"You're here\" and \"Found\".")]
+    public Image statusDot;
+
+    [Tooltip("The one thing to do next: answer, go there, the next stop.")]
+    public Button footerPrimary;
+    public TextMeshProUGUI footerPrimaryLabel;
+    public GameObject footerPrimaryIcon;
+
+    [Tooltip("The quieter version of the same slot: stop navigating, close.")]
+    public Button footerSecondary;
+    public TextMeshProUGUI footerSecondaryLabel;
+
+    [Tooltip("Learn more, hide, move and report, behind the ⋯.")]
+    public SheetMenu menu;
+    public SheetDetents detents;
+
+    [Tooltip("Every stop on the trail, as a sheet. Built with this one, opened by the cards.")]
+    public StopListView stopList;
+
+    enum Next { None, Answer, Guide, StopGuide, NextStop, Close }
+    Next _footer;
+    bool _reveal;
+
     /// <summary>Raised before the sheet opens, so the Camera tab can close Nearby.</summary>
     public Action onWillOpen;
 
@@ -86,6 +113,20 @@ public class InfoPanelController : MonoBehaviour
     {
         if (scrimButton != null)
             scrimButton.onClick.AddListener(ClosePanel);
+
+        if (footerPrimary != null)
+            footerPrimary.onClick.AddListener(RunFooter);
+
+        if (footerSecondary != null)
+            footerSecondary.onClick.AddListener(RunFooter);
+
+        if (detents != null)
+            detents.onDismissed.AddListener(ClosePanel);
+
+        // "Back to the next stop" on an answered question closes the sheet: the
+        // next stop is on the card under it, and the map is the way there.
+        if (pieces != null && pieces.question != null)
+            pieces.question.onLeave = ClosePanel;
 
         if (guideButton != null)
             guideButton.onClick.AddListener(ToggleGuidance);
@@ -123,6 +164,7 @@ public class InfoPanelController : MonoBehaviour
 
         AppStrings.OnLanguageChanged += RefreshLabels;
         GuidanceService.OnGuidanceChanged += RefreshLabels;
+        MarkerTaskService.OnProgressChanged += RefreshFooter;
         DoorFlow.OnDoorChanged += CloseUnderDoor;
         ReportSheetView.OnBlocked += CloseAfterBlock;
 
@@ -133,6 +175,7 @@ public class InfoPanelController : MonoBehaviour
     {
         AppStrings.OnLanguageChanged -= RefreshLabels;
         GuidanceService.OnGuidanceChanged -= RefreshLabels;
+        MarkerTaskService.OnProgressChanged -= RefreshFooter;
         DoorFlow.OnDoorChanged -= CloseUnderDoor;
         ReportSheetView.OnBlocked -= CloseAfterBlock;
     }
@@ -182,6 +225,7 @@ public class InfoPanelController : MonoBehaviour
 
         _distanceTimer = 0f;
         RefreshDistance();
+        RefreshFooter();
     }
 
     // -------------------------------------------------------------- actions
@@ -196,9 +240,14 @@ public class InfoPanelController : MonoBehaviour
             return;
 
         if (GuidanceService.Target == currentBuilding)
+        {
             GuidanceService.Stop();
+        }
         else
+        {
             GuidanceService.Guide(currentBuilding);
+            ProximityToast.Say(string.Format(AppStrings.Get("guide.toast"), currentBuilding.DisplayName));
+        }
 
         ClosePanel();
     }
@@ -208,8 +257,14 @@ public class InfoPanelController : MonoBehaviour
         if (currentBuilding == null)
             return;
 
-        HiddenMarkers.Hide(currentBuilding);
+        BuildingData stop = currentBuilding;
+        HiddenMarkers.Hide(stop);
         ClosePanel();
+
+        // Said, and undoable for a moment: a stop hidden by a slip of the thumb
+        // should not need Profile to bring it back.
+        ProximityToast.Say(AppStrings.Get("hide.toast"), AppStrings.Get("hide.undo"),
+                           () => HiddenMarkers.Unhide(stop));
     }
 
     /// <summary>
@@ -224,7 +279,13 @@ public class InfoPanelController : MonoBehaviour
         if (currentBuilding == null || reportSheet == null)
             return;
 
-        reportSheet.Open(currentBuilding.buildingId);
+        if (menu != null)
+            menu.Close();
+
+        if (detents != null)
+            detents.ToLarge();
+
+        reportSheet.Open(currentBuilding.buildingId, currentBuilding.DisplayName);
     }
 
     /// <summary>
@@ -324,6 +385,7 @@ public class InfoPanelController : MonoBehaviour
         // Worked out before anything is drawn, because it decides both what the
         // sheet shows and whether the contents are asked for at all.
         bool reveal = MayReveal(data, fromMarker);
+        _reveal = reveal;
 
         // Hiding a practice stop would hide it from every replay, and a report
         // would put a stop that does not exist in the moderators' queue.
@@ -366,6 +428,10 @@ public class InfoPanelController : MonoBehaviour
         {
             DiscoveryTracker.MarkDiscovered(data);
 
+            // Found what it was leading to, so the blue line has done its job.
+            if (GuidanceService.Target == data)
+                GuidanceService.Stop();
+
             // And to the server, which is what makes it count towards trails
             // walked and badges. The phone's own flag stays for the screens that
             // read it offline; this is the record that survives a new phone.
@@ -393,6 +459,23 @@ public class InfoPanelController : MonoBehaviour
 
         if (scrim != null)
             scrim.SetActive(true);
+
+        if (menu != null)
+            menu.Close();
+
+        // A stop opens half way: its name, where it is, the first of its words,
+        // and the map still showing above it.
+        if (detents != null)
+        {
+            detents.Snap(false);
+
+            // From fully below the screen at the new height, whatever height it
+            // was last put away at.
+            if (sheet != null && !sheet.IsOpen)
+                sheet.SnapClosed();
+        }
+
+        RefreshFooter();
 
         if (OnOpened != null)
             OnOpened(data);
@@ -424,12 +507,23 @@ public class InfoPanelController : MonoBehaviour
         if (colourRing != null)
             colourRing.color = MarkerPalette.RingFor(colour);
 
+        if (numberLabel != null)
+        {
+            bool numbered = data.step > 0;
+            numberLabel.gameObject.SetActive(numbered);
+            numberLabel.text = numbered ? data.step.ToString() : string.Empty;
+            numberLabel.color = MarkerPalette.OnColour(colour);
+        }
+
         if (bearingArrow != null)
             bearingArrow.SetTarget(data);
 
         RefreshDistance();
     }
 
+    /// <summary>
+    /// The line under the stop's number: found, here, or how far and which way.
+    /// </summary>
     void RefreshDistance()
     {
         if (distanceText == null)
@@ -442,14 +536,154 @@ public class InfoPanelController : MonoBehaviour
             ? locationService.DistanceMetresTo(currentBuilding)
             : -1d;
 
-        if (metres < 0d)
+        bool approximate = locationService != null && locationService.IsApproximate;
+        bool found = currentBuilding != null && DiscoveryTracker.IsDiscovered(currentBuilding);
+        bool near = currentBuilding != null && metres >= 0d && metres <= NextStopCard.NearMetres(currentBuilding);
+
+        string text;
+        if (found)
+            text = AppStrings.Get("sheet.found");
+        else if (metres < 0d)
+            text = AppStrings.Get("map.noLocation");
+        else if (near)
+            text = string.Format(AppStrings.Get("card.here"), AppStrings.FormatDistance(metres, approximate));
+        else
+            text = string.Format(AppStrings.Get("sheet.away"), AppStrings.FormatDistance(metres, approximate));
+
+        if (distanceText.text != text)
+            distanceText.text = text;
+
+        bool good = found || near;
+        distanceText.color = ThemeManager.Get(good ? ThemeRole.StatusGood : ThemeRole.TextMuted);
+
+        if (statusDot != null && statusDot.gameObject.activeSelf != good)
+            statusDot.gameObject.SetActive(good);
+
+        if (statusDot != null)
+            statusDot.color = ThemeManager.Get(ThemeRole.GoodDot);
+
+        if (bearingArrow != null)
         {
-            distanceText.text = AppStrings.Get("map.noLocation");
+            bool arrow = !good && metres >= 0d;
+            if (bearingArrow.gameObject.activeSelf != arrow)
+                bearingArrow.gameObject.SetActive(arrow);
+        }
+    }
+
+    // ------------------------------------------------------------- the footer
+
+    /// <summary>
+    /// The one thing to do next, in the one slot at the foot of the sheet.
+    ///
+    ///   a question you can answer here     Answer the question
+    ///   locked after a wrong answer        Locked · 3:12 (dimmed)
+    ///   being guided here                  Stop navigation
+    ///   not there yet                      ➤ Take me there
+    ///   done, with a next stop             Next stop
+    ///   anything else                      Close
+    /// </summary>
+    void RefreshFooter()
+    {
+        BuildingData data = currentBuilding;
+        if (data == null || (footerPrimary == null && footerSecondary == null))
             return;
+
+        MarkerTaskService tasks = MarkerTaskService.Instance;
+        MarkerTaskService.MarkerProgress progress = tasks != null
+            ? tasks.Progress(data.buildingId)
+            : new MarkerTaskService.MarkerProgress();
+
+        double metres = locationService != null ? locationService.DistanceMetresTo(data) : -1d;
+        bool near = metres >= 0d && metres <= NextStopCard.NearMetres(data);
+        bool found = DiscoveryTracker.IsDiscovered(data);
+        bool answerable = _reveal && data.HasTask && !progress.solved && !progress.skipped &&
+                          !progress.awaitingReview;
+
+        string label;
+        bool primary = true;
+        bool arrow = false;
+        bool enabled = true;
+
+        if (answerable)
+        {
+            _footer = Next.Answer;
+
+            if (progress.IsLocked)
+            {
+                int left = Mathf.CeilToInt(progress.SecondsLeft);
+                label = string.Format(AppStrings.Get("sheet.locked"), (left / 60) + ":" + (left % 60).ToString("00"));
+                enabled = false;
+            }
+            else
+            {
+                label = AppStrings.Get("sheet.answer");
+            }
+        }
+        else if (GuidanceService.Target == data)
+        {
+            _footer = Next.StopGuide;
+            label = AppStrings.Get("card.stopGuide");
+            primary = false;
+        }
+        else if (!found && !near && metres >= 0d)
+        {
+            _footer = Next.Guide;
+            label = AppStrings.Get("card.guide");
+            arrow = true;
+        }
+        else if (found && NextStopCard.Current != null && NextStopCard.Current != data)
+        {
+            _footer = Next.NextStop;
+            label = AppStrings.Get("sheet.nextStop");
+        }
+        else
+        {
+            _footer = Next.Close;
+            label = AppStrings.Get("sheet.close");
+            primary = false;
         }
 
-        distanceText.text = AppStrings.FormatDistance(
-            metres, locationService != null && locationService.IsApproximate);
+        if (footerPrimary != null && footerPrimary.gameObject.activeSelf != primary)
+            footerPrimary.gameObject.SetActive(primary);
+
+        if (footerSecondary != null && footerSecondary.gameObject.activeSelf != !primary)
+            footerSecondary.gameObject.SetActive(!primary);
+
+        TextMeshProUGUI target = primary ? footerPrimaryLabel : footerSecondaryLabel;
+        if (target != null && target.text != label)
+            target.text = label;
+
+        if (footerPrimaryIcon != null && footerPrimaryIcon.activeSelf != arrow)
+            footerPrimaryIcon.SetActive(arrow);
+
+        if (footerPrimary != null && footerPrimary.interactable != enabled)
+            footerPrimary.interactable = enabled;
+    }
+
+    void RunFooter()
+    {
+        switch (_footer)
+        {
+            case Next.Answer:
+                if (pieces != null)
+                {
+                    if (detents != null)
+                        detents.ToLarge();
+
+                    pieces.OpenQuestion();
+                }
+                break;
+
+            case Next.Guide:
+            case Next.StopGuide:
+                ToggleGuidance();
+                break;
+
+            case Next.NextStop:
+            case Next.Close:
+                ClosePanel();
+                break;
+        }
     }
 
     // Joins only the fields that are actually filled in, so a building missing an
@@ -485,6 +719,8 @@ public class InfoPanelController : MonoBehaviour
         if (hideLabel != null)
             hideLabel.text = AppStrings.Get("marker.hide");
 
+        RefreshFooter();
+
         // Re-render the open sheet in the new language rather than leaving stale
         // text until the reader closes and reopens it.
         if (currentBuilding != null && titleText != null)
@@ -511,6 +747,13 @@ public class InfoPanelController : MonoBehaviour
         return "https://" + url;
     }
 
+    /// <summary>Close, from a page over the sheet - which may be open over nothing.</summary>
+    public void CloseIfOpen()
+    {
+        if (currentBuilding != null)
+            ClosePanel();
+    }
+
     public void ClosePanel()
     {
         // Before the sheet slides away, so nothing is still playing to an empty
@@ -519,6 +762,9 @@ public class InfoPanelController : MonoBehaviour
             pieces.Close();
 
         currentBuilding = null;
+
+        if (menu != null)
+            menu.Close();
 
         if (OnClosed != null)
             OnClosed();

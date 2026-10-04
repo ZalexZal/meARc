@@ -36,6 +36,10 @@ using UnityEngine.UI;
 public class CaptureMode : MonoBehaviour
 {
     public TextMeshProUGUI titleLabel;
+
+    [Tooltip("The calibration coach. Raised while this bar is up: the bar is taller " +
+             "than the card it stands in for, and covered the coach's words.")]
+    public RectTransform coach;
     public TextMeshProUGUI statusLabel;
 
     public Button forwardButton;
@@ -159,7 +163,18 @@ public class CaptureMode : MonoBehaviour
             if (other != null) other.SetActive(false);
 
         gameObject.SetActive(true);
+        LiftCoach(true);
         Draw();
+    }
+
+    void LiftCoach(bool up)
+    {
+        if (coach == null)
+            return;
+
+        float y = up ? 0.8f : 0.66f;
+        coach.anchorMin = new Vector2(0f, y);
+        coach.anchorMax = new Vector2(1f, y);
     }
 
     void End()
@@ -176,6 +191,7 @@ public class CaptureMode : MonoBehaviour
     {
         IsOpen = false;
         _placing = false;
+        LiftCoach(false);
 
         // Leaving the camera tab mid-capture is a cancel, not a save. Coroutines
         // stop with the object, so a save in flight is abandoned here too; if it
@@ -349,6 +365,7 @@ public class CaptureMode : MonoBehaviour
             if (other != null) other.SetActive(false);
 
         gameObject.SetActive(true);
+        LiftCoach(true);
         SetInteractable(false);
         if (cancelButton != null)
             cancelButton.interactable = true;

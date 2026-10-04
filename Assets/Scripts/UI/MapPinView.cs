@@ -3,27 +3,39 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// One marker on the map.
+/// One marker on the map, in the three states Daylight v2 draws:
 ///
-/// The bulb sits exactly on the coordinate and the label rides above it, because a
-/// pin whose label is centred on the point is a pin that lies about where the
-/// thing is by half a label.
+///   done   small, filled with the stop's colour, a tick on it
+///   next   large, filled, its number on it, a soft halo, and the only name
+///   later  hollow: the stop's colour as a ring, its number in ink
+///
+/// The bulb sits exactly on the coordinate and the name rides above it, because
+/// a pin whose label is centred on the point lies about where the thing is by
+/// half a label. Only the next stop is named - a name on every pin was a map of
+/// black ovals, and the next stop is the one the reader is asking about.
 /// </summary>
 public class MapPinView : MonoBehaviour
 {
+    public enum State { Later, Next, Done }
+
     [Header("Parts")]
     public Button button;
 
-    [Tooltip("Ring behind the bulb. This is what separates a marker from the map " +
-             "and from the accent when the trail picked the same colour.")]
+    [Tooltip("The surface-coloured disc behind the bulb: what separates a marker " +
+             "from the map, and the hollow pin's face.")]
     public Image ring;
 
     [Tooltip("The marker's own colour.")]
     public Image bulb;
 
-    [Tooltip("Grows when this pin is the selected one, so selection reads without " +
-             "relying on colour alone.")]
+    [Tooltip("The soft halo around the next stop.")]
+    public Image halo;
+
+    [Tooltip("Kept so older scenes load; the halo does its job now.")]
     public Image selection;
+
+    public TextMeshProUGUI number;
+    public Image tick;
 
     public TextMeshProUGUI label;
     public Image labelPlate;
@@ -36,6 +48,7 @@ public class MapPinView : MonoBehaviour
     System.Action<BuildingData> _onSelected;
     bool _selected;
     bool _labelAllowed = true;
+    State _state = State.Later;
 
     public BuildingData Building { get { return _building; } }
 
@@ -53,21 +66,11 @@ public class MapPinView : MonoBehaviour
         Refresh();
     }
 
-    /// <summary>Re-reads colour and name, e.g. after a language or theme change.</summary>
     void OnEnable()
     {
-        // Repaint on the way in, not only on the event.
-        //
-        // This is the asymmetry the plate bug was really made of. ThemedElement
-        // calls Apply() in OnEnable and then subscribes; this only subscribed.
-        // A pin lives under MapPanel, which is switched off while Settings - the
-        // one screen with the theme toggle on it - is open, so the pin is always
-        // disabled at the exact moment the theme changes and always misses the
-        // event. Subscribing to a message you are guaranteed not to be there for
-        // is not a subscription.
-        //
-        // It costs a name and a colour per pin and it also picks up a language
-        // change, which arrives the same way and through the same closed door.
+        // Repaint on the way in, not only on the event: a pin lives under the map
+        // panel, which is switched off while Profile - where the theme is chosen -
+        // is open, so it always misses the event itself.
         Refresh();
         ThemeManager.OnThemeChanged += Refresh;
     }
@@ -77,75 +80,105 @@ public class MapPinView : MonoBehaviour
         ThemeManager.OnThemeChanged -= Refresh;
     }
 
-    /// <summary>
-    /// Repaints the pin.
-    ///
-    /// Still subscribed to the theme, though the plate and the label no longer
-    /// move with it - the marker's own colour and its ring do, because RingFor
-    /// picks whichever of black or white the marker is not.
-    ///
-    /// The plate used to be painted here from Surface and was the thing that
-    /// broke: UIFactory.Plain bakes the colour it is handed and attaches no
-    /// ThemedElement, so the prefab froze at whatever the editor's theme was
-    /// when it was written - #1A1F27, the dark Surface - while the label beside
-    /// it did follow the theme, because UIFactory.Text does attach one. Dark
-    /// text on a dark plate, in the light theme only.
-    /// </summary>
+    public void SetState(State state)
+    {
+        if (_state == state)
+            return;
+
+        _state = state;
+        Refresh();
+    }
+
     public void Refresh()
     {
         if (_building == null)
             return;
 
         Color colour = MarkerPalette.Resolve(_building);
+        Color surface = ThemeManager.Get(ThemeRole.Surface);
+        bool big = _state == State.Next || _selected;
 
-        if (bulb != null)
-            bulb.color = colour;
+        // Sizes in reference pixels: 36px for the next stop, 26 for one ahead,
+        // 24 for one done, each with its surface ring.
+        float outer = big ? 100f : _state == State.Done ? 66f : 72f;
+        float border = big ? 8f : _state == State.Done ? 6f : 0f;
 
         if (ring != null)
-            ring.color = MarkerPalette.RingFor(colour);
+        {
+            ring.rectTransform.sizeDelta = new Vector2(outer, outer);
+            ring.color = _state == State.Later && !big ? colour : surface;
+        }
 
-        // Against the map, not against the chrome. See MapInk: Surface and
-        // TextPrimary made a white plate carrying near-black text sit on a cream
-        // map among its own near-black labels, which is a name nobody can find.
+        if (bulb != null)
+        {
+            float inner = _state == State.Later && !big ? outer - 16f : outer - border * 2f;
+            bulb.rectTransform.sizeDelta = new Vector2(inner, inner);
+            bulb.color = _state == State.Later && !big ? surface : colour;
+        }
+
+        if (halo != null)
+        {
+            bool show = big;
+            if (halo.gameObject.activeSelf != show)
+                halo.gameObject.SetActive(show);
+
+            Color wash = colour;
+            wash.a = 0.28f;
+            halo.color = wash;
+            halo.rectTransform.sizeDelta = new Vector2(outer + 28f, outer + 28f);
+        }
+
+        if (selection != null && selection.gameObject.activeSelf)
+            selection.gameObject.SetActive(false);
+
+        bool done = _state == State.Done && !big;
+        bool numbered = !done && _building.step > 0;
+
+        if (number != null)
+        {
+            if (number.gameObject.activeSelf != numbered)
+                number.gameObject.SetActive(numbered);
+
+            if (numbered)
+            {
+                number.text = _building.step.ToString();
+                number.fontSize = big ? 42f : 33f;
+                number.color = _state == State.Later && !big
+                    ? ThemeManager.Get(ThemeRole.TextPrimary)
+                    : MarkerPalette.OnColour(colour);
+            }
+        }
+
+        if (tick != null)
+        {
+            if (tick.gameObject.activeSelf != done)
+                tick.gameObject.SetActive(done);
+
+            tick.color = MarkerPalette.OnColour(colour);
+        }
+
         if (label != null)
         {
             label.text = _building.DisplayName;
-            label.color = MapInk.OnPlate;
+            label.color = ThemeManager.Get(ThemeRole.TextPrimary);
         }
 
         if (labelPlate != null)
-            labelPlate.color = MapInk.Plate;
+            labelPlate.color = ThemeManager.Get(ThemeRole.Glass);
+
+        ApplyLabel();
     }
 
     public void SetSelected(bool selected)
     {
-        if (selection != null)
-        {
-            selection.gameObject.SetActive(selected);
-            selection.color = ThemeManager.Get(ThemeRole.Accent);
-        }
-
-        if (bulb != null)
-        {
-            float size = selected ? selectedBulbSize : bulbSize;
-            bulb.rectTransform.sizeDelta = new Vector2(size, size);
-
-            if (ring != null)
-                ring.rectTransform.sizeDelta = new Vector2(size + 8f, size + 8f);
-        }
+        if (_selected == selected)
+            return;
 
         _selected = selected;
-        ApplyLabel();
+        Refresh();
     }
 
-    /// <summary>
-    /// Whether this pin may show its name.
-    ///
-    /// The map turns labels off once there are enough pins that they would overlap,
-    /// because two names crossing each other are worse than none - but the selected
-    /// pin and the one being walked to always keep theirs, since those are the two
-    /// the reader is actually asking about.
-    /// </summary>
+    /// <summary>Kept for MapView, which still asks; only the next or chosen pin is named.</summary>
     public void SetLabelAllowed(bool allowed)
     {
         _labelAllowed = allowed;
@@ -157,7 +190,42 @@ public class MapPinView : MonoBehaviour
         if (label == null)
             return;
 
-        label.transform.parent.gameObject.SetActive(_selected || _labelAllowed);
+        bool show = _state == State.Next || _selected;
+        GameObject plate = label.transform.parent.gameObject;
+
+        if (plate.activeSelf != show)
+            plate.SetActive(show);
+    }
+
+    /// <summary>
+    /// Keeps the name on the screen. A stop near the edge had its label cut in
+    /// half by it ("Test 29 0"); the plate slides in instead, still above its pin.
+    /// </summary>
+    void LateUpdate()
+    {
+        if (label == null)
+            return;
+
+        RectTransform plate = (RectTransform)label.transform.parent;
+        if (!plate.gameObject.activeSelf)
+            return;
+
+        RectTransform me = (RectTransform)transform;
+        RectTransform area = me.parent as RectTransform;
+        if (area == null)
+            return;
+
+        float room = area.rect.width * 0.5f - 22f;
+        float half = plate.rect.width * 0.5f;
+        float x = me.anchoredPosition.x;
+        float shift = Mathf.Clamp(0f, -room + half - x, room - half - x);
+
+        Vector2 at = plate.anchoredPosition;
+        if (!Mathf.Approximately(at.x, shift))
+        {
+            at.x = shift;
+            plate.anchoredPosition = at;
+        }
     }
 
     void Raise()

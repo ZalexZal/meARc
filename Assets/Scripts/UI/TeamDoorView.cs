@@ -106,6 +106,16 @@ public class TeamDoorView : MonoBehaviour
     public TextMeshProUGUI statusLabel;
     public Button closeButton;
 
+    [Header("Daylight v2")]
+    [Tooltip("Copies the team code; the code is what people read out across a room.")]
+    public Button copyButton;
+
+    [Tooltip("Hands the code to the phone's share sheet.")]
+    public Button shareButton;
+
+    [Tooltip("The Leave button's face: clear until armed, then the warning red.")]
+    public Image leaveFace;
+
     void OnEnable()
     {
         if (createButton != null)
@@ -124,6 +134,18 @@ public class TeamDoorView : MonoBehaviour
         {
             leaveButton.onClick.RemoveAllListeners();
             leaveButton.onClick.AddListener(Leave);
+        }
+
+        if (copyButton != null)
+        {
+            copyButton.onClick.RemoveAllListeners();
+            copyButton.onClick.AddListener(CopyCode);
+        }
+
+        if (shareButton != null)
+        {
+            shareButton.onClick.RemoveAllListeners();
+            shareButton.onClick.AddListener(ShareCode);
         }
 
         TeamService.OnTeamChanged += Refresh;
@@ -210,6 +232,10 @@ public class TeamDoorView : MonoBehaviour
 
     public void Refresh()
     {
+        // Leave's words are this view's own (it rewrites them as it arms), so
+        // they follow the language from here rather than from a localiser.
+        DrawLeave();
+
         TeamService teams = TeamService.Instance;
         TeamService.Detail team = teams != null ? teams.Team : null;
         bool onTeam = team != null && team.on_team;
@@ -292,9 +318,12 @@ public class TeamDoorView : MonoBehaviour
             {
                 // "1 stops" is the kind of thing a room of teenagers reads out
                 // loud. One stop gets its own sentence, in both languages.
-                teamMeta.text = string.Format(
-                    AppStrings.Get(team.solved == 1 ? "team.metaOne" : "team.meta"),
-                    team.solved, team.points);
+                // Who is in it first, as Daylight's caption under the name has it.
+                teamMeta.text = string.Format(AppStrings.Get("team.capacity"), team.Size, team.Cap) +
+                                " · " +
+                                string.Format(
+                                    AppStrings.Get(team.solved == 1 ? "team.metaOne" : "team.meta"),
+                                    team.solved, team.points);
             }
 
             DrawMoved(team);
@@ -349,6 +378,10 @@ public class TeamDoorView : MonoBehaviour
 
         if (capacityLabel != null)
         {
+            // On a team it is in the line under the name instead; above the
+            // name it read as the sheet's heading.
+            capacityLabel.gameObject.SetActive(!onTeam);
+
             int cap = team != null ? team.Cap : 4;
 
             capacityLabel.text = onTeam
@@ -565,7 +598,76 @@ public class TeamDoorView : MonoBehaviour
         label.text = !_leaveArmed ? AppStrings.Get("team.leave")
                    : last ? string.Format(AppStrings.Get("team.leaveLast"), team.points)
                    : AppStrings.Get("team.leaveConfirm");
-        label.color = ThemeManager.Get(_leaveArmed ? ThemeRole.StatusPoor : ThemeRole.TextPrimary);
+
+        // Red words while it only asks; a red button once it means it.
+        label.color = _leaveArmed ? Color.white : ThemeManager.Get(ThemeRole.StatusPoor);
+
+        if (leaveFace != null)
+        {
+            Color red = ThemeManager.Get(ThemeRole.BadDot);
+            red.a = _leaveArmed ? 1f : 0f;
+            leaveFace.color = red;
+        }
+    }
+
+    string Code
+    {
+        get
+        {
+            TeamService.Detail team = TeamService.Instance != null ? TeamService.Instance.Team : null;
+            return team != null ? team.invite_code : null;
+        }
+    }
+
+    void CopyCode()
+    {
+        string code = Code;
+        if (string.IsNullOrEmpty(code))
+            return;
+
+        GUIUtility.systemCopyBuffer = code;
+        Haptics.Tick();
+
+        // Android 13 and later say "Copied" themselves.
+        if (Haptics.Sdk < 33)
+            ProximityToast.Say(AppStrings.Get("team.copied"));
+    }
+
+    void ShareCode()
+    {
+        string code = Code;
+        if (string.IsNullOrEmpty(code))
+            return;
+
+        string text = string.Format(AppStrings.Get("team.shareText"), code);
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (AndroidJavaObject intent = new AndroidJavaObject("android.content.Intent"))
+            using (AndroidJavaClass intentClass = new AndroidJavaClass("android.content.Intent"))
+            using (AndroidJavaClass player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (AndroidJavaObject activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            {
+                intent.Call<AndroidJavaObject>("setAction", "android.intent.action.SEND");
+                intent.Call<AndroidJavaObject>("setType", "text/plain");
+                intent.Call<AndroidJavaObject>("putExtra", "android.intent.extra.TEXT", text);
+
+                using (AndroidJavaObject chooser = intentClass.CallStatic<AndroidJavaObject>(
+                           "createChooser", intent, AppStrings.Get("team.share")))
+                {
+                    activity.Call("startActivity", chooser);
+                }
+            }
+            return;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning("[Team] Share sheet failed: " + exception.Message);
+        }
+#endif
+        GUIUtility.systemCopyBuffer = text;
+        ProximityToast.Say(AppStrings.Get("team.copied"));
     }
 
     void Leave()

@@ -320,17 +320,17 @@ public static class UIPreview
         Shoot(canvas, rig, "06-tutorial" + t, "MapPanel", "Tutorial/Overlay");
 
         // A middle card, where Back exists and Next is not yet Done.
-        Tutorial(canvas.transform, 3);
+        Tutorial(canvas.transform, 0);
         Shoot(canvas, rig, "30-tutorial-mid" + t, "MapPanel", "Tutorial/Overlay");
 
         // The last card, where Next becomes Start exploring and the guide ends.
-        Tutorial(canvas.transform, 5);
+        Tutorial(canvas.transform, 0);
         Shoot(canvas, rig, "31-tutorial-last" + t, "MapPanel", "Tutorial/Overlay");
 
         Tutorial(canvas.transform, 0);
         // The strip stands down for an alert, as it does in the app now, so the
         // picture stops showing the alert landing on top of it.
-        NextStopStrip stripForToast = canvas.GetComponentInChildren<NextStopStrip>(true);
+        NextStopCard stripForToast = canvas.GetComponentInChildren<NextStopCard>(true);
         bool stripUp = stripForToast != null && stripForToast.gameObject.activeSelf;
 
         if (stripForToast != null)
@@ -379,7 +379,7 @@ public static class UIPreview
                 chip.reportButton.gameObject.SetActive(false);
         }
 
-        NextStopStrip strip = canvas.GetComponentInChildren<NextStopStrip>(true);
+        NextStopCard strip = canvas.GetComponentInChildren<NextStopCard>(true);
         bool stripWas = strip != null && strip.gameObject.activeSelf;
 
         if (strip != null)
@@ -1105,6 +1105,41 @@ public static class UIPreview
         }
     }
 
+    static readonly HashSet<string> _shortSeen = new HashSet<string>();
+
+    /// <summary>
+    /// Every label on screen set to Ellipsis that is shorter than one line of
+    /// its own type. TMP draws nothing at all for a line that does not fit, so
+    /// these are the words that silently vanish: the capture bar's title and
+    /// the team names on the board both went this way.
+    /// </summary>
+    static void ShortLines(Canvas canvas, string shot)
+    {
+        foreach (TMPro.TextMeshProUGUI label in canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(false))
+        {
+            if (label.overflowMode != TMPro.TextOverflowModes.Ellipsis ||
+                string.IsNullOrWhiteSpace(label.text))
+            {
+                continue;
+            }
+
+            float need = label.fontSize * 1.2f;
+            float have = label.rectTransform.rect.height - label.margin.y - label.margin.w;
+
+            if (have + 0.5f >= need)
+                continue;
+
+            string path = label.name;
+            for (Transform t = label.transform.parent; t != null && t != canvas.transform; t = t.parent)
+                path = t.name + "/" + path;
+
+            if (_shortSeen.Add(path))
+                Debug.LogWarning("[ShortLine] " + shot + ": " + path + " is " + have.ToString("0") +
+                                 " high for a " + label.fontSize.ToString("0") + " line - \"" +
+                                 label.text + "\"");
+        }
+    }
+
     static void Shoot(Canvas canvas, Rig rig, string name, params string[] visible)
     {
         var wanted = new HashSet<string>(visible);
@@ -1199,8 +1234,8 @@ public static class UIPreview
             mapChrome.gameObject.SetActive(false);
 
         Highlight(canvas.transform,
-            name.Contains("camera") ? "CameraTabButton" :
-            name.Contains("settings") ? "SettingsTabButton" : "MapTabButton");
+            System.Array.IndexOf(visible, "CameraPanel") >= 0 ? "CameraTabButton" :
+            System.Array.IndexOf(visible, "SettingsPanel") >= 0 ? "SettingsTabButton" : "MapTabButton");
 
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)canvas.transform);
@@ -1233,6 +1268,8 @@ public static class UIPreview
 
         File.WriteAllBytes(Path.Combine(OutputFolder, name + ".png"), shot.EncodeToPNG());
         Object.DestroyImmediate(shot);
+
+        ShortLines(canvas, name);
 
         if (mapChrome != null)
             mapChrome.gameObject.SetActive(chromeWas);
@@ -1336,35 +1373,37 @@ public static class UIPreview
     /// </summary>
     static void StandIn(Transform root)
     {
-        Set(root, "MapPanel/Safe/Panel/Nearest/Row/Text/Name", "Безистен");
-        Set(root, "MapPanel/Safe/Panel/Nearest/Row/Distance", "180 m");
 
-        Set(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Text/Name", "Часовниковата кула");
-        Set(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Distance", "62 m");
-        Hide(root, "CameraPanel/LiveARView/Safe/Panel/Dock/Row/Empty");
+        Set(root, "MapPanel/Safe/Panel/NextStop/Actions/Primary/Row/Label", AppStrings.Get("card.guide"));
+        Set(root, "CameraPanel/LiveARView/Safe/Panel/CameraCard/Actions/Primary/Row/Label", AppStrings.Get("card.guide"));
+        Set(root, "InfoSheet/Safe/Sheet/Lower/Area/Overview/Footer/Primary/Row/Label", AppStrings.Get("card.guide"));
+        Set(root, "InfoSheet/Safe/ReportChooser/Safe/Sheet/Lower/Area/Body/Scroll/Viewport/Content/Intro",
+            string.Format(AppStrings.Get("report.introNamed"), "Безистен"));
 
-        const string Sheet = "InfoSheet/Safe/Sheet/Overview/Body/Scroll/Viewport/Content/";
+        const string Sheet = "InfoSheet/Safe/Sheet/Lower/Area/Overview/Body/Scroll/Viewport/Content/";
 
-        Set(root, Sheet + "Head/TitleText", "Безистен");
-        Set(root, Sheet + "Distance/Value", "180 m");
-        Set(root, Sheet + "MetaText", "1509–1510  ·  Неизвестен  ·  Търговски");
+        Set(root, Sheet + "Heading/TitleText", "Безистен");
+        Set(root, Sheet + "Status/Line/Value", "180 m оттук");
+        Set(root, Sheet + "Heading/MetaText", "около 1509 · Покрит пазар");
+        Set(root, Sheet + "Status/Badge/Number", "1");
         Set(root, Sheet + "DescriptionText",
             "Ямболският безистен е един от малкото запазени покрити пазари на " +
             "Балканския полуостров. Построен е около 1509–1510 г. и дълго време е бил " +
             "търговското сърце на града.");
 
-        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Name", "Ямбол — център");
-        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Mode/Label", "Свободен");
+        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Name", "Кой знае повече?");
+        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Sub", "Състезание · 2 от 5 · 20 точки");
+        Set(root, "MapPanel/Safe/TopBar/TeamRow/TeamChip/Label", "Северняците · 3-то място");
 
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +
                   "PrivacyCard/Row/Count", "2 hidden");
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +
                   "Version/Label", "Version 0.2.0");
 
-        Set(root, "ProximityToast/Safe/CardHolder/Card/Row/Text/Name", "Часовниковата кула");
-        Set(root, "ProximityToast/Safe/CardHolder/Card/Row/Distance", "48 m");
+        Set(root, "ProximityToast/Safe/CardHolder/Card/Message",
+            string.Format(AppStrings.Get("alert.near"), "Театър „Невена Коканова“", "20 m"));
+        Set(root, "ProximityToast/Safe/CardHolder/Card/Action/Label", AppStrings.Get("alert.open"));
 
-        Set(root, "MapPanel/Safe/Scale/Label", "100 m");
     }
 
     static void Set(Transform root, string path, string text)
@@ -1551,32 +1590,59 @@ public static class UIPreview
             return;
         }
 
-        string[] names = { "Безистен", "ПМГ", "Часовникът" };
-        Color[] colours =
+        // Daylight v2's five stops, laid out as the prototype has them around the
+        // reader: two found, the third next, two still ahead.
+        string[] names = { "Безистен", "Ески джамия", "Театър", "Музей", "Папазов" };
+        string[] colours = { "#E8546A", "#2F9E8F", "#E8A33D", "#5B6EE1", "#9B59B6" };
+        Vector2[] at =
         {
-            new Color32(0x45, 0xC4, 0xB0, 0xFF),
-            new Color32(0x00, 0x33, 0xFF, 0xFF),
-            new Color32(0x72, 0x00, 0x7A, 0xFF)
+            new Vector2(-342f, 115f), new Vector2(-250f, 355f), new Vector2(138f, 211f),
+            new Vector2(66f, -48f), new Vector2(-159f, -226f)
         };
-        Vector2[] at = { new Vector2(-150f, 260f), new Vector2(210f, -80f), new Vector2(-60f, -330f) };
 
-        for (int i = 0; i < 3; i++)
+        Transform route = content.Find("Route");
+        Color leg = ThemeManager.IsDark
+            ? new Color(0.96f, 0.96f, 0.97f, 0.24f)
+            : new Color(0.114f, 0.114f, 0.122f, 0.20f);
+
+        for (int i = 0; route != null && i < at.Length - 1; i++)
+        {
+            GameObject go = new GameObject("Leg", typeof(RectTransform));
+            RectTransform rt = (RectTransform)go.transform;
+            rt.SetParent(route, false);
+            Vector2 delta = at[i + 1] - at[i];
+            rt.anchoredPosition = at[i] + delta * 0.5f;
+            rt.sizeDelta = new Vector2(delta.magnitude + 11f, 11f);
+            rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+            Image image = go.AddComponent<Image>();
+            image.sprite = UISprites.Pill;
+            image.type = Image.Type.Sliced;
+            image.pixelsPerUnitMultiplier = 160f / 11f;
+            image.color = leg;
+            image.raycastTarget = false;
+        }
+
+        for (int i = 0; i < names.Length; i++)
         {
             MapPinView pin = (MapPinView)PrefabUtility.InstantiatePrefab(prefab, content);
             ((RectTransform)pin.transform).anchoredPosition = at[i];
 
-            if (pin.bulb != null)
-                pin.bulb.color = colours[i];
+            BuildingData stop = ScriptableObject.CreateInstance<BuildingData>();
+            stop.buildingId = "preview-" + i;
+            stop.buildingName = names[i];
+            stop.buildingNameBg = names[i];
+            stop.step = i + 1;
+            stop.markerColourHex = colours[i];
 
-            if (pin.ring != null)
-                pin.ring.color = MarkerPalette.RingFor(colours[i]);
-
-            if (pin.label != null)
-                pin.label.text = names[i];
-
-            pin.SetLabelAllowed(true);
-            pin.SetSelected(i == 0);
+            pin.Bind(stop, null);
+            pin.SetState(i < 2 ? MapPinView.State.Done : i == 2 ? MapPinView.State.Next : MapPinView.State.Later);
+            pin.Refresh();
+            pin.SetLabelAllowed(i == 2);
         }
+
+        Transform me = content.Find("UserDot");
+        if (me != null)
+            ((RectTransform)me).anchoredPosition = new Vector2(220f, 120f);
 
         // The reader, and the ring that says how far.
         Show(content, "UserDot");
@@ -1613,7 +1679,11 @@ public static class UIPreview
 
         // True bearings, north up. The cone is what turns.
         float[] angles = { 18f, 128f, 286f };
-        float[] reach = { 58f, 124f, 92f };
+        // As fractions of the radar's own radius: the old numbers were for the
+        // larger radar and put two of the three dots off its edge.
+        CameraRadar owner = radar.GetComponentInParent<CameraRadar>(true);
+        float r = owner != null ? owner.radius : 70f;
+        float[] reach = { 0.44f * r, 0.94f * r, 0.7f * r };
 
         for (int i = 0; i < 3; i++)
         {
@@ -1778,9 +1848,9 @@ public static class UIPreview
             Show(_controller.overview, false);
             Show(_controller.page, true);
 
-            // The mark in the corner goes away with the page, as it does in the
-            // app. Bind puts it back, which is why nothing here has to.
-            Show(_controller.closeMark, false);
+            // Back shows on a page, as it does in the app.
+            if (_controller.backGroup != null)
+                _controller.backGroup.alpha = 1f;
 
             bool question = which == Which.Question;
             Show(_controller.media != null ? _controller.media.gameObject : null, !question);
@@ -1788,9 +1858,8 @@ public static class UIPreview
 
             if (question)
             {
-                // No heading: the question is the heading.
                 if (_controller.pageTitle != null)
-                    _controller.pageTitle.text = string.Empty;
+                    _controller.pageTitle.text = AppStrings.Get("piece.question");
 
                 _controller.question.Show(_marker);
                 return;
@@ -1908,22 +1977,38 @@ public static class UIPreview
             // a Check button under a question already marked correct.
             Show(view.checkHolder, carriesOn);
 
-            Show(view.ruleHolder, ending == Ending.Lock || ending == Ending.Deduct ||
-                                  ending == Ending.Skip);
+            Show(view.ruleHolder, true);
 
             if (view.ruleLabel != null)
             {
-                // The deduction caption takes its number now, so a picture of it
-                // would otherwise read "A wrong answer costs {0} points".
-                view.ruleLabel.text = ending == Ending.Deduct
-                    ? string.Format(AppStrings.Get("task.dedCap"), 5)
-                    : AppStrings.Get(ending == Ending.Lock ? "task.lockCap"
-                                                           : "task.skipCap");
+                string worth = string.Format(AppStrings.Get("task.worthShort"), 10);
+                string rule = ending == Ending.Deduct ? string.Format(AppStrings.Get("task.dedLine"), 5)
+                            : ending == Ending.Lock ? string.Format(AppStrings.Get("task.lockLine"),
+                                                                    string.Format(AppStrings.Get("time.minutes"), 5))
+                            : ending == Ending.Skip ? AppStrings.Get("task.skipLine")
+                            : null;
+                view.ruleLabel.text = rule == null ? worth : worth + " · " + rule;
             }
 
+            // The footer, as Draw would leave it.
+            Show(view.hintsHolder, carriesOn);
+            Show(view.nextButton != null ? view.nextButton.gameObject : null, right);
+            Show(view.exploreButton != null ? view.exploreButton.gameObject : null, ending == Ending.Lock);
+            if (view.nextLabel != null) view.nextLabel.text = AppStrings.Get("task.next");
+            if (view.exploreLabel != null) view.exploreLabel.text = AppStrings.Get("task.explore");
+
             Show(view.lockHolder, ending == Ending.Lock);
-            if (ending == Ending.Lock && view.lockLabel != null)
-                view.lockLabel.text = string.Format(AppStrings.Get("task.lockMsg"), "4:32");
+            if (ending == Ending.Lock)
+            {
+                if (view.lockTitle != null) view.lockTitle.text = AppStrings.Get("task.notRight");
+                if (view.lockLabel != null)
+                    view.lockLabel.text = string.Format(AppStrings.Get("task.lockBody"), "4:32", "14:05");
+                if (view.lockArc != null)
+                {
+                    view.lockArc.fillAmount = 0.9f;
+                    view.lockArc.color = ThemeManager.Get(ThemeRole.BadDot);
+                }
+            }
 
             Show(view.scoreHolder, ending == Ending.Deduct);
             if (ending == Ending.Deduct && view.scoreLabel != null)
@@ -1952,40 +2037,36 @@ public static class UIPreview
 
         static void Bubble(MarkerQuestionView view, Ending ending)
         {
-            if (ending == Ending.Skip)
+            // Lock says itself on the lock card; Skip takes the whole page.
+            if (ending == Ending.Skip || ending == Ending.Lock)
             {
                 Show(view.bubbleHolder, false);
                 return;
             }
 
-            Show(view.bubbleHolder, true);
+            string heading = ending == Ending.Right
+                ? string.Format(AppStrings.Get("task.rightPts"), 10)
+                : AppStrings.Get("task.notRight");
 
-            string text =
-                ending == Ending.Right
-                    ? AppStrings.Get("task.correct") + "  " +
-                      string.Format(AppStrings.Get("task.awarded"), 10)
+            string body = ending == Ending.Right
+                ? "Покритият пазар е построен около 1509–1510 г. и оттогава е центърът на града."
                 : ending == Ending.Deduct
                     ? string.Format(AppStrings.Get("task.dedMsg"), 5)
-                : ending == Ending.Lock
-                    ? AppStrings.Get("task.wrong")
                     : "Not quite. Look at the date on the plaque by the entrance.";
 
-            if (view.bubbleLabel != null)
-                view.bubbleLabel.text = text;
+            System.Reflection.MethodInfo say = typeof(MarkerQuestionView).GetMethod(
+                "Verdict2", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
 
-            Color colour = ThemeManager.Get(ending == Ending.Right
-                ? ThemeRole.StatusGood
-                : ThemeRole.StatusPoor);
-
-            if (view.bubbleEdge != null)
-                view.bubbleEdge.color = colour;
-
-            if (view.bubbleFill != null)
+            if (say == null)
             {
-                Color wash = colour;
-                wash.a = 0.14f;
-                view.bubbleFill.color = wash;
+                Debug.LogWarning("[Preview] MarkerQuestionView.Verdict2 has moved.");
+                return;
             }
+
+            say.Invoke(view, new object[]
+            {
+                heading, body, ending == Ending.Right ? ThemeRole.StatusGood : ThemeRole.StatusPoor
+            });
         }
 
         /// <summary>
@@ -2037,10 +2118,15 @@ public static class UIPreview
             if (trails.nearNote != null)
                 trails.nearNote.gameObject.SetActive(false);
 
+            Transform mine = trails.listParent != null ? (Transform)trails.listParent : content;
+
+            if (trails.mineGroup != null)
+                trails.mineGroup.SetActive(rows);
+
             List<TrailRowView> existing = new List<TrailRowView>();
-            foreach (TrailRowView found in content.GetComponentsInChildren<TrailRowView>(true))
+            foreach (TrailRowView found in mine.GetComponentsInChildren<TrailRowView>(true))
             {
-                if (found.transform.parent == content)
+                if (found.transform.parent == mine)
                     existing.Add(found);
             }
 
@@ -2052,7 +2138,8 @@ public static class UIPreview
 
                 for (int i = 0; i < names.Length; i++)
                 {
-                    TrailRowView row = Object.Instantiate(trails.rowPrefab, content);
+                    TrailRowView row = Object.Instantiate(trails.rowPrefab, mine);
+                    row.SetFirst(i == 0);
                     row.Bind(new TrailService.Trail
                     {
                         id = "preview-" + i,
@@ -2149,58 +2236,83 @@ public static class UIPreview
         }
 
         /// <summary>
-        /// Puts a believable route in the strip: one stop behind, one ahead.
+        /// Puts a believable stop on the next-stop card: the first one, one partway
+        /// along, or the trail finished.
         ///
-        /// Straight at the labels rather than through NextStopStrip, because the
+        /// Straight at the labels rather than through NextStopCard, because the
         /// component reads DiscoveryTracker and a live position, and neither exists
-        /// in a batch-mode render.
+        /// in a batch-mode render. The card's own Update would redraw it, so it is
+        /// switched off for the shot and its labels kept.
         /// </summary>
         public static void Strip(Transform root, string state)
         {
-            NextStopStrip strip = root.GetComponentInChildren<NextStopStrip>(true);
+            NextStopCard[] cards = root.GetComponentsInChildren<NextStopCard>(true);
 
-            if (strip == null)
+            if (cards.Length == 0)
             {
-                Debug.LogWarning("[Preview] No strip on the map.");
+                Debug.LogWarning("[Preview] No next-stop card on the map.");
                 return;
             }
 
-            bool started = state != "Start";
-            bool done = state == "Done";
-
-            Show(strip.previousRow, started);
-            Show(strip.nextRow, !done);
-            Show(strip.hereWire, !done);
-
-            if (started && strip.previousName != null)
+            for (int c = 0; c < cards.Length; c++)
             {
-                strip.previousName.text = "Часовниковата кула";
-                strip.previousMeta.text = string.Format(AppStrings.Get("strip.stopFound"), 2);
+                NextStopCard card = cards[c];
+                card.enabled = false;
+                bool done = state == "Done";
+                bool near = state == "Start";
+
+                Color colour = done ? ThemeManager.Get(ThemeRole.GoodDot) : MarkerPalette.ForKey("garden");
+                if (card.badge != null) card.badge.color = colour;
+                if (card.numberLabel != null)
+                {
+                    card.numberLabel.gameObject.SetActive(!done);
+                    card.numberLabel.text = near ? "1" : "3";
+                    card.numberLabel.color = MarkerPalette.OnColour(colour);
+                }
+
+                if (card.badgeTick != null)
+                {
+                    card.badgeTick.gameObject.SetActive(done);
+                    card.badgeTick.enabled = done;
+                    card.badgeTick.color = MarkerPalette.OnColour(colour);
+                }
+
+                if (card.listLabel != null) card.listLabel.text = AppStrings.Get("card.all");
+
+                if (done)
+                {
+                    card.headLabel.text = AppStrings.Get("card.complete");
+                    card.titleLabel.text = string.Format(AppStrings.Get("card.allFound"), 5);
+                    card.statusLabel.text = AppStrings.Get("card.completeBody");
+                }
+                else
+                {
+                    card.headLabel.text = string.Format(AppStrings.Get("card.next"), near ? 1 : 3, 5);
+                    card.titleLabel.text = near ? "Безистен" : "Театър „Невена Коканова“";
+                    card.statusLabel.text = near
+                        ? string.Format(AppStrings.Get("card.here"), AppStrings.FormatDistance(6d))
+                        : string.Format(AppStrings.Get("card.walk"), AppStrings.FormatDistance(180d), 2);
+                }
+
+                bool good = done || near;
+                Color dark = new Color(0.63f, 0.63f, 0.65f);
+                card.statusLabel.color = good
+                    ? (card.onCamera ? new Color(0.188f, 0.82f, 0.345f) : ThemeManager.Get(ThemeRole.StatusGood))
+                    : (card.onCamera ? dark : ThemeManager.Get(ThemeRole.TextMuted));
+
+                Show(card.statusDot != null ? card.statusDot.gameObject : null, good);
+                Show(card.statusArrow != null ? card.statusArrow.gameObject : null, !good);
+
+                // The actions, as the card draws them in each state.
+                Show(card.primaryButton != null ? card.primaryButton.gameObject : null, true);
+                card.primaryLabel.text = AppStrings.Get(done ? "card.all" : near ? "card.open" : "card.guide");
+                Show(card.primaryIcon, !done && !near);
+                Show(card.secondaryButton != null ? card.secondaryButton.gameObject : null, false);
+                Show(card.iconButton != null ? card.iconButton.gameObject : null, !done && !(near && card.onCamera));
+
+                if (card.iconImage != null)
+                    card.iconImage.sprite = near ? card.cameraSprite : card.infoSprite;
             }
-
-            if (done)
-            {
-                strip.hereName.text = string.Format(AppStrings.Get("strip.allFound"), 9);
-                strip.hereMeta.text = AppStrings.Get("strip.complete");
-                return;
-            }
-
-            strip.hereName.text = AppStrings.Get("strip.here");
-            strip.hereMeta.text = started
-                ? string.Format(AppStrings.Get("strip.foundOf"), 2, 9)
-                : AppStrings.Get("strip.nothingYet");
-
-            if (strip.nextName != null)
-            {
-                strip.nextName.text = "Градската градина";
-                strip.nextMeta.text = string.Format(AppStrings.Get("strip.stopOf"), 3, 9);
-            }
-
-            if (strip.nextDistance != null)
-                strip.nextDistance.text = AppStrings.FormatDistance(180d);
-
-            if (strip.nextKnob != null)
-                strip.nextKnob.color = MarkerPalette.ForKey("garden");
         }
 
         static void Show(GameObject go, bool on)
@@ -2216,48 +2328,12 @@ public static class UIPreview
     /// </summary>
     static void Highlight(Transform root, string tab)
     {
-        string[] all = { "MapTabButton", "CameraTabButton", "SettingsTabButton" };
+        GlassTabBar bar = root.GetComponentInChildren<GlassTabBar>(true);
+        if (bar == null)
+            return;
 
-        for (int i = 0; i < all.Length; i++)
-        {
-            Transform button = root.Find("BottomNav/Row/" + all[i]);
-            if (button == null)
-                continue;
-
-            bool active = all[i] == tab;
-            Color colour = ThemeManager.Get(active ? ThemeRole.Accent : ThemeRole.TextMuted);
-
-            Transform indicator = button.Find("Indicator");
-            if (indicator != null)
-            {
-                Image pill = indicator.GetComponent<Image>();
-                if (pill != null)
-                {
-                    Color fill = ThemeManager.Get(ThemeRole.Accent);
-                    fill.a = active ? 0.16f : 0f;
-                    pill.color = fill;
-                }
-            }
-
-            Transform label = button.Find("Label");
-            if (label != null)
-            {
-                TMP_Text text = label.GetComponent<TMP_Text>();
-                if (text != null)
-                {
-                    text.color = colour;
-                    text.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
-                }
-            }
-
-            Transform icon = button.Find("Icon/Icon");
-            if (icon != null)
-            {
-                Graphic g = icon.GetComponent<Graphic>();
-                if (g != null)
-                    g.color = colour;
-            }
-        }
+        int index = tab == "CameraTabButton" ? 1 : tab == "SettingsTabButton" ? 2 : 0;
+        bar.ShowActive(index, false);
     }
 
     static void Show(Transform parent, string name)

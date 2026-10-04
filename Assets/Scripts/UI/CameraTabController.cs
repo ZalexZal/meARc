@@ -429,6 +429,15 @@ public class CameraTabController : MonoBehaviour
 
     public void ToggleNearby()
     {
+        // The same Stops sheet the card's "All stops" opens: one list of the
+        // trail's stops, in the app's one style, rather than an older panel
+        // that only this corner still reached.
+        if (infoPanel != null && infoPanel.stopList != null)
+        {
+            infoPanel.stopList.Open();
+            return;
+        }
+
         if (nearbyPanel == null)
             return;
 

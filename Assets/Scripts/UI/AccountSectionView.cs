@@ -261,7 +261,7 @@ public class AccountSectionView : MonoBehaviour
         auth.StartCoroutine(auth.SetDisplayName(Value(signedInNameField), Done));
     }
 
-    void SignOut()
+    public void SignOut()
     {
         if (_busy)
             return;

@@ -45,6 +45,13 @@ public class TrailsDoor : MonoBehaviour
     [Tooltip("The library: public trails near the reader, joined without a code.")]
     public GameObject nearGroup;
     public RectTransform nearParent;
+
+    [Header("Daylight v2")]
+    [Tooltip("What SizeList measures: the whole scrolling list, not only the rows.")]
+    public RectTransform measure;
+
+    [Tooltip("The inset group of joined trails, off when there are none.")]
+    public GameObject mineGroup;
     public TextMeshProUGUI nearNote;
 
     readonly List<TrailRowView> _rows = new List<TrailRowView>();
@@ -112,6 +119,9 @@ public class TrailsDoor : MonoBehaviour
             subtitle.gameObject.SetActive(mine.Count > 0);
         }
 
+        if (mineGroup != null)
+            mineGroup.SetActive(mine.Count > 0);
+
         Fill(mine, service != null ? service.SelectedId : null);
         FillNear(service);
         SizeList();
@@ -128,12 +138,14 @@ public class TrailsDoor : MonoBehaviour
     /// </summary>
     public void SizeList()
     {
-        if (listSize == null || listParent == null)
+        RectTransform list = measure != null ? measure : listParent;
+
+        if (listSize == null || list == null)
             return;
 
-        LayoutRebuilder.ForceRebuildLayoutImmediate(listParent);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(list);
 
-        float wanted = Mathf.Min(LayoutUtility.GetPreferredHeight(listParent), 860f);
+        float wanted = Mathf.Min(LayoutUtility.GetPreferredHeight(list), 1100f);
 
         // Both, or the minimum wins. UIFactory.Size sets minHeight alongside
         // preferredHeight, and a layout group takes the larger of the two.
@@ -169,6 +181,7 @@ public class TrailsDoor : MonoBehaviour
 
             row.gameObject.SetActive(true);
             row.Bind(trail, trail.id == selectedId);
+            row.SetFirst(i == 0);
 
             if (row.button != null)
             {
@@ -209,6 +222,10 @@ public class TrailsDoor : MonoBehaviour
                 nearNote.text = AppStrings.Get(note);
         }
 
+        // No rows, no box: an empty grey group under the note read as a list
+        // that had failed to load.
+        nearParent.gameObject.SetActive(near.Count > 0);
+
         while (_nearRows.Count < near.Count)
             _nearRows.Add(Instantiate(rowPrefab, nearParent));
 
@@ -222,6 +239,7 @@ public class TrailsDoor : MonoBehaviour
                 continue;
 
             row.BindListed(near[i]);
+            row.SetFirst(i == 0);
 
             if (row.button != null)
             {

@@ -367,7 +367,9 @@ public class MediaPlayerView : MonoBehaviour
 
     IEnumerator LoadStill(string url, MarkerMedia media)
     {
-        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
+        // Bytes, not a texture download. Unity reads JPEG and PNG and nothing
+        // else, and a creator's WebP came back as "Data Processing Error".
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
             yield return request.SendWebRequest();
 
@@ -384,10 +386,85 @@ public class MediaPlayerView : MonoBehaviour
                 yield break;
             }
 
-            Texture2D texture = DownloadHandlerTexture.GetContent(request);
+            Texture2D texture = Decode(request.downloadHandler.data, out byte[] readable);
+
+            if (texture == null)
+            {
+                Debug.LogWarning("[Media] Image could not be decoded (" +
+                                 request.downloadHandler.data.Length + " bytes)");
+                Fail("media.failed");
+                yield break;
+            }
+
             Paint(texture);
-            ToDisk(url, request.downloadHandler.data);
+            ToDisk(url, readable);
         }
+    }
+
+    /// <summary>
+    /// JPEG and PNG Unity reads itself. Anything else - WebP, HEIC from a newer
+    /// phone - goes through Android's own decoder and comes back as PNG, and the
+    /// PNG is what gets kept, so the next look is a plain read from disk.
+    /// </summary>
+    static Texture2D Decode(byte[] bytes, out byte[] readable)
+    {
+        readable = bytes;
+
+        if (bytes == null || bytes.Length == 0)
+            return null;
+
+        Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+
+        if (texture.LoadImage(bytes, true))
+            return texture;
+
+        Destroy(texture);
+        readable = AndroidToPng(bytes);
+
+        if (readable == null)
+            return null;
+
+        texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+
+        if (texture.LoadImage(readable, true))
+            return texture;
+
+        Destroy(texture);
+        readable = null;
+        return null;
+    }
+
+    // ponytail: full-size PNG re-encode on the main thread; a very large photo
+    // stalls for a moment the first time. Downsample with inSampleSize if it shows.
+    static byte[] AndroidToPng(byte[] bytes)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (AndroidJavaClass factory = new AndroidJavaClass("android.graphics.BitmapFactory"))
+            using (AndroidJavaObject bitmap = factory.CallStatic<AndroidJavaObject>(
+                       "decodeByteArray", (sbyte[])(Array)bytes, 0, bytes.Length))
+            {
+                if (bitmap == null)
+                    return null;
+
+                using (AndroidJavaClass formats = new AndroidJavaClass("android.graphics.Bitmap$CompressFormat"))
+                using (AndroidJavaObject png = formats.GetStatic<AndroidJavaObject>("PNG"))
+                using (AndroidJavaObject stream = new AndroidJavaObject("java.io.ByteArrayOutputStream"))
+                {
+                    bool written = bitmap.Call<bool>("compress", png, 100, stream);
+                    bitmap.Call("recycle");
+
+                    return written ? (byte[])(Array)stream.Call<sbyte[]>("toByteArray") : null;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Media] Android could not decode the picture: " + exception.Message);
+        }
+#endif
+        return null;
     }
 
     void Paint(Texture2D texture)

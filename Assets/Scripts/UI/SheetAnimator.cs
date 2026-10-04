@@ -9,8 +9,6 @@ using UnityEngine;
 /// same GameObject - and a closed sheet parked below the screen receives no taps
 /// anyway, because the graphic raycaster only tests inside the canvas rect.
 ///
-/// TODO: swap to DOTween (DOAnchorPosY) once the package is installed. This is a
-/// coroutine lerp so the project doesn't gain a dependency it hasn't asked for.
 /// </summary>
 [RequireComponent(typeof(RectTransform))]
 public class SheetAnimator : MonoBehaviour
@@ -99,19 +97,46 @@ public class SheetAnimator : MonoBehaviour
         _running = StartCoroutine(Slide(targetY));
     }
 
+    /// <summary>Velocity handed over by a drag, in reference pixels a second.</summary>
+    float _handover;
+
+    /// <summary>Settles open carrying the speed the finger let go at.</summary>
+    public void SettleOpen(float velocity)
+    {
+        _handover = velocity;
+        SettleOpen();
+    }
+
+    /// <summary>
+    /// A critically damped spring rather than a timed ease: it arrives and stops,
+    /// and a flick carries its own speed into the settle instead of being
+    /// restarted from rest - Daylight's sheet motion.
+    /// </summary>
     IEnumerator Slide(float targetY)
     {
-        float startY = _rect.anchoredPosition.y;
-        float elapsed = 0f;
+        float y = _rect.anchoredPosition.y;
+        float v = _handover;
+        _handover = 0f;
 
-        while (elapsed < duration)
+        const float k = 420f, c = 41f;
+
+        while (true)
         {
-            elapsed += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(elapsed / duration);
+            float dt = Mathf.Min(Time.unscaledDeltaTime, 0.05f);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(dt / 0.004f));
+            float h = dt / steps;
 
-            t = 1f - Mathf.Pow(1f - t, 3f); // OutCubic
+            for (int i = 0; i < steps; i++)
+            {
+                float a = -k * (y - targetY) - c * v;
+                v += a * h;
+                y += v * h;
+            }
 
-            SetY(Mathf.LerpUnclamped(startY, targetY, t));
+            if (Mathf.Abs(y - targetY) < 0.5f && Mathf.Abs(v) < 5f)
+                break;
+
+            SetY(y);
             yield return null;
         }
 

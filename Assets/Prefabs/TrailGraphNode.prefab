@@ -247,8 +247,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 28
-  m_fontSizeBase: 28
+  m_fontSize: 33
+  m_fontSizeBase: 33
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -342,7 +342,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: -10, y: 20}
-  m_SizeDelta: {x: 500, y: 52}
+  m_SizeDelta: {x: 500, y: 64}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1629098743191506656
 CanvasRenderer:
@@ -399,8 +399,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 40
-  m_fontSizeBase: 40
+  m_fontSize: 47
+  m_fontSizeBase: 47
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -409,7 +409,7 @@ MonoBehaviour:
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 512
   m_textAlignment: 65535
-  m_characterSpacing: -0.8
+  m_characterSpacing: -1
   m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
@@ -769,9 +769,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aad18a8e3d8d4cf7a5335015c2e331cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TapFeedback
-  pressedAlpha: 0.55
+  pressedScale: 0.95
+  pressedAlpha: 1
   duration: 0.09
-  disabledAlpha: 0.4
+  disabledAlpha: 0.38
   target: {fileID: 7352978568035695984}
 --- !u!1 &8007559275419990759
 GameObject:
@@ -866,8 +867,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 33
-  m_fontSizeBase: 33
+  m_fontSize: 39
+  m_fontSizeBase: 39
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1001,7 +1002,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0.039215688, g: 0.5176471, b: 1, a: 1}
+  m_fontColor: {r: 0.16078432, g: 0.5921569, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1018,8 +1019,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 33
-  m_fontSizeBase: 33
+  m_fontSize: 39
+  m_fontSizeBase: 39
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1075,5 +1076,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad6425d140d54dc4e9df99038182933c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThemedElement
-  role: 7
+  role: 14
   preserveAlpha: 0

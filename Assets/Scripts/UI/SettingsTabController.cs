@@ -100,6 +100,23 @@ public class SettingsTabController : MonoBehaviour
              "draft buildings. Same gesture Android uses for Developer Options.")]
     public Button versionButton;
 
+    [Header("Daylight v2")]
+    [Tooltip("Every badge in the grid opens the page with all of them.")]
+    public Button[] badgeButtons = new Button[0];
+
+    [Tooltip("How it works: the three steps, as a sheet.")]
+    public Button howButton;
+
+    public Button accountButton;
+    public GameObject accountPage;
+
+    public Button languageButton;
+    public GameObject languagePage;
+
+    [Tooltip("Language as a sheet, as Daylight has it. Used instead of the page when set.")]
+    public LanguageChoiceView languageSheet;
+    public TextMeshProUGUI languageValueLabel;
+
     void Awake()
     {
         if (themeToggle != null)
@@ -141,6 +158,17 @@ public class SettingsTabController : MonoBehaviour
         WireHelpRow(securityButton, securityPage);
         WireHelpRow(blockedButton, blockedPage);
         WireHelpRow(feedbackButton, feedbackPage);
+        WireHelpRow(accountButton, accountPage);
+        if (languageSheet != null && languageButton != null)
+            languageButton.onClick.AddListener(languageSheet.Open);
+        else
+            WireHelpRow(languageButton, languagePage);
+
+        for (int i = 0; i < badgeButtons.Length; i++)
+            WireHelpRow(badgeButtons[i], badgesPage);
+
+        if (howButton != null)
+            howButton.onClick.AddListener(() => { if (tutorial != null) tutorial.Open(); });
 
         if (termsButton != null)
             termsButton.onClick.AddListener(() => Application.OpenURL(SiteLink.Terms()));
@@ -180,6 +208,7 @@ public class SettingsTabController : MonoBehaviour
         if (scroll != null)
             scroll.verticalNormalizedPosition = 1f;
     }
+
 
     void OnDisable()
     {
@@ -292,6 +321,9 @@ public class SettingsTabController : MonoBehaviour
     /// <summary>Highlights whichever half of the EN/BG segmented control is active.</summary>
     void ApplyLanguageSegment()
     {
+        if (languageValueLabel != null)
+            languageValueLabel.text = LanguageChoiceView.CurrentName;
+
         bool english = AppStrings.CurrentLanguage == AppLanguage.English;
 
         Color accent = ThemeManager.Get(ThemeRole.Accent);

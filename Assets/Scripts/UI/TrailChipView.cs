@@ -3,32 +3,35 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Which trail is open, at the top of the map, and the way to change it.
+/// The glass pill at the top of the map: which trail is open, how it is going,
+/// and the way to change it.
 ///
-/// This replaced a title that said "Map" - a word the tab bar was already saying
-/// two inches below it. The trail's name is the thing a reader standing in a
-/// street actually cannot work out from the screen, and once a reader can hold
-/// more than one trail there has to be somewhere to swap between them.
+///   Кой знае повече?
+///   Състезание · 2 от 5 · 20 точки                         ⌄
+///
+/// Daylight v2 put everything a walker asks about the trail on this one line
+/// and spelled it out: the kind of trail by name, stops found out of the
+/// trail's own count, and points written as a word rather than "т.". It
+/// replaced a "TRAIL" eyebrow, a mode chip and a warning triangle, three marks
+/// that each needed learning.
 /// </summary>
 public class TrailChipView : MonoBehaviour
 {
     public Button button;
     public TextMeshProUGUI nameLabel;
 
-    [Tooltip("Freefall, Capture the flag, and so on. Hidden for a plain guided " +
-             "trail, where naming the mode tells nobody anything.")]
-    public GameObject modeChip;
+    [Tooltip("Kind of trail · found of total · points.")]
+    public TextMeshProUGUI subLabel;
 
+    [Tooltip("Kept so older scenes load. The kind of trail is on the sub line now.")]
+    public GameObject modeChip;
     public TextMeshProUGUI modeLabel;
 
     [Tooltip("The chevron that says this is a control rather than a heading.")]
     public GameObject chevron;
 
-    [Tooltip("Reports the whole trail. Its own hit area on top of the chip's, " +
-             "because the chip itself opens the trail list.")]
+    [Tooltip("Kept so older scenes load. Reporting a trail lives in My trails now.")]
     public Button reportButton;
-
-    [Tooltip("The chooser it opens. Shared with the one on a marker's sheet.")]
     public ReportSheetView reportSheet;
 
     void Awake()
@@ -40,12 +43,6 @@ public class TrailChipView : MonoBehaviour
             reportButton.onClick.AddListener(Report);
     }
 
-    /// <summary>
-    /// Reports the trail rather than a marker on it.
-    ///
-    /// Hidden when no trail is open, since there would be nothing to report -
-    /// Refresh handles that alongside everything else the chip shows.
-    /// </summary>
     void Report()
     {
         TrailService trails = TrailService.Instance;
@@ -59,6 +56,10 @@ public class TrailChipView : MonoBehaviour
         TrailService.OnTrailsChanged += Refresh;
         AppStrings.OnLanguageChanged += Refresh;
         DemoTrail.OnChanged += Refresh;
+        DiscoveryTracker.OnDiscoveryChanged += Refresh;
+        MarkerTaskService.OnProgressChanged += Scored;
+        TeamService.OnTeamChanged += Refresh;
+        BuildingDatabase.OnBuildingsChanged += Refresh;
         Refresh();
     }
 
@@ -67,6 +68,28 @@ public class TrailChipView : MonoBehaviour
         TrailService.OnTrailsChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
         DemoTrail.OnChanged -= Refresh;
+        DiscoveryTracker.OnDiscoveryChanged -= Refresh;
+        MarkerTaskService.OnProgressChanged -= Scored;
+        TeamService.OnTeamChanged -= Refresh;
+        BuildingDatabase.OnBuildingsChanged -= Refresh;
+    }
+
+    /// <summary>
+    /// An answer or a hint moved the team's points, and those are the server's
+    /// to say, so they are asked for again. The redraw follows OnTeamChanged.
+    /// </summary>
+    void Scored()
+    {
+        Refresh();
+
+        TrailService trails = TrailService.Instance;
+        TeamService teams = TeamService.Instance;
+
+        if (trails != null && trails.SelectedIsGame && teams != null && !teams.Busy &&
+            !string.IsNullOrEmpty(trails.SelectedId))
+        {
+            teams.Load(trails.SelectedId);
+        }
     }
 
     void Open()
@@ -80,79 +103,62 @@ public class TrailChipView : MonoBehaviour
         TrailService service = TrailService.Instance;
         TrailService.Trail trail = service != null ? service.Selected : null;
 
-        // The demo is not a trail anybody joined, and says so.
         if (DemoTrail.Active)
             trail = new TrailService.Trail { name = AppStrings.Get("demo.name"), mode = "guide" };
 
         bool hasName = trail != null && !string.IsNullOrWhiteSpace(trail.name);
 
-        // With no trail open this is an invitation, not a heading. It used to read
-        // "Map" - the word the tab bar says two inches below it, and one that tells
-        // a reader holding no trail nothing about the single thing left to do.
         if (nameLabel != null)
             nameLabel.text = hasName ? trail.name : AppStrings.Get("trails.choose");
 
-        // Nothing open, nothing to report.
-        if (reportButton != null)
-            reportButton.gameObject.SetActive(hasName && !DemoTrail.Active);
+        if (modeChip != null && modeChip.activeSelf)
+            modeChip.SetActive(false);
 
-        // Guide is the default and needs no label. A chip on every trail would be a
-        // chip that means nothing.
-        string mode = trail != null ? trail.mode : null;
-        bool worthSaying = !string.IsNullOrEmpty(mode) && mode != "guide";
+        if (reportButton != null && reportButton.gameObject.activeSelf)
+            reportButton.gameObject.SetActive(false);
 
-        if (modeChip != null)
-            modeChip.SetActive(worthSaying);
-
-        if (worthSaying && modeLabel != null)
-        {
-            string named = AppStrings.Get("mode." + mode);
-
-            // Get hands back the key when a string is missing, which would put
-            // "mode.relay" on screen. Show the raw value instead - it is at least
-            // a word, and a mode this build does not know about is the portal
-            // being ahead of the app rather than a fault.
-            modeLabel.text = named.StartsWith("mode.") ? mode : named;
-
-            // The chip asks for exactly the width of the word it is holding.
-            //
-            // The row it sits in wants more than it has - eyebrow, name, chip,
-            // chevron - so the layout shrinks every child towards its minimum,
-            // the chip included. With a fixed floor of 90 the pill came out
-            // narrower than "Capture the flag" and the centred label spilled out
-            // of both ends of it, across the trail name on one side and the
-            // chevron on the other. A ContentSizeFitter here fights the row for
-            // control of the same rect; setting the floor to the text instead
-            // leaves one authority and makes the trail name the only thing that
-            // gives, which is what it is for - it ellipsises, a mode word does
-            // not.
-            LayoutElement chipSize = modeChip != null
-                ? modeChip.GetComponent<LayoutElement>() : null;
-
-            if (chipSize != null)
-            {
-                float wanted = modeLabel.GetPreferredValues(modeLabel.text).x + 34f;
-                chipSize.minWidth = wanted;
-                chipSize.preferredWidth = wanted;
-            }
-        }
-
-        // Always pressable.
-        //
-        // It was interactable only with more than one trail, or none - so holding
-        // exactly one made it dead, and My trails is the only route to joining a
-        // second or leaving the one you have. A reader who joins one trail could
-        // not reach that screen again by any path in the app.
-        //
-        // The chevron follows the same rule now. It said "there is somewhere to
-        // go" and there always is: the list is worth opening to leave a trail even
-        // when there is only one in it.
-        bool switchable = service != null;
+        if (subLabel != null)
+            subLabel.text = hasName ? Line(trail, service) : AppStrings.Get("chip.none");
 
         if (chevron != null)
-            chevron.SetActive(switchable);
+            chevron.SetActive(service != null);
 
         if (button != null)
-            button.interactable = switchable;
+            button.interactable = service != null;
+    }
+
+    /// <summary>"Състезание · 2 от 5 · 20 точки", with each part only when it is true.</summary>
+    static string Line(TrailService.Trail trail, TrailService service)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+
+        string mode = string.IsNullOrEmpty(trail.mode) ? "guide" : trail.mode;
+        string named = AppStrings.Get("mode." + mode);
+        parts.Add(named.StartsWith("mode.") ? mode : named);
+
+        var all = BuildingDatabase.AllBuildings;
+        int total = all.Count;
+        if (total > 0)
+        {
+            int done = 0;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (NextStopCard.Done(all[i]))
+                    done++;
+            }
+
+            parts.Add(string.Format(AppStrings.Get("chip.progress"), done, total));
+        }
+
+        TeamService teams = TeamService.Instance;
+        // Not in the demo: the team and its points belong to the real trail
+        // underneath it, and a guided walk scores nothing.
+        if (!DemoTrail.Active && service != null && service.SelectedIsGame && teams != null &&
+            teams.Team != null && teams.Team.on_team)
+        {
+            parts.Add(string.Format(AppStrings.Get("chip.points"), teams.Team.points));
+        }
+
+        return string.Join(" · ", parts);
     }
 }

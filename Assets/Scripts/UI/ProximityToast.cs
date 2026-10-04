@@ -3,17 +3,20 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The card that slides in when a marker comes into range.
+/// The app's one toast: a dark pill that drops in from the top, says one thing,
+/// and offers at most one thing to do about it.
 ///
-/// It carries an action, because an alert that only informs is an interruption:
-/// tapping it opens the marker, which is where Guide me there lives.
+///   Театър е на 20 м.                                  Отвори
+///   Спирката е скрита от картата.                      Отмени
+///   Кодът е копиран.
 ///
-/// It sits at the Canvas root so it appears on any tab, and below the marker sheet
-/// in draw order so it can never cover something the reader opened deliberately.
+/// Daylight v2 moved it from a card at the bottom - where it landed on top of
+/// the next-stop card and under the reader's thumb - to the top, where nothing
+/// else lives. It is still how a nearby stop announces itself, and it is now
+/// also what everything else says "done" with.
 ///
-/// This component is on a holder that is always active, and only its card is
-/// switched off. A component that deactivates its own object stops receiving
-/// OnEnable, and this one subscribes to the alert there.
+/// The component stays on the always-active holder so it keeps hearing alerts;
+/// the pill itself is switched on and off.
 /// </summary>
 public class ProximityToast : MonoBehaviour
 {
@@ -22,10 +25,16 @@ public class ProximityToast : MonoBehaviour
     public InfoPanelController infoPanel;
 
     [Header("Parts")]
-    [Tooltip("The card wrapper, not this object. See the note on this class.")]
+    [Tooltip("The pill's wrapper, not this object.")]
     public GameObject root;
     public RectTransform card;
+    public TextMeshProUGUI messageText;
+
+    [Tooltip("The one action, at the pill's right end.")]
     public Button openButton;
+    public TextMeshProUGUI actionLabel;
+
+    [Header("Kept so older scenes load")]
     public Image colourDot;
     public Image colourRing;
     public TextMeshProUGUI captionText;
@@ -34,33 +43,31 @@ public class ProximityToast : MonoBehaviour
     public Button dismissButton;
 
     [Header("Behaviour")]
-    [Tooltip("How long it stays before retiring itself. Long enough to read while " +
-             "walking, short enough not to sit on the map.")]
-    public float secondsOnScreen = 9f;
+    public float secondsOnScreen = 6f;
 
-    [Tooltip("Where the card rests, measured from the bottom of the screen.")]
-    public float restY = 230f;
+    [Tooltip("Where the pill rests: from the top of the safe area, downwards.")]
+    public float restY = -28f;
 
-    public float slideDistance = 220f;
-    public float slideSeconds = 0.22f;
+    [Tooltip("How far above its rest it starts, as a negative number.")]
+    public float slideDistance = -260f;
+    public float slideSeconds = 0.4f;
+
+    public static ProximityToast Instance { get; private set; }
 
     BuildingData _marker;
+    System.Action _run;
     float _shownAt;
+    float _stay;
     float _slideStart;
     bool _sliding;
     bool _leaving;
 
-    /// <summary>
-    /// Whether an alert is on screen right now.
-    ///
-    /// Asked by the map, which takes the next-stop strip away while this is up.
-    /// A static, because the strip and this live in different top-level panels
-    /// and neither has any business holding a reference to the other.
-    /// </summary>
     public static bool IsShowing { get; private set; }
 
     void Awake()
     {
+        Instance = this;
+
         if (openButton != null)
             openButton.onClick.AddListener(Open);
 
@@ -75,6 +82,8 @@ public class ProximityToast : MonoBehaviour
 
     void OnEnable()
     {
+        Instance = this;
+
         if (locationService == null)
             locationService = UserLocationService.Instance;
 
@@ -83,49 +92,70 @@ public class ProximityToast : MonoBehaviour
         BuildingDatabase.OnBuildingsChanged += DropIfGone;
     }
 
-    /// <summary>
-    /// A stop that is no longer on the map is not nearby. Signing out, deleting
-    /// the account or switching trails left the last announcement standing,
-    /// naming a stop from a trail the reader no longer had open.
-    /// </summary>
+    void OnDisable()
+    {
+        IsShowing = false;
+        ProximityAlerts.OnAlert -= Show;
+        AppStrings.OnLanguageChanged -= Render;
+        BuildingDatabase.OnBuildingsChanged -= DropIfGone;
+    }
+
     void DropIfGone()
     {
         if (_marker != null && BuildingDatabase.GetById(_marker.buildingId) == null)
             Dismiss();
     }
 
-    void OnDisable()
-    {
-        // A static survives this object, so it is put back by hand. Left true,
-        // the map would hide its strip forever after the last alert.
-        IsShowing = false;
-
-        ProximityAlerts.OnAlert -= Show;
-        AppStrings.OnLanguageChanged -= Render;
-        BuildingDatabase.OnBuildingsChanged -= DropIfGone;
-    }
-
-    /// <summary>
-    /// A stop sheet or the capture bar is open. The card rests over the bottom of
-    /// the screen, which is exactly where their buttons are: on the phone it sat
-    /// on a sheet's Hide and Report, and on the capture bar's Save and Cancel.
-    /// </summary>
+    /// <summary>A stop announced while the sheet is up would be talking over it.</summary>
     bool Covering()
     {
         return CaptureMode.IsOpen ||
                (infoPanel != null && infoPanel.sheet != null && infoPanel.sheet.IsOpen);
     }
 
+    /// <summary>
+    /// Says something, with an optional action. A bare message stays a little
+    /// under three seconds; one that offers an action stays long enough to reach.
+    /// </summary>
+    public static void Say(string message, string action = null, System.Action run = null)
+    {
+        if (Instance != null)
+            Instance.Speak(message, action, run);
+    }
+
+    void Speak(string message, string action, System.Action run)
+    {
+        if (card == null || string.IsNullOrEmpty(message))
+            return;
+
+        _marker = null;
+        _run = run;
+        _stay = string.IsNullOrEmpty(action) ? 2.8f : 4.5f;
+
+        if (messageText != null)
+            messageText.text = message;
+
+        SetAction(action);
+        Enter();
+    }
+
+    /// <summary>A stop the reader has just walked up to.</summary>
     public void Show(BuildingData marker)
     {
         if (marker == null || card == null || Covering())
             return;
 
         _marker = marker;
+        _run = null;
+        _stay = secondsOnScreen;
+        Render();
+        Enter();
+    }
+
+    void Enter()
+    {
         _shownAt = Time.unscaledTime;
         _leaving = false;
-
-        Render();
 
         if (root != null)
             root.SetActive(true);
@@ -134,6 +164,17 @@ public class ProximityToast : MonoBehaviour
         _sliding = true;
         _slideStart = Time.unscaledTime;
         card.anchoredPosition = new Vector2(0f, restY - slideDistance);
+    }
+
+    void SetAction(string action)
+    {
+        bool has = !string.IsNullOrEmpty(action);
+
+        if (openButton != null && openButton.gameObject.activeSelf != has)
+            openButton.gameObject.SetActive(has);
+
+        if (actionLabel != null && has)
+            actionLabel.text = action;
     }
 
     public void Dismiss()
@@ -156,7 +197,7 @@ public class ProximityToast : MonoBehaviour
         if (_leaving)
             return;
 
-        if (Covering())
+        if (_marker != null && Covering())
         {
             Dismiss();
             return;
@@ -165,9 +206,10 @@ public class ProximityToast : MonoBehaviour
         if (_sliding)
             return;
 
-        RefreshDistance();
+        if (_marker != null)
+            Render();
 
-        if (Time.unscaledTime - _shownAt > secondsOnScreen)
+        if (Time.unscaledTime - _shownAt > _stay)
             Dismiss();
     }
 
@@ -180,10 +222,8 @@ public class ProximityToast : MonoBehaviour
             ? 1f
             : Mathf.Clamp01((Time.unscaledTime - _slideStart) / slideSeconds);
 
-        // Eased out on the way in and in on the way out, so arriving feels like
-        // settling and leaving feels like a decision.
-        float eased = _leaving ? t * t : 1f - (1f - t) * (1f - t);
-
+        // In quick and settling, out a little faster.
+        float eased = _leaving ? t * t : 1f - Mathf.Pow(1f - t, 4f);
         float from = _leaving ? restY : restY - slideDistance;
         float to = _leaving ? restY - slideDistance : restY;
 
@@ -199,6 +239,7 @@ public class ProximityToast : MonoBehaviour
             root.SetActive(false);
             IsShowing = false;
             _marker = null;
+            _run = null;
         }
     }
 
@@ -207,45 +248,34 @@ public class ProximityToast : MonoBehaviour
         if (_marker == null)
             return;
 
-        Color colour = MarkerPalette.Resolve(_marker);
-
-        if (colourDot != null)
-            colourDot.color = colour;
-
-        if (colourRing != null)
-            colourRing.color = MarkerPalette.RingFor(colour);
-
-        if (captionText != null)
-            captionText.text = AppStrings.Get("alert.caption");
-
-        if (nameText != null)
-            nameText.text = _marker.DisplayName;
-
-        RefreshDistance();
-    }
-
-    void RefreshDistance()
-    {
-        if (distanceText == null || _marker == null)
-            return;
-
         if (locationService == null)
             locationService = UserLocationService.Instance;
 
-        double metres = locationService != null
-            ? locationService.DistanceMetresTo(_marker)
-            : -1d;
+        double metres = locationService != null ? locationService.DistanceMetresTo(_marker) : -1d;
 
-        distanceText.text = metres < 0d
-            ? AppStrings.Get("map.noLocation")
-            : AppStrings.FormatDistance(metres,
-                locationService != null && locationService.IsApproximate);
+        string text = metres < 0d
+            ? _marker.DisplayName
+            : string.Format(AppStrings.Get("alert.near"), _marker.DisplayName,
+                            AppStrings.FormatDistance(metres,
+                                locationService != null && locationService.IsApproximate));
+
+        if (messageText != null && messageText.text != text)
+            messageText.text = text;
+
+        SetAction(AppStrings.Get("alert.open"));
     }
 
     void Open()
     {
         BuildingData marker = _marker;
+        System.Action run = _run;
         Dismiss();
+
+        if (run != null)
+        {
+            run();
+            return;
+        }
 
         if (infoPanel != null && marker != null)
             infoPanel.ShowPanel(marker);

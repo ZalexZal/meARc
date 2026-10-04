@@ -46,6 +46,24 @@ public class ReportSheetView : MonoBehaviour
     /// <summary>Raised after a block lands, so screens drop what they were showing.</summary>
     public static event Action OnBlocked;
 
+    [Header("Daylight v2: choose, then send")]
+    [Tooltip("What the report is about, in a sentence naming it.")]
+    public TextMeshProUGUI introLabel;
+
+    [Tooltip("Each reason's radio disc, the hole in it, and its outline.")]
+    public Image[] reasonRadios = new Image[6];
+    public RectTransform[] reasonHoles = new RectTransform[6];
+    public Image[] reasonEdges = new Image[6];
+
+    [Tooltip("Optional words for whoever reads the report.")]
+    public TMP_InputField detailField;
+
+    public Button sendButton;
+    public TextMeshProUGUI sendLabel;
+
+    int _chosen = -1;
+    string _name;
+
     /// <summary>What is being reported. Exactly one of these is set.</summary>
     string _markerId;
     string _worldId;
@@ -80,7 +98,7 @@ public class ReportSheetView : MonoBehaviour
 
             // Captured per iteration, or every button reports the last reason.
             int index = i;
-            reasonButtons[i].onClick.AddListener(delegate { Send(index); });
+            reasonButtons[i].onClick.AddListener(delegate { Choose(index); });
         }
 
         if (cancelButton != null)
@@ -89,12 +107,23 @@ public class ReportSheetView : MonoBehaviour
         if (blockButton != null)
             blockButton.onClick.AddListener(Block);
 
+        if (sendButton != null)
+            sendButton.onClick.AddListener(delegate { Send(_chosen); });
+
         // Deliberately not deactivating here. The builder ships this panel off,
         // so Awake runs on the first Open - and closing it from Awake would shut
         // the panel in the same frame it was asked for.
     }
 
     /// <summary>Opens the chooser for one marker.</summary>
+    /// <summary>A stop, by name, so the page can ask about it by name.</summary>
+    public void Open(string markerId, string name)
+    {
+        Open(markerId);
+        _name = name;
+        Relabel();
+    }
+
     public void Open(string markerId)
     {
         if (string.IsNullOrEmpty(markerId))
@@ -148,6 +177,13 @@ public class ReportSheetView : MonoBehaviour
         _busy = false;
         _blockArmed = false;
         _generation++;
+        _chosen = -1;
+        _name = null;
+
+        if (detailField != null)
+            detailField.SetTextWithoutNotify(string.Empty);
+
+        PaintChoice();
 
         Say(null);
         SetInteractable(true);
@@ -199,11 +235,55 @@ public class ReportSheetView : MonoBehaviour
                 reasonButtons[i].gameObject.SetActive(!(team && AboutAPlace(Reasons[i])));
         }
 
+        if (introLabel != null)
+        {
+            bool marker = !string.IsNullOrEmpty(_markerId);
+            introLabel.text = marker && !string.IsNullOrWhiteSpace(_name)
+                ? string.Format(AppStrings.Get("report.introNamed"), _name)
+                : AppStrings.Get(team ? "report.introTeam" : marker ? "report.intro" : "report.introTrail");
+        }
+
+        if (sendLabel != null)
+            sendLabel.text = AppStrings.Get("report.send");
+
         if (blockLabel != null)
         {
             blockLabel.text = AppStrings.Get(_blockArmed ? "block.confirm"
                 : team ? "block.team" : "block.creator");
         }
+    }
+
+    void Choose(int index)
+    {
+        if (_busy)
+            return;
+
+        _chosen = index;
+        Haptics.Tick();
+        PaintChoice();
+    }
+
+    /// <summary>The radios, and Send, which wakes once there is a reason.</summary>
+    void PaintChoice()
+    {
+        Color accent = ThemeManager.Get(ThemeRole.Accent);
+
+        for (int i = 0; i < reasonButtons.Length; i++)
+        {
+            bool on = i == _chosen;
+
+            if (i < reasonRadios.Length && reasonRadios[i] != null)
+                reasonRadios[i].color = on ? accent : ThemeManager.Get(ThemeRole.FillStrong);
+
+            if (i < reasonHoles.Length && reasonHoles[i] != null)
+                reasonHoles[i].sizeDelta = on ? new Vector2(22f, 22f) : new Vector2(50f, 50f);
+
+            if (i < reasonEdges.Length && reasonEdges[i] != null)
+                reasonEdges[i].color = on ? accent : ThemeManager.Get(ThemeRole.Line);
+        }
+
+        if (sendButton != null)
+            sendButton.interactable = _chosen >= 0 && !_busy;
     }
 
     void Send(int index)
@@ -237,8 +317,13 @@ public class ReportSheetView : MonoBehaviour
         else if (!string.IsNullOrEmpty(_markerId)) { rpc = "report_marker"; key = "p_marker"; id = _markerId; }
         else { rpc = "report_world"; key = "p_world"; id = _worldId; }
 
+        // The words are optional and every report RPC takes them as p_detail.
+        string detail = detailField != null ? detailField.text.Trim() : string.Empty;
+
         string body = "{\"" + key + "\":\"" + Escape(id) + "\"," +
-                      "\"p_reason\":\"" + Escape(reason) + "\"}";
+                      "\"p_reason\":\"" + Escape(reason) + "\"" +
+                      (detail.Length > 0 ? ",\"p_detail\":\"" + Escape(detail) + "\"" : string.Empty) +
+                      "}";
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/" + rpc), body, null))
@@ -390,6 +475,12 @@ public class ReportSheetView : MonoBehaviour
 
         if (blockButton != null)
             blockButton.interactable = on;
+
+        if (sendButton != null)
+            sendButton.interactable = on && _chosen >= 0;
+
+        if (detailField != null)
+            detailField.interactable = on;
     }
 
     void Say(string key, ThemeRole role = ThemeRole.TextMuted)
@@ -414,6 +505,27 @@ public class ReportSheetView : MonoBehaviour
         if (string.IsNullOrEmpty(value))
             return string.Empty;
 
-        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        // The details box takes several lines, and a raw line break inside a
+        // JSON string is a malformed request rather than a report.
+        var b = new System.Text.StringBuilder(value.Length + 8);
+        foreach (char c in value)
+        {
+            switch (c)
+            {
+                case '\\': b.Append("\\\\"); break;
+                case '"': b.Append("\\\""); break;
+                case '\n': b.Append("\\n"); break;
+                case '\r': b.Append("\\r"); break;
+                case '\t': b.Append("\\t"); break;
+                default:
+                    if (c < ' ')
+                        b.Append("\\u").Append(((int)c).ToString("x4"));
+                    else
+                        b.Append(c);
+                    break;
+            }
+        }
+
+        return b.ToString();
     }
 }

@@ -60,57 +60,86 @@ public class AnswerOptionView : MonoBehaviour
         Set(State.Idle);
     }
 
+    [Header("Daylight v2 radio")]
+    [Tooltip("The radio's disc. Its colour is the state.")]
+    public Image radio;
+
+    [Tooltip("The hole in the disc: wide for an empty radio, small for a chosen one.")]
+    public RectTransform radioHole;
+    public Image radioHoleImage;
+    public Image radioTick;
+
+    [Tooltip("Dims a muted option as a whole, words and radio together.")]
+    public CanvasGroup fade;
+
     public void Set(State state)
     {
         Color line = ThemeManager.Get(ThemeRole.Line);
         Color accent = ThemeManager.Get(ThemeRole.Accent);
-        Color bad = ThemeManager.Get(ThemeRole.StatusPoor);
-        Color good = ThemeManager.Get(ThemeRole.StatusGood);
+        Color bad = ThemeManager.Get(ThemeRole.BadDot);
+        Color good = ThemeManager.Get(ThemeRole.GoodDot);
+        Color surface = ThemeManager.Get(ThemeRole.Surface);
 
+        // A hairline round an untouched option; the accent round the chosen one;
+        // green or red, on a wash of the same, once it has been judged.
         Color border = state == State.Wrong ? bad
                      : state == State.Right ? good
                      : state == State.Chosen ? accent
-                     : state == State.Muted ? Fade(line, 0.5f)
                      : line;
 
-        // Outlined, not filled.
-        //
-        // Four grey slabs stacked down a white sheet are heavy, and being chosen
-        // showed up as a small ring changing colour inside one of them. Now an
-        // unchosen option is a thin border on the sheet's own ground and the
-        // chosen one is filled in the accent, which makes the choice the loudest
-        // thing on the screen rather than the quietest.
-        //
-        // The background keeps its raycast either way: it is the button's target
-        // graphic, and an invisible one still has to be pressable.
         if (background != null)
-            background.color = state == State.Chosen ? accent : Fade(accent, 0f);
+        {
+            background.color = state == State.Right ? ThemeManager.Get(ThemeRole.GoodTint)
+                             : state == State.Wrong ? ThemeManager.Get(ThemeRole.BadTint)
+                             : surface;
+        }
 
         if (edge != null)
             edge.color = border;
 
-        bool onAccent = state == State.Chosen;
+        if (radio != null)
+        {
+            radio.color = state == State.Right ? good
+                        : state == State.Wrong ? bad
+                        : state == State.Chosen ? accent
+                        : ThemeManager.Get(ThemeRole.FillStrong);
+        }
 
-        if (marker != null)
-            marker.color = onAccent ? ThemeManager.Get(ThemeRole.OnAccent) : border;
+        // 22px disc: a 2px ring when empty, a 7px ring when chosen or wrong, and
+        // solid with a tick when right.
+        if (radioHole != null)
+        {
+            bool hole = state != State.Right;
+            radioHole.gameObject.SetActive(hole);
+            float size = state == State.Chosen || state == State.Wrong ? 22f : 50f;
+            radioHole.sizeDelta = new Vector2(size, size);
+        }
+
+        if (radioHoleImage != null)
+            radioHoleImage.color = state == State.Wrong ? ThemeManager.Get(ThemeRole.BadTint) : surface;
+
+        if (radioTick != null)
+            radioTick.gameObject.SetActive(state == State.Right);
+
+        if (marker != null && radio == null)
+            marker.color = border;
 
         if (label != null)
-        {
-            label.color = onAccent ? ThemeManager.Get(ThemeRole.OnAccent)
-                        : state == State.Muted ? ThemeManager.Get(ThemeRole.TextMuted)
-                        : ThemeManager.Get(ThemeRole.TextPrimary);
-        }
+            label.color = ThemeManager.Get(ThemeRole.TextPrimary);
 
-        bool judged = state == State.Wrong || state == State.Right;
-
+        // The cross sits at the end of a wrong option; a right one is said by
+        // its radio.
         if (verdictIcon != null)
-            verdictIcon.SetActive(judged);
+            verdictIcon.SetActive(state == State.Wrong);
 
-        if (judged && verdictImage != null)
+        if (state == State.Wrong && verdictImage != null)
         {
-            verdictImage.sprite = state == State.Right ? tickSprite : crossSprite;
-            verdictImage.color = state == State.Right ? good : bad;
+            verdictImage.sprite = crossSprite;
+            verdictImage.color = ThemeManager.Get(ThemeRole.StatusPoor);
         }
+
+        if (fade != null)
+            fade.alpha = state == State.Muted ? 0.45f : 1f;
 
         // Chosen stays pressable, because choosing is no longer sending: a
         // reader who picks the wrong line has to be able to pick another one.

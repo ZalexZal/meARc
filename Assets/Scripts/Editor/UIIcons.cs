@@ -37,7 +37,23 @@ public enum AppIcon
     Book,
     Clock,
     Home,
-    Trail
+    Trail,
+
+    // Daylight v2. Drawn from the prototype's own outlines, on the same 24 box
+    // turned the right way up (SVG counts y down, these count it up).
+    ChevronDown,
+    ChevronLeft,
+    MapFold,
+    More,
+    Info,
+    Hide,
+    Move,
+    Copy,
+    Share,
+    Bulb,
+    Walk,
+    Spark,
+    Plus
 }
 
 /// <summary>
@@ -499,6 +515,142 @@ public static class UIIcons
                     Segment(p, 8.5f, 15f, 13f, 9f, Stroke)),
                     Union(Segment(p, 13f, 9f, 16f, 13f, Stroke),
                           Segment(p, 16f, 13f, 20.5f, 5f, Stroke)));
+
+            case AppIcon.ChevronDown:
+                return p => Union(
+                    Segment(p, 6f, 15f, 12f, 9f, Stroke),
+                    Segment(p, 12f, 9f, 18f, 15f, Stroke));
+
+            case AppIcon.ChevronLeft:
+                return p => Union(
+                    Segment(p, 15f, 18f, 9f, 12f, Stroke),
+                    Segment(p, 9f, 12f, 15f, 6f, Stroke));
+
+            case AppIcon.MapFold:
+                return p =>
+                {
+                    // A folded map: three panels, the middle one standing proud.
+                    float s1 = Segment(p, 9f, 20f, 3f, 18f, Stroke * 0.9f);
+                    float s2 = Segment(p, 3f, 18f, 3f, 4f, Stroke * 0.9f);
+                    float s3 = Segment(p, 3f, 4f, 9f, 6f, Stroke * 0.9f);
+                    float s4 = Segment(p, 9f, 6f, 15f, 4f, Stroke * 0.9f);
+                    float s5 = Segment(p, 15f, 4f, 21f, 6f, Stroke * 0.9f);
+                    float s6 = Segment(p, 21f, 6f, 21f, 20f, Stroke * 0.9f);
+                    float s7 = Segment(p, 21f, 20f, 15f, 18f, Stroke * 0.9f);
+                    float s8 = Segment(p, 15f, 18f, 9f, 20f, Stroke * 0.9f);
+                    float folds = Union(Segment(p, 9f, 20f, 9f, 6f, Stroke * 0.9f),
+                                        Segment(p, 15f, 18f, 15f, 4f, Stroke * 0.9f));
+                    return Union(Union(Union(Union(s1, s2), Union(s3, s4)),
+                                       Union(Union(s5, s6), Union(s7, s8))), folds);
+                };
+
+            case AppIcon.More:
+                return p => Union(Union(
+                    Circle(p, 5f, 12f, 1.6f), Circle(p, 12f, 12f, 1.6f)), Circle(p, 19f, 12f, 1.6f));
+
+            case AppIcon.Info:
+                return p => Union(Union(
+                    Ring(p, 12f, 12f, 9f, Stroke * 0.9f),
+                    Segment(p, 12f, 13f, 12f, 7f, Stroke * 0.9f)),
+                    Circle(p, 12f, 16.5f, 1.2f));
+
+            case AppIcon.Hide:
+                return p =>
+                {
+                    // An eye - the almond where two circles overlap - with the
+                    // stroke through it that every app reads as "not shown".
+                    float almond = Mathf.Max(Circle(p, 12f, 4f, 11f), Circle(p, 12f, 20f, 11f));
+                    float lid = Mathf.Abs(almond) - Stroke * 0.45f;
+                    float pupil = Ring(p, 12f, 12f, 2.6f, Stroke * 0.9f);
+                    float eye = Union(lid, pupil);
+                    // A gap either side of the slash, so it reads as cut.
+                    eye = Subtract(eye, Segment(p, 3.5f, 20.5f, 20.5f, 3.5f, Stroke * 2.6f));
+                    return Union(eye, Segment(p, 3.5f, 20.5f, 20.5f, 3.5f, Stroke));
+                };
+
+            case AppIcon.Move:
+                return p =>
+                {
+                    float cross = Union(Segment(p, 12f, 3f, 12f, 21f, Stroke * 0.9f),
+                                        Segment(p, 3f, 12f, 21f, 12f, Stroke * 0.9f));
+                    float up = Union(Segment(p, 8.5f, 17.5f, 12f, 21f, Stroke * 0.9f),
+                                     Segment(p, 12f, 21f, 15.5f, 17.5f, Stroke * 0.9f));
+                    float down = Union(Segment(p, 8.5f, 6.5f, 12f, 3f, Stroke * 0.9f),
+                                       Segment(p, 12f, 3f, 15.5f, 6.5f, Stroke * 0.9f));
+                    float left = Union(Segment(p, 6.5f, 15.5f, 3f, 12f, Stroke * 0.9f),
+                                       Segment(p, 3f, 12f, 6.5f, 8.5f, Stroke * 0.9f));
+                    float right = Union(Segment(p, 17.5f, 15.5f, 21f, 12f, Stroke * 0.9f),
+                                        Segment(p, 21f, 12f, 17.5f, 8.5f, Stroke * 0.9f));
+                    return Union(Union(cross, Union(up, down)), Union(left, right));
+                };
+
+            case AppIcon.Copy:
+                return p =>
+                {
+                    float front = Subtract(RoundRect(p, 14f, 10f, 6f, 6f, 2f),
+                                           RoundRect(p, 14f, 10f, 6f - Stroke * 0.9f, 6f - Stroke * 0.9f, 1.2f));
+                    float back = Subtract(RoundRect(p, 10f, 14f, 6f, 6f, 2f),
+                                          RoundRect(p, 10f, 14f, 6f - Stroke * 0.9f, 6f - Stroke * 0.9f, 1.2f));
+                    // The back sheet only where the front one is not.
+                    back = Subtract(back, RoundRect(p, 14f, 10f, 7.4f, 7.4f, 2f));
+                    return Union(front, back);
+                };
+
+            case AppIcon.Share:
+                return p =>
+                {
+                    float shaft = Segment(p, 12f, 9f, 12f, 21f, Stroke * 0.9f);
+                    float head = Union(Segment(p, 7f, 16f, 12f, 21f, Stroke * 0.9f),
+                                       Segment(p, 12f, 21f, 17f, 16f, Stroke * 0.9f));
+                    float tray = Union(Union(Segment(p, 5f, 11f, 5f, 5f, Stroke * 0.9f),
+                                             Segment(p, 5f, 5f, 19f, 5f, Stroke * 0.9f)),
+                                       Segment(p, 19f, 5f, 19f, 11f, Stroke * 0.9f));
+                    return Union(Union(shaft, head), tray);
+                };
+
+            case AppIcon.Bulb:
+                return p =>
+                {
+                    float glass = KeepAbove(p, Ring(p, 12f, 14.6f, 5.6f, Stroke * 0.9f), 11.2f);
+                    float neck = Union(Segment(p, 7.9f, 10.9f, 9.2f, 7.6f, Stroke * 0.9f),
+                                       Segment(p, 16.1f, 10.9f, 14.8f, 7.6f, Stroke * 0.9f));
+                    float base1 = Segment(p, 9f, 6f, 15f, 6f, Stroke * 0.9f);
+                    float base2 = Segment(p, 10f, 3f, 14f, 3f, Stroke * 0.9f);
+                    return Union(Union(glass, neck), Union(base1, base2));
+                };
+
+            case AppIcon.Walk:
+                return p =>
+                {
+                    float head = Circle(p, 13f, 19.5f, 1.9f);
+                    float leg1 = Union(Segment(p, 10f, 3f, 12f, 9f, Stroke * 0.9f),
+                                       Segment(p, 12f, 9f, 15f, 6f, Stroke * 0.9f));
+                    float leg2 = Segment(p, 15f, 6f, 15f, 3f, Stroke * 0.9f);
+                    float arm1 = Union(Segment(p, 8f, 13f, 11f, 16f, Stroke * 0.9f),
+                                       Segment(p, 11f, 16f, 14f, 15f, Stroke * 0.9f));
+                    float arm2 = Union(Segment(p, 14f, 15f, 16f, 12f, Stroke * 0.9f),
+                                       Segment(p, 16f, 12f, 19f, 12f, Stroke * 0.9f));
+                    float body = Segment(p, 11f, 16f, 9.5f, 10f, Stroke * 0.9f);
+                    return Union(Union(Union(head, leg1), Union(leg2, arm1)), Union(arm2, body));
+                };
+
+            case AppIcon.Spark:
+                return p =>
+                {
+                    float a = Union(Segment(p, 12f, 21f, 12f, 17f, Stroke * 0.9f),
+                                    Segment(p, 12f, 7f, 12f, 3f, Stroke * 0.9f));
+                    float b = Union(Segment(p, 3f, 12f, 7f, 12f, Stroke * 0.9f),
+                                    Segment(p, 17f, 12f, 21f, 12f, Stroke * 0.9f));
+                    float c = Union(Segment(p, 6f, 18f, 8.5f, 15.5f, Stroke * 0.9f),
+                                    Segment(p, 15.5f, 8.5f, 18f, 6f, Stroke * 0.9f));
+                    float d = Union(Segment(p, 6f, 6f, 8.5f, 8.5f, Stroke * 0.9f),
+                                    Segment(p, 15.5f, 15.5f, 18f, 18f, Stroke * 0.9f));
+                    return Union(Union(a, b), Union(c, d));
+                };
+
+            case AppIcon.Plus:
+                return p => Union(Segment(p, 12f, 5f, 12f, 19f, Stroke * 1.1f),
+                                  Segment(p, 5f, 12f, 19f, 12f, Stroke * 1.1f));
 
             default: // Check
                 return p => Union(

@@ -16,7 +16,12 @@ public static class UISprites
     const string Folder = "Assets/UI";
 
     /// <summary>Soft-cornered rectangle for fields and buttons.</summary>
-    public static Sprite Rounded { get { return GetOrCreate("UIRounded28", 96, 28); } }
+    // Daylight v2 radii, at 2.77 reference pixels to a prototype pixel: 16 for
+    // rows, options and grouped lists, 24 for cards and sheets, 11 for the
+    // small boxes - icon tiles, code cells, the segmented control.
+    public static Sprite Rounded { get { return GetOrCreate("UIRounded44", 128, 44); } }
+
+    public static Sprite Small { get { return GetOrCreate("UIRounded30", 96, 30); } }
 
     /// <summary>
     /// The larger radius, for the modal cards.
@@ -27,12 +32,12 @@ public static class UISprites
     /// wide - close enough to square to look like an unstyled rectangle, and far
     /// enough from it to look like it was meant to be round and failed.
     /// </summary>
-    public static Sprite Card { get { return GetOrCreate("UIRounded52", 160, 52); } }
+    public static Sprite Card { get { return GetOrCreate("UIRounded66", 192, 66); } }
 
     /// <summary>The border of a card, at the card radius.</summary>
     public static Sprite CardOutline
     {
-        get { return GetOrCreateOutline("UICardOutline", 160, 52f, 3f); }
+        get { return GetOrCreateOutline("UICardOutline66", 192, 66f, 3f); }
     }
 
     /// <summary>
@@ -51,6 +56,18 @@ public static class UISprites
     // (radius 32) gave every 128-pixel button square-ish ends. Anything shorter
     // than 160 now gets fully round ends - Unity shrinks the corners to fit.
     public static Sprite Pill { get { return GetOrCreate("UIPill160", 160, 80); } }
+
+    /// <summary>The rim of a capsule: the glass tab bar's edge, and its lens's.</summary>
+    public static Sprite PillOutline
+    {
+        get { return GetOrCreateOutline("UIPillOutline", 160, 80f, 3f); }
+    }
+
+    /// <summary>
+    /// A soft shadow under a capsule, for the one floating control the system
+    /// allows one under: the glass tab bar, which has nothing to stand on.
+    /// </summary>
+    public static Sprite PillShadow { get { return GetOrCreateShadow("UIPillShadow", 240, 80f, 40f); } }
 
     /// <summary>A plain circle, for dots and switch knobs.</summary>
     public static Sprite Circle { get { return GetOrCreate("UICircle", 64, 32, false); } }
@@ -73,6 +90,9 @@ public static class UISprites
     /// map, the camera feed and the sheet are three different backgrounds.
     /// </summary>
     public static Sprite Ring { get { return GetOrCreateRing("UIRing", 64, 7); } }
+
+    /// <summary>A hairline ring: the rim of a round glass control, 3px at 128.</summary>
+    public static Sprite RingThin { get { return GetOrCreateRing("UIRingThin", 128, 3); } }
 
     /// <summary>
     /// A triangle pointing up. Kept for anything that needs a bare wedge; the
@@ -98,7 +118,7 @@ public static class UISprites
     /// </summary>
     public static Sprite RoundedOutline
     {
-        get { return GetOrCreateOutline("UIRoundedOutline", 96, 28f, 3f); }
+        get { return GetOrCreateOutline("UIRoundedOutline44", 128, 44f, 3f); }
     }
 
     /// <summary>
@@ -107,6 +127,34 @@ public static class UISprites
     /// into text going under something.
     /// </summary>
     public static Sprite FadeUp { get { return GetOrCreateFade("UIFadeUp", 64); } }
+
+    /// <summary>
+    /// One dash of the guidance line, for an Image set to Tiled: a rounded 8px
+    /// dash and a 4px gap, the prototype's "2 10" dasharray with round caps, at
+    /// twice the size it is drawn so the caps stay round.
+    /// </summary>
+    public static Sprite Dash { get { return Save("UIDash", RenderDash(66, 34), 0); } }
+
+    static Texture2D RenderDash(int width, int height)
+    {
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        float r = height * 0.5f;
+        float left = r, right = 44f - r;
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                float px = x + 0.5f, py = y + 0.5f;
+                float cx = Mathf.Clamp(px, left, right);
+                float d = new Vector2(px - cx, py - r).magnitude - r;
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(0.5f - d)));
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
 
     static Sprite GetOrCreateFade(string name, int size)
     {

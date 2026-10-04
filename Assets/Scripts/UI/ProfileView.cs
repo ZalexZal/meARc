@@ -49,6 +49,52 @@ public class ProfileView : MonoBehaviour
     [Header("Guest")]
     public TextMeshProUGUI guestNote;
 
+    [Header("Daylight v2")]
+    [Tooltip("The guest's card: progress lives on this phone, make a profile.")]
+    public GameObject guestGroup;
+
+    [Tooltip("The signed-in card: the face, the name, since when.")]
+    public GameObject meGroup;
+
+    public Button createButton;
+    public Button signInButton;
+
+    [Tooltip("Rows only an account has: the account page, sign out.")]
+    public GameObject[] signedInOnly = new GameObject[0];
+
+    [Tooltip("The hairline round a badge not yet earned.")]
+    public Image[] medalEdges = new Image[0];
+
+    [Tooltip("One per slot in the grid. Each opens the badge drawn in it.")]
+    public Button[] medalButtons = new Button[0];
+    public BadgeSheetView badgeSheet;
+
+    // Which badge each slot is showing: the grid is sorted earned-first, so a
+    // slot's badge changes with the profile.
+    string[] _slotKeys = new string[0];
+
+    void Awake()
+    {
+        for (int i = 0; i < medalButtons.Length; i++)
+        {
+            int slot = i;
+            if (medalButtons[i] != null)
+                medalButtons[i].onClick.AddListener(() => OpenBadge(slot));
+        }
+
+        if (createButton != null)
+            createButton.onClick.AddListener(OpenAccount);
+
+        if (signInButton != null)
+            signInButton.onClick.AddListener(OpenAccount);
+    }
+
+    static void OpenAccount()
+    {
+        if (DoorFlow.Instance != null)
+            DoorFlow.Instance.OpenAccount();
+    }
+
     void OnEnable()
     {
         ProfileService.OnChanged += Refresh;
@@ -96,6 +142,18 @@ public class ProfileView : MonoBehaviour
     {
         DrawWho(guest, data, displayName, email);
 
+        if (guestGroup != null)
+            guestGroup.SetActive(guest);
+
+        if (meGroup != null)
+            meGroup.SetActive(!guest);
+
+        for (int i = 0; i < signedInOnly.Length; i++)
+        {
+            if (signedInOnly[i] != null)
+                signedInOnly[i].SetActive(!guest);
+        }
+
         if (statsGroup != null)
             statsGroup.SetActive(!guest && data != null);
 
@@ -104,8 +162,12 @@ public class ProfileView : MonoBehaviour
             Set(trailsValue, data.trails_walked.ToString());
             Set(stopsValue, data.stops_found.ToString());
 
+            // "1 trail", "2 trails": the word under a number agrees with it.
+            Caption(trailsValue, data.trails_walked == 1 ? "profile.trailsOne" : "profile.trails");
+            Caption(stopsValue, data.stops_found == 1 ? "profile.stopsOne" : "profile.stops");
+
             int total = data.badges != null ? data.badges.Length : Badges.Keys.Length;
-            Set(badgesValue, data.Earned + " / " + total);
+            Set(badgesValue, string.Format(AppStrings.Get("chip.progress"), data.Earned, total));
         }
 
         DrawMedals(guest, data);
@@ -193,16 +255,38 @@ public class ProfileView : MonoBehaviour
                 medalSlots[i].SetActive(false);
     }
 
+    void OpenBadge(int slot)
+    {
+        if (badgeSheet != null && slot < _slotKeys.Length)
+            badgeSheet.Open(_slotKeys[slot]);
+    }
+
     void DrawMedal(int slot, string key, bool earned, int tier)
     {
         if (slot >= medalSlots.Length || medalSlots[slot] == null)
             return;
 
+        if (_slotKeys.Length != medalSlots.Length)
+            _slotKeys = new string[medalSlots.Length];
+
+        _slotKeys[slot] = key;
+
         medalSlots[slot].SetActive(true);
-        Color colour = Badges.Colour(key, earned, tier);
+
+        // One blue for every earned badge, as Daylight draws them: a tint of it
+        // behind the glyph in the full colour. One not yet earned is an outline.
+        Color colour = ThemeManager.Get(earned ? ThemeRole.AccentText : ThemeRole.TextMuted);
 
         if (slot < medalRings.Length && medalRings[slot] != null)
-            medalRings[slot].color = Badges.Wash(colour, earned);
+        {
+            Color wash = ThemeManager.Get(ThemeRole.AccentTint);
+            if (!earned)
+                wash.a = 0f;
+            medalRings[slot].color = wash;
+        }
+
+        if (slot < medalEdges.Length && medalEdges[slot] != null)
+            medalEdges[slot].gameObject.SetActive(!earned);
 
         if (slot < medalIcons.Length && medalIcons[slot] != null)
         {
@@ -261,6 +345,22 @@ public class ProfileView : MonoBehaviour
 
         string month = AppStrings.Get("month." + when.Month);
         return string.Format(AppStrings.Get("profile.since"), month, when.Year);
+    }
+
+    /// <summary>The word under a stat's number, kept through language changes.</summary>
+    static void Caption(TextMeshProUGUI value, string key)
+    {
+        Transform cell = value != null ? value.transform.parent : null;
+        Transform found = cell != null ? cell.Find("Caption") : null;
+        TextMeshProUGUI caption = found != null ? found.GetComponent<TextMeshProUGUI>() : null;
+        if (caption == null)
+            return;
+
+        LocalizedLabel localized = caption.GetComponent<LocalizedLabel>();
+        if (localized != null)
+            localized.key = key;
+
+        caption.text = AppStrings.Get(key);
     }
 
     public static string Initials(string name, string email)

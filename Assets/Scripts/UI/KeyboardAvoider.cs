@@ -61,7 +61,16 @@ public class KeyboardAvoider : MonoBehaviour
 
     void Update()
     {
-        float wanted = Mathf.MoveTowards(_lift, Wanted(), speed * Time.unscaledDeltaTime);
+        float goal = Wanted();
+
+        // Not down while a finger is on the screen. A tap on Cancel or Join with
+        // the keyboard up hides the keyboard as the finger lands; the card used
+        // to drop under it at once, the finger came up over something else, and
+        // the button never heard its tap.
+        if (goal < _lift && (Input.touchCount > 0 || Input.GetMouseButton(0)))
+            return;
+
+        float wanted = Mathf.MoveTowards(_lift, goal, speed * Time.unscaledDeltaTime);
 
         if (Mathf.Approximately(wanted, _lift))
             return;

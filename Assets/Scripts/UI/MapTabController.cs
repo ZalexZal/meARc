@@ -22,10 +22,10 @@ public class MapTabController : MonoBehaviour
     public TabNavigationController tabs;
 
     [Header("Panel")]
-    [Tooltip("Previous, here, next - the strip resting on the map. It replaced a card " +
-             "that named whatever happened to be closest, which is proximity rather " +
-             "than the reader's question.")]
-    public NextStopStrip nextStop;
+    [Tooltip("The card resting above the tab bar: the next stop and the one thing " +
+             "to do about it. It replaced the previous/here/next strip, the guidance " +
+             "banner and the Browse and Team row (Daylight v2).")]
+    public NextStopCard nextStop;
 
     [Header("Chrome")]
     public GuidanceBanner guidance;
@@ -242,7 +242,10 @@ public class MapTabController : MonoBehaviour
         if (nextStop == null)
             return false;
 
-        bool show = !GuidanceService.IsGuiding && !ProximityToast.IsShowing;
+        // Up unless the state card is saying there is nothing to point at. The
+        // card carries guidance itself now, and alerts arrive at the top of the
+        // screen, so neither has to take it down any more.
+        bool show = stateCard == null || stateCard.root == null || !stateCard.root.activeSelf;
 
         if (nextStop.gameObject.activeSelf != show)
         {

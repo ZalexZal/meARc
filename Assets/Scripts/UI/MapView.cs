@@ -52,9 +52,22 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
     public RectTransform guidanceRay;
 
     [Header("Chrome")]
+    [Tooltip("Where the faint line through the stops, in the trail's order, is " +
+             "drawn. Under the pins. Not drawn for a freefall trail, which has no order.")]
+    public RectTransform routeParent;
+
+    [Tooltip("The pill the legs are drawn with, for round ends and joins.")]
+    public Sprite legSprite;
+
     public RectTransform scaleBar;
     public TextMeshProUGUI scaleLabel;
     public Button recentreButton;
+
+    [Tooltip("What floats over the map at the top and the bottom: the trail pill " +
+             "and the card. The reader is kept in the middle of what is left, so " +
+             "a stop just south of them is not hidden under the card.")]
+    public RectTransform coverTop;
+    public RectTransform coverBottom;
 
     [Header("Zoom")]
     [Tooltip("Metres visible across the width of the map at the current zoom.")]
@@ -156,6 +169,10 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         ThemeManager.OnThemeChanged += Repaint;
         AppStrings.OnLanguageChanged += Repaint;
         GuidanceService.OnGuidanceChanged += HandleGuidanceChanged;
+        NextStopCard.OnNextChanged += HandleProgress;
+        InfoPanelController.OnClosed += Deselect;
+        DiscoveryTracker.OnDiscoveryChanged += HandleProgress;
+        MarkerTaskService.OnProgressChanged += HandleProgress;
 
         Rebuild();
         MarkDirty();
@@ -170,6 +187,10 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         ThemeManager.OnThemeChanged -= Repaint;
         AppStrings.OnLanguageChanged -= Repaint;
         GuidanceService.OnGuidanceChanged -= HandleGuidanceChanged;
+        NextStopCard.OnNextChanged -= HandleProgress;
+        InfoPanelController.OnClosed -= Deselect;
+        DiscoveryTracker.OnDiscoveryChanged -= HandleProgress;
+        MarkerTaskService.OnProgressChanged -= HandleProgress;
     }
 
     void Update()
@@ -401,6 +422,44 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         GeoMath.LocalOffsetMetres(_originLat, _originLon,
                                   locationService.Latitude, locationService.Longitude,
                                   out _panEast, out _panNorth);
+
+        _panNorth -= ClearMiddle() / PixelsPerMetre;
+    }
+
+    static readonly Vector3[] Corners = new Vector3[4];
+
+    /// <summary>
+    /// How far above the rect's middle the middle of the uncovered map is, in
+    /// local pixels. Zero when nothing is covering it.
+    /// </summary>
+    float ClearMiddle()
+    {
+        if (_rect == null)
+            return 0f;
+
+        Rect r = _rect.rect;
+        float top = r.yMax;
+        float bottom = r.yMin;
+
+        if (coverTop != null && coverTop.gameObject.activeInHierarchy)
+        {
+            coverTop.GetWorldCorners(Corners);
+            top = Mathf.Min(top, _rect.InverseTransformPoint(Corners[0]).y);
+        }
+
+        if (coverBottom != null && coverBottom.gameObject.activeInHierarchy)
+        {
+            coverBottom.GetWorldCorners(Corners);
+            bottom = Mathf.Max(bottom, _rect.InverseTransformPoint(Corners[1]).y);
+        }
+
+        return top > bottom ? (top + bottom) * 0.5f - r.center.y : 0f;
+    }
+
+    void HandleProgress()
+    {
+        ApplySelection();
+        MarkDirty();
     }
 
     void HandleGuidanceChanged()
@@ -493,6 +552,15 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         MarkDirty();
     }
 
+    /// <summary>The sheet is gone, so no pin is the one being looked at.</summary>
+    void Deselect()
+    {
+        if (_selected == null)
+            return;
+
+        Select(null);
+    }
+
     public void Select(BuildingData building)
     {
         _selected = building;
@@ -515,6 +583,12 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
             pair.Value.SetLabelAllowed(labels);
             pair.Value.SetSelected(pair.Key == _selected || pair.Key == guided);
+
+            // Done, next or later, as Daylight draws them. The card decides
+            // which stop is next; the map only draws it.
+            pair.Value.SetState(pair.Key == NextStopCard.Current
+                ? MapPinView.State.Next
+                : NextStopCard.Done(pair.Key) ? MapPinView.State.Done : MapPinView.State.Later);
         }
     }
 
@@ -530,6 +604,7 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
 
     void LayOut()
     {
+        LayOutRoute();
         LayOutPins();
         LayOutReader();
         LayOutGuidance();
@@ -554,6 +629,93 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
             bool visible = _hasOrigin && Within(position, 60f);
             if (pair.Value.gameObject.activeSelf != visible)
                 pair.Value.gameObject.SetActive(visible);
+        }
+    }
+
+    readonly List<RectTransform> _legs = new List<RectTransform>();
+    readonly List<BuildingData> _route = new List<BuildingData>();
+    Color _legColour;
+
+    /// <summary>
+    /// The trail's order, drawn: a hairline from each stop to the next. Not a
+    /// route - the app does not know the streets - but the sequence the creator
+    /// chose, which is what turns five dots into a walk.
+    /// </summary>
+    void LayOutRoute()
+    {
+        if (routeParent == null)
+            return;
+
+        _route.Clear();
+
+        TrailService trails = TrailService.Instance;
+        bool freefall = trails != null && trails.Selected != null &&
+                        string.Equals(trails.Selected.mode, "freefall", StringComparison.OrdinalIgnoreCase);
+
+        if (!freefall)
+        {
+            var all = BuildingDatabase.AllBuildings;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i] != null && all[i].step > 0)
+                    _route.Add(all[i]);
+            }
+
+            _route.Sort((a, b) => a.step.CompareTo(b.step));
+        }
+
+        int needed = _hasOrigin ? Mathf.Max(0, _route.Count - 1) : 0;
+
+        Color colour = ThemeManager.IsDark
+            ? new Color(0.96f, 0.96f, 0.97f, 0.24f)
+            : new Color(0.114f, 0.114f, 0.122f, 0.20f);
+
+        while (_legs.Count < needed)
+        {
+            GameObject go = new GameObject("Leg", typeof(RectTransform));
+            go.layer = routeParent.gameObject.layer;
+            RectTransform rt = (RectTransform)go.transform;
+            rt.SetParent(routeParent, false);
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            Image image = go.AddComponent<Image>();
+            image.raycastTarget = false;
+            image.color = colour;
+
+            if (legSprite != null)
+            {
+                image.sprite = legSprite;
+                image.type = Image.Type.Sliced;
+                image.pixelsPerUnitMultiplier = 160f / 11f;
+            }
+
+            _legs.Add(rt);
+        }
+
+        bool recolour = colour != _legColour;
+        _legColour = colour;
+
+        for (int i = 0; i < _legs.Count; i++)
+        {
+            bool on = i < needed;
+            if (_legs[i].gameObject.activeSelf != on)
+                _legs[i].gameObject.SetActive(on);
+
+            if (!on)
+                continue;
+
+            if (recolour)
+                _legs[i].GetComponent<Image>().color = colour;
+
+            Vector2 from = Project(_route[i].latitude, _route[i].longitude);
+            Vector2 to = Project(_route[i + 1].latitude, _route[i + 1].longitude);
+            Vector2 delta = to - from;
+
+            _legs[i].anchoredPosition = from + delta * 0.5f;
+            // Overlapping by the line's width, so each joint is round.
+            _legs[i].sizeDelta = new Vector2(delta.magnitude + 11f, 11f);
+            _legs[i].localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
         }
     }
 
@@ -612,11 +774,10 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
             accuracyCircle.rectTransform.sizeDelta = new Vector2(radius * 2f, radius * 2f);
         }
 
-        // Barely there. The circle is context, not content - what the reader is
-        // looking for is their own dot and the pins, and a wash of accent across a
-        // quarter of the map buries both.
+        // A wash with no edge: Daylight draws the uncertainty as a tint, and the
+        // dot and the pins still read through it.
         Color tint = ThemeManager.Get(ThemeRole.Accent);
-        tint.a = 0.07f;
+        tint.a = 0.12f;
 
         if (tint != _lastAccuracyColour)
         {
@@ -680,7 +841,6 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
             return;
 
         Color tint = ThemeManager.Get(ThemeRole.Accent);
-        tint.a = 0.85f;
 
         if (tint != _lastRayColour)
         {

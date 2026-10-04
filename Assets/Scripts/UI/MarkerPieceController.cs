@@ -50,10 +50,22 @@ public class MarkerPieceController : MonoBehaviour
     [Header("Icons")]
     public Sprite videoIcon;
     public Sprite audioIcon;
+    public Sprite photoIcon;
     public Sprite questionIcon;
 
     [Tooltip("Hidden while a piece is open, so the sheet shows one thing at a time.")]
     public GameObject overview;
+
+    [Header("Daylight v2")]
+    [Tooltip("The one row a stop shows from afar: what is here, shut until you arrive.")]
+    public PieceRowView lockedRow;
+    public Sprite lockIcon;
+
+    [Tooltip("The sheet header's back button, faded out on the overview so the " +
+             "title stays centred.")]
+    public CanvasGroup backGroup;
+
+    float _tick;
 
     readonly List<PieceRowView> _rows = new List<PieceRowView>();
     readonly HashSet<string> _played = new HashSet<string>();
@@ -101,24 +113,21 @@ public class MarkerPieceController : MonoBehaviour
         Set(page, false);
         Set(overview, true);
         Set(closeMark, true);
+        PageChrome(false);
 
         int count = marker != null ? marker.PieceCount : 0;
 
         Set(section, count > 0);
-        Set(countRow, true);
+        Set(countRow, false);
 
         if (tooFarLabel != null)
             Set(tooFarLabel.gameObject, false);
 
+        if (lockedRow != null)
+            Set(lockedRow.gameObject, false);
+
         if (count == 0)
             return;
-
-        if (countLabel != null)
-        {
-            countLabel.text = count == 1
-                ? AppStrings.Get("piece.one")
-                : string.Format(AppStrings.Get("piece.count"), count);
-        }
 
         Fill();
     }
@@ -143,23 +152,36 @@ public class MarkerPieceController : MonoBehaviour
         Set(page, false);
         Set(overview, true);
         Set(closeMark, true);
+        PageChrome(false);
         Set(section, true);
 
-        // The count chip is a fixed pill and this is a sentence, so the chip goes
-        // and the sentence gets the width it needs.
         Set(countRow, false);
 
         if (tooFarLabel != null)
-        {
-            Set(tooFarLabel.gameObject, true);
-            // Standing on the stop with a fake-location app on reads as "come
-            // closer" otherwise - a sentence that cannot be acted on at 0 m.
-            bool mocked = UserLocationService.Instance != null && UserLocationService.Instance.IsMocked;
-            tooFarLabel.text = AppStrings.Get(mocked ? "piece.mocked" : "piece.tooFar");
-        }
+            Set(tooFarLabel.gameObject, false);
 
         for (int i = 0; i < _rows.Count; i++)
             _rows[i].gameObject.SetActive(false);
+
+        // One shut row saying what is here and when it opens. A stop with
+        // nothing but its words has nothing to promise, so it shows none.
+        bool any = marker != null && marker.PieceCount > 0;
+        Set(section, any);
+
+        if (lockedRow == null || !any)
+            return;
+
+        Set(lockedRow.gameObject, true);
+        lockedRow.SetFirst(true);
+
+        // Standing on the stop with a fake-location app on reads as "come
+        // closer" otherwise - a sentence that cannot be acted on at 0 m.
+        bool mocked = UserLocationService.Instance != null && UserLocationService.Instance.IsMocked;
+
+        lockedRow.Draw(lockIcon,
+                       AppStrings.Get(marker.HasTask ? "piece.question" : "piece.more"),
+                       AppStrings.Get(mocked ? "piece.mocked" : "piece.unlocks"),
+                       PieceRowView.Look.Shut);
     }
 
     /// <summary>Called when the sheet closes. Stops anything still playing.</summary>
@@ -171,6 +193,7 @@ public class MarkerPieceController : MonoBehaviour
         Set(page, false);
         Set(overview, true);
         Set(closeMark, true);
+        PageChrome(false);
     }
 
     void Fill()
@@ -200,43 +223,142 @@ public class MarkerPieceController : MonoBehaviour
 
             _rows[i].gameObject.SetActive(true);
 
+            _rows[i].SetFirst(i == 0);
+
             if (i < _media.Count)
             {
                 MarkerMedia piece = _media[i];
-                bool audio = piece.Kind == MarkerMediaKind.Audio;
+                Sprite icon = piece.Kind == MarkerMediaKind.Audio ? audioIcon
+                            : piece.Kind == MarkerMediaKind.Image && photoIcon != null ? photoIcon
+                            : videoIcon;
 
-                // A video link has no file name to fall back on, so Title comes
-                // back as the kind word and the row read "Watch" over "Watch".
-                // One of them is enough.
-                string caption = AppStrings.Get(Verb(piece));
+                // The thing's own name on top and its kind underneath, as Daylight
+                // lists them: "The stage from inside" over "Video".
+                string kind = AppStrings.Get(Kind(piece));
                 string title = piece.Title;
 
-                // Where it plays instead - "youtu.be" - so the row is not a
-                // caption over an empty line, which read as a stop half loaded.
-                if (string.Equals(title, caption, StringComparison.OrdinalIgnoreCase) ||
-                    string.IsNullOrWhiteSpace(title))
+                // A video link has no file name to fall back on, so Title comes
+                // back as the kind word. Where it plays instead - "youtu.be" - is
+                // a name; the kind word twice is not.
+                if (string.IsNullOrWhiteSpace(title) ||
+                    string.Equals(title, AppStrings.Get(Verb(piece)), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(title, kind, StringComparison.OrdinalIgnoreCase))
                 {
                     title = Uri.TryCreate(piece.path ?? string.Empty, UriKind.Absolute, out Uri link)
                         ? link.Host.Replace("www.", string.Empty)
-                        : string.Empty;
+                        : kind;
                 }
 
-                _rows[i].Bind(audio ? audioIcon : videoIcon, caption, title,
-                              _played.Contains(Key(piece)));
+                _rows[i].Draw(icon, title, kind,
+                              _played.Contains(Key(piece)) ? PieceRowView.Look.Done : PieceRowView.Look.Open);
             }
             else
             {
                 // The question is always last: it is the thing the media is there
                 // to make answerable.
-                MarkerTaskService service = MarkerTaskService.Instance;
-                bool solved = service != null &&
-                              service.Progress(_marker.buildingId).IsFinished;
-
-                _rows[i].Bind(questionIcon,
-                              AppStrings.Get("piece.answer"),
-                              _marker.task.Prompt,
-                              solved);
+                DrawQuestionRow(_rows[i]);
             }
+        }
+    }
+
+    /// <summary>
+    /// The question's row: what it is worth, and where it stands - answered,
+    /// shut for a few minutes, waiting for the creator, or there to be answered.
+    /// </summary>
+    void DrawQuestionRow(PieceRowView row)
+    {
+        MarkerTaskService service = MarkerTaskService.Instance;
+        MarkerTaskService.MarkerProgress progress = service != null
+            ? service.Progress(_marker.buildingId)
+            : new MarkerTaskService.MarkerProgress();
+
+        TrailService trails = TrailService.Instance;
+        bool scored = trails != null && trails.SelectedIsGame;
+        int worth = _marker.task != null ? _marker.task.points : 0;
+
+        string title = scored && worth > 0
+            ? string.Format(AppStrings.Get("piece.questionFor"), worth)
+            : AppStrings.Get("piece.question");
+
+        if (progress.solved)
+        {
+            string said = scored && progress.points > 0
+                ? string.Format(AppStrings.Get("piece.rightPts"), progress.points)
+                : AppStrings.Get("piece.right");
+            row.Draw(questionIcon, AppStrings.Get("piece.question"), said,
+                     PieceRowView.Look.Done);
+            return;
+        }
+
+        if (progress.skipped)
+        {
+            row.Draw(questionIcon, AppStrings.Get("piece.question"), AppStrings.Get("piece.skipped"),
+                     PieceRowView.Look.Shut);
+            return;
+        }
+
+        string caption;
+        if (progress.IsLocked)
+        {
+            int left = Mathf.CeilToInt(progress.SecondsLeft);
+            caption = string.Format(AppStrings.Get("piece.lockedFor"), (left / 60) + ":" + (left % 60).ToString("00"));
+        }
+        else if (progress.awaitingReview)
+        {
+            caption = AppStrings.Get("piece.review");
+        }
+        else
+        {
+            caption = AppStrings.Get("piece.answerHere");
+        }
+
+        row.Draw(questionIcon, title, caption, PieceRowView.Look.Open);
+    }
+
+    /// <summary>"Video", "Audio", "Photo": what a piece is, as a noun.</summary>
+    static string Kind(MarkerMedia piece)
+    {
+        if (piece.Kind == MarkerMediaKind.Audio)
+            return "piece.kindAudio";
+
+        if (piece.Kind == MarkerMediaKind.Image)
+            return "piece.kindPhoto";
+
+        return "piece.kindVideo";
+    }
+
+    /// <summary>Whether this stop has a question that can be opened now.</summary>
+    public bool HasQuestion
+    {
+        get { return _marker != null && _marker.HasTask && _rows.Count > 0 && section != null && section.activeSelf &&
+                     (lockedRow == null || !lockedRow.gameObject.activeSelf); }
+    }
+
+    /// <summary>Opens the question, for the sheet's own "Answer the question".</summary>
+    public void OpenQuestion()
+    {
+        if (_marker != null && _marker.HasTask)
+            Open(_media.Count);
+    }
+
+    void Update()
+    {
+        // A question shut for a few minutes counts down on its row.
+        if (_marker == null || !_marker.HasTask || page == null || page.activeSelf)
+            return;
+
+        _tick += Time.unscaledDeltaTime;
+        if (_tick < 0.5f)
+            return;
+
+        _tick = 0f;
+
+        MarkerTaskService service = MarkerTaskService.Instance;
+        int index = _media.Count;
+        if (service != null && index < _rows.Count && _rows[index].gameObject.activeSelf &&
+            service.Progress(_marker.buildingId).IsLocked)
+        {
+            DrawQuestionRow(_rows[index]);
         }
     }
 
@@ -284,6 +406,7 @@ public class MarkerPieceController : MonoBehaviour
 
         Set(overview, false);
         Set(page, true);
+        PageChrome(true);
 
         Set(media != null ? media.gameObject : null, !isQuestion);
         Set(question != null ? question.gameObject : null, isQuestion);
@@ -301,7 +424,7 @@ public class MarkerPieceController : MonoBehaviour
             // directly underneath, one line apart, which is the fault that
             // comment was written about.
             if (pageTitle != null)
-                pageTitle.text = string.Empty;
+                pageTitle.text = AppStrings.Get("piece.question");
 
             if (question != null)
                 question.Show(_marker);
@@ -336,6 +459,7 @@ public class MarkerPieceController : MonoBehaviour
         Set(page, false);
         Set(overview, true);
         Set(closeMark, true);
+        PageChrome(false);
 
         // Redrawn on the way back, so a tick or a solved question appears without
         // the reader closing the sheet and opening it again.
@@ -345,6 +469,20 @@ public class MarkerPieceController : MonoBehaviour
     string Key(MarkerMedia piece)
     {
         return (_marker != null ? _marker.buildingId : string.Empty) + "|" + piece.path;
+    }
+
+    /// <summary>Back shows on a page and not on the overview.</summary>
+    void PageChrome(bool onPage)
+    {
+        if (backGroup != null)
+        {
+            backGroup.alpha = onPage ? 1f : 0f;
+            backGroup.interactable = onPage;
+            backGroup.blocksRaycasts = onPage;
+        }
+
+        if (!onPage && pageTitle != null)
+            pageTitle.text = string.Empty;
     }
 
     static void Set(GameObject go, bool on)

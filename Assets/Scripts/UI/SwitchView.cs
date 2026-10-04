@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -7,8 +8,11 @@ using UnityEngine.UI;
 ///
 /// Unity's Toggle only knows how to show and hide a graphic, which reads as a
 /// rectangle with a square appearing in it rather than as a switch.
+///
+/// As on a phone, the knob travels rather than jumps, and it can be pushed
+/// across with a finger: let go past the middle and the switch flips.
 /// </summary>
-public class SwitchView : MonoBehaviour
+public class SwitchView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     [Header("References")]
     public Toggle toggle;
@@ -18,6 +22,15 @@ public class SwitchView : MonoBehaviour
 
     [Tooltip("Gap between the knob and the end of the track.")]
     public float inset = 7f;
+
+    [Tooltip("Seconds the knob takes to cross, roughly. Daylight's is 0.3.")]
+    public float travelTime = 0.09f;
+
+    float _pos;
+    float _target;
+    float _speed;
+    float _dragStart;
+    bool _dragging;
 
     void Awake()
     {
@@ -34,6 +47,7 @@ public class SwitchView : MonoBehaviour
     void OnDisable()
     {
         ThemeManager.OnThemeChanged -= ApplyCurrent;
+        _dragging = false;
     }
 
     void OnDestroy()
@@ -42,18 +56,70 @@ public class SwitchView : MonoBehaviour
             toggle.onValueChanged.RemoveListener(Apply);
     }
 
+    /// <summary>Straight to where the toggle says, without travelling: opening, theme changes.</summary>
     void ApplyCurrent()
     {
-        Apply(toggle != null && toggle.isOn);
+        _target = toggle != null && toggle.isOn ? 1f : 0f;
+        _pos = _target;
+        _speed = 0f;
+        Place();
     }
 
+    /// <summary>The toggle changed: travel there.</summary>
     public void Apply(bool isOn)
+    {
+        _target = isOn ? 1f : 0f;
+
+        if (!isActiveAndEnabled)
+        {
+            _pos = _target;
+            Place();
+        }
+    }
+
+    void Update()
+    {
+        if (_dragging)
+            return;
+
+        // Set from code without an event still has to show.
+        if (toggle != null)
+            _target = toggle.isOn ? 1f : 0f;
+
+        if (Mathf.Approximately(_pos, _target))
+            return;
+
+        _pos = Mathf.SmoothDamp(_pos, _target, ref _speed, travelTime, Mathf.Infinity, Time.unscaledDeltaTime);
+
+        if (Mathf.Abs(_pos - _target) < 0.002f)
+        {
+            _pos = _target;
+            _speed = 0f;
+        }
+
+        Place();
+    }
+
+    float Travel
+    {
+        get
+        {
+            if (knob == null)
+                return 0f;
+
+            float width = ((RectTransform)transform).rect.width;
+            return Mathf.Max(0f, width - knob.rect.width - inset * 2f);
+        }
+    }
+
+    void Place()
     {
         if (track != null)
         {
-            track.color = isOn
-                ? ThemeManager.Get(ThemeRole.Accent)
-                : ThemeManager.Get(ThemeRole.Line);
+            // Green when on, as a system switch is; the one blue is kept for
+            // the things that are actions.
+            track.color = Color.Lerp(ThemeManager.Get(ThemeRole.FillStrong),
+                                     ThemeManager.Get(ThemeRole.GoodDot), _pos);
         }
 
         if (knobImage != null)
@@ -62,12 +128,52 @@ public class SwitchView : MonoBehaviour
         if (knob == null)
             return;
 
-        // Anchoring to the end it travels to keeps the knob correct whatever width
-        // the track ends up at.
-        float side = isOn ? 1f : 0f;
-        knob.anchorMin = new Vector2(side, 0.5f);
-        knob.anchorMax = new Vector2(side, 0.5f);
-        knob.pivot = new Vector2(side, 0.5f);
-        knob.anchoredPosition = new Vector2(isOn ? -inset : inset, 0f);
+        knob.anchorMin = new Vector2(0f, 0.5f);
+        knob.anchorMax = new Vector2(0f, 0.5f);
+        knob.pivot = new Vector2(0f, 0.5f);
+        knob.anchoredPosition = new Vector2(inset + _pos * Travel, 0f);
+    }
+
+    // ------------------------------------------------------------- the finger
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        if (toggle == null || !toggle.IsInteractable() || !SideDrag.Claim(this, eventData))
+            return;
+
+        // Toggle sits on this object too, and would flip the switch again on
+        // the release that ends this drag.
+        eventData.eligibleForClick = false;
+
+        _dragging = true;
+        _dragStart = _pos;
+        _speed = 0f;
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (!_dragging)
+            return;
+
+        float travel = Travel;
+        _pos = Mathf.Clamp01(_dragStart + (travel > 0f ? SideDrag.Moved(transform, eventData) / travel : 0f));
+        Place();
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        if (!_dragging)
+            return;
+
+        _dragging = false;
+        bool on = _pos >= 0.5f;
+
+        if (toggle.isOn != on)
+        {
+            Haptics.Tick();
+            toggle.isOn = on;
+        }
+
+        _target = on ? 1f : 0f;
     }
 }

@@ -19,6 +19,11 @@ public class AppLifecycleWatcher : MonoBehaviour
 
     float _pausedAt = -1f;
 
+    void Start()
+    {
+        ThemeManager.RefreshSystem();
+    }
+
     void OnApplicationPause(bool paused)
     {
         if (paused)
@@ -26,6 +31,9 @@ public class AppLifecycleWatcher : MonoBehaviour
             _pausedAt = Time.realtimeSinceStartup;
             return;
         }
+
+        // The phone may have gone to night mode while the app was away.
+        ThemeManager.RefreshSystem();
 
         if (_pausedAt < 0f)
             return;

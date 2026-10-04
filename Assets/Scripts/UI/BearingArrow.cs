@@ -134,7 +134,7 @@ public class BearingArrow : MonoBehaviour
         if (tinted == null)
             return;
 
-        Color colour = ThemeManager.Get(ThemeRole.Accent);
+        Color colour = ThemeManager.Get(ThemeRole.AccentText);
         if (colour != _lastColour)
         {
             _lastColour = colour;

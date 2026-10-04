@@ -51,6 +51,34 @@ public class SafeAreaPad : MonoBehaviour
         Apply();
     }
 
+    /// <summary>
+    /// The top inset in screen pixels: the safe area's, or the camera cutout's
+    /// if that is deeper.
+    ///
+    /// The app hides the status bar, and while it is hidden Android reports a
+    /// safe area that runs to the top of the glass - so the trail pill and the
+    /// sheets slid up under the punch-hole camera whenever the bar had not
+    /// shown since launch. The cutout does not move, so it is the floor.
+    /// </summary>
+    public static float TopPixels()
+    {
+        float top = Mathf.Max(0f, Screen.height - Screen.safeArea.yMax);
+
+        Rect[] cutouts = Screen.cutouts;
+        if (cutouts != null)
+        {
+            for (int i = 0; i < cutouts.Length; i++)
+            {
+                // Screen space counts y up from the bottom; a cutout in the top
+                // quarter is one the top of the layout has to clear.
+                if (cutouts[i].yMax > Screen.height * 0.75f)
+                    top = Mathf.Max(top, Screen.height - cutouts[i].yMin);
+            }
+        }
+
+        return top;
+    }
+
     void Apply()
     {
         if (_rect == null)
@@ -69,7 +97,7 @@ public class SafeAreaPad : MonoBehaviour
         float insetLeft = safe.xMin / scale;
         float insetRight = (Screen.width - safe.xMax) / scale;
         float insetBottom = safe.yMin / scale;
-        float insetTop = (Screen.height - safe.yMax) / scale;
+        float insetTop = TopPixels() / scale;
 
         _rect.offsetMin = new Vector2(
             left ? insetLeft + extra : 0f,

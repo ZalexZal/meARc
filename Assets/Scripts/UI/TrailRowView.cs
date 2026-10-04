@@ -15,6 +15,12 @@ public class TrailRowView : MonoBehaviour
     [Tooltip("What this reader may do here, and how the trail is played.")]
     public TextMeshProUGUI metaLabel;
 
+    [Tooltip("How far along: found of total on the open trail; stops and distance on a near one.")]
+    public TextMeshProUGUI progressLabel;
+
+    [Tooltip("The hairline above every row but the first in its group.")]
+    public GameObject divider;
+
     [Tooltip("Marks the trail currently open. Off for every other row.")]
     public GameObject currentMark;
 
@@ -119,6 +125,31 @@ public class TrailRowView : MonoBehaviour
         if (currentMark != null)
             currentMark.SetActive(current);
 
+        // Only the open trail's progress is known here: the stops of the others
+        // are not on the phone until they are opened.
+        if (progressLabel != null)
+        {
+            // The demo borrows the stop list while it runs.
+            current = current && !DemoTrail.Active;
+            progressLabel.gameObject.SetActive(current);
+
+            if (current)
+            {
+                var all = BuildingDatabase.AllBuildings;
+                int done = 0;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    if (NextStopCard.Done(all[i]))
+                        done++;
+                }
+
+                progressLabel.text = all.Count > 0
+                    ? string.Format(AppStrings.Get("chip.progress"), done, all.Count)
+                    : string.Empty;
+                progressLabel.gameObject.SetActive(all.Count > 0);
+            }
+        }
+
         if (leaveButton != null)
             leaveButton.gameObject.SetActive(true);
     }
@@ -138,12 +169,11 @@ public class TrailRowView : MonoBehaviour
         if (leaveButton != null)
             leaveButton.gameObject.SetActive(false);
 
-        if (metaLabel != null)
+        if (progressLabel != null)
         {
-            metaLabel.text = string.Format(AppStrings.Get("near.meta"),
-                Meta(new TrailService.Trail { mode = listed.mode }),
-                listed.stop_count,
-                AppStrings.FormatDistance(listed.distance_m));
+            progressLabel.gameObject.SetActive(true);
+            progressLabel.text = string.Format(AppStrings.Get("near.meta2"), listed.stop_count,
+                                               AppStrings.FormatDistance(listed.distance_m));
         }
     }
 
@@ -170,6 +200,17 @@ public class TrailRowView : MonoBehaviour
 
         // Get returns the key when a string is missing, which would put "mode.ctf"
         // on screen. Loud is right for us and wrong for them.
-        return mode.StartsWith("mode.") ? string.Empty : mode;
+        if (mode.StartsWith("mode."))
+            return string.Empty;
+
+        // And how it is played, which is what the name of a mode does not say.
+        string how = AppStrings.Get("how." + trail.mode);
+        return how.StartsWith("how.") ? mode : mode + " · " + how;
+    }
+
+    public void SetFirst(bool first)
+    {
+        if (divider != null && divider.activeSelf == first)
+            divider.SetActive(!first);
     }
 }

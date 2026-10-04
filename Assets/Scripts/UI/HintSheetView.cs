@@ -45,6 +45,17 @@ public class HintSheetView : MonoBehaviour
     public TextMeshProUGUI statusLabel;
     public Button closeButton;
 
+    [Header("Daylight v2: arm, then confirm")]
+    [Tooltip("Shown in place of Unlock once it has been pressed: Cancel and \"Yes, −5\".")]
+    public Button[] rowCancels = new Button[MaxRows];
+    public Button[] rowConfirms = new Button[MaxRows];
+    public TextMeshProUGUI[] rowConfirmLabels = new TextMeshProUGUI[MaxRows];
+
+    [Tooltip("The sentence above the hints: what they cost and when.")]
+    public TextMeshProUGUI introLabel;
+
+    int _armed = -1;
+
     BuildingData _marker;
     bool _busy;
 
@@ -62,6 +73,17 @@ public class HintSheetView : MonoBehaviour
 
         if (closeButton != null)
             closeButton.onClick.AddListener(Close);
+
+        for (int i = 0; i < MaxRows; i++)
+        {
+            int index = i;
+
+            if (i < rowConfirms.Length && rowConfirms[i] != null)
+                rowConfirms[i].onClick.AddListener(delegate { _armed = -1; Post(index); });
+
+            if (i < rowCancels.Length && rowCancels[i] != null)
+                rowCancels[i].onClick.AddListener(delegate { _armed = -1; Draw(); });
+        }
     }
 
     void OnEnable()
@@ -85,6 +107,7 @@ public class HintSheetView : MonoBehaviour
     {
         _marker = marker;
         _busy = false;
+        _armed = -1;
 
         Say(null);
         gameObject.SetActive(true);
@@ -110,6 +133,13 @@ public class HintSheetView : MonoBehaviour
             emptyLabel.text = AppStrings.Get("hint.none");
         }
 
+        if (introLabel != null)
+        {
+            bool firstFree = count > 0 && hints[0] != null && hints[0].cost <= 0;
+            introLabel.gameObject.SetActive(count > 0);
+            introLabel.text = AppStrings.Get(firstFree ? "hint.introFree" : "hint.intro");
+        }
+
         int spent = 0;
         bool blocked = false;
 
@@ -125,49 +155,63 @@ public class HintSheetView : MonoBehaviour
                 continue;
 
             MarkerHint hint = hints[i];
-
             if (hint.revealed)
                 spent += hint.cost;
 
             if (rowTitles[i] != null)
                 rowTitles[i].text = string.Format(AppStrings.Get("hint.nth"), i + 1);
 
-            // Free says so rather than showing a nought, which reads as a missing
-            // number rather than as something a creator chose to give away.
+            bool openable = !hint.revealed && !blocked;
+            bool armed = openable && _armed == i;
+
+            // The right-hand side says one thing: what it cost, the button that
+            // opens it, the confirmation, or that the one before comes first.
+            bool note = hint.revealed || !openable;
+
             if (rowChipHolders[i] != null)
-                rowChipHolders[i].SetActive(!hint.revealed);
+                rowChipHolders[i].SetActive(note);
 
             if (rowChips[i] != null)
             {
-                rowChips[i].text = hint.cost > 0
-                    ? string.Format(AppStrings.Get("hint.cost"), hint.cost)
-                    : AppStrings.Get("hint.free");
+                rowChips[i].text = hint.revealed
+                    ? (hint.cost > 0 ? string.Format(AppStrings.Get("hint.cost"), hint.cost)
+                                     : AppStrings.Get("hint.free"))
+                    : AppStrings.Get("hint.previous");
             }
-
-            // Open, next in line, or waiting behind one that is still shut.
-            bool openable = !hint.revealed && !blocked;
 
             if (rowBodies[i] != null)
             {
-                rowBodies[i].text = hint.HasText
-                    ? hint.body.Text
-                    : AppStrings.Get(openable ? "hint.locked" : "hint.previous");
-
-                rowBodies[i].color = ThemeManager.Get(hint.HasText
-                    ? ThemeRole.TextPrimary
-                    : ThemeRole.TextMuted);
+                bool shown = hint.revealed && hint.HasText;
+                rowBodies[i].gameObject.SetActive(shown);
+                rowBodies[i].text = shown ? hint.body.Text : string.Empty;
+                rowBodies[i].color = ThemeManager.Get(ThemeRole.TextPrimary);
             }
 
             if (rowButtons[i] != null)
             {
-                rowButtons[i].gameObject.SetActive(!hint.revealed);
-                rowButtons[i].interactable = openable && !_busy;
+                rowButtons[i].gameObject.SetActive(openable && !armed);
+                rowButtons[i].interactable = !_busy;
             }
 
             if (rowActions[i] != null)
-                rowActions[i].text = AppStrings.Get("hint.unlock");
+            {
+                rowActions[i].text = hint.cost > 0
+                    ? string.Format(AppStrings.Get("hint.unlockCost"), hint.cost)
+                    : AppStrings.Get("hint.show");
+            }
 
-            // Everything after the first unopened one is behind it.
+            if (i < rowCancels.Length && rowCancels[i] != null)
+                rowCancels[i].gameObject.SetActive(armed);
+
+            if (i < rowConfirms.Length && rowConfirms[i] != null)
+            {
+                rowConfirms[i].gameObject.SetActive(armed);
+                rowConfirms[i].interactable = !_busy;
+            }
+
+            if (i < rowConfirmLabels.Length && rowConfirmLabels[i] != null)
+                rowConfirmLabels[i].text = string.Format(AppStrings.Get("hint.yes"), hint.cost);
+
             if (!hint.revealed)
                 blocked = true;
         }
@@ -175,13 +219,33 @@ public class HintSheetView : MonoBehaviour
         if (spentLabel != null)
         {
             spentLabel.gameObject.SetActive(spent > 0);
-
             if (spent > 0)
                 spentLabel.text = string.Format(AppStrings.Get("hint.spent"), spent);
         }
     }
 
+    /// <summary>
+    /// The first press. A free hint opens; one that costs asks first, in its own
+    /// row - "Cancel" and "Yes, −5" - because the points go whether or not the
+    /// hint helps.
+    /// </summary>
     void Reveal(int index)
+    {
+        MarkerHint[] costs = _marker != null ? _marker.hints : null;
+
+        if (!_busy && costs != null && index >= 0 && index < costs.Length && costs[index] != null &&
+            costs[index].cost > 0 && _armed != index)
+        {
+            _armed = index;
+            Haptics.Tick();
+            Draw();
+            return;
+        }
+
+        Post(index);
+    }
+
+    void Post(int index)
     {
         MarkerHint[] hints = _marker != null ? _marker.hints : null;
 

@@ -17,7 +17,10 @@ public enum UIShape
     Ring,
 
     /// <summary>Points up at zero rotation. Every direction arrow in the app.</summary>
-    Triangle
+    Triangle,
+
+    /// <summary>The small radius: icon tiles, code cells, the segmented control.</summary>
+    Small
 }
 
 /// <summary>
@@ -108,12 +111,21 @@ public static class UIFactory
                 image.sprite = UISprites.Triangle;
                 image.type = Image.Type.Simple;
                 break;
+
+            case UIShape.Small:
+                image.sprite = UISprites.Small;
+                image.type = Image.Type.Sliced;
+                break;
         }
 
         // Keeps the authored corner radius instead of letting Unity rescale the
         // 9-slice border with the sprite's pixels-per-unit.
         if (shape != UIShape.Rect)
             image.pixelsPerUnitMultiplier = 1f;
+
+        // A pill's caps follow its height instead (see PillShape).
+        if (shape == UIShape.Pill && image.GetComponent<PillShape>() == null)
+            image.gameObject.AddComponent<PillShape>();
     }
 
     /// <summary>Background that follows the theme.</summary>
@@ -182,10 +194,12 @@ public static class UIFactory
         text.raycastTarget = false;
         text.text = name;
 
-        // Tighter as it gets bigger - the "Apple tight" headline. Inter runs a
-        // little wider than SF, so this is its own dynamic-tracking curve.
-        // Small text keeps the face's own spacing.
-        text.characterSpacing = size >= 70f ? -2f : size >= 50f ? -1.5f : size >= 38f ? -0.8f : 0f;
+        // Tighter as it gets bigger - the "Apple tight" headline, in TMP's
+        // hundredths of an em: -0.022em at 34px, -0.02em at 28px, -0.012em at
+        // 21px and -0.01em for 17px body, as Daylight v2 sets them. Small text
+        // keeps the face's own spacing.
+        text.characterSpacing = size >= 90f ? -2.2f : size >= 70f ? -2f : size >= 55f ? -1.2f
+                              : size >= 44f ? -1f : 0f;
 
         if (TMP_Settings.defaultFontAsset != null)
             text.font = TMP_Settings.defaultFontAsset;
@@ -252,20 +266,21 @@ public static class UIFactory
     /// </summary>
     public static Toggle Switch(string name, Transform parent)
     {
+        // 51 by 31, the size of the system switch, at 2.77 reference pixels to one.
         RectTransform rt = Rect(name, parent);
-        rt.sizeDelta = new Vector2(96f, 54f);
+        rt.sizeDelta = new Vector2(141f, 86f);
 
-        LayoutElement element = Size(rt.gameObject, 54f, 96f);
+        LayoutElement element = Size(rt.gameObject, 86f, 141f);
         element.flexibleWidth = 0f; // never stretch to fill its row
 
-        Image track = Plain(rt, ThemeManager.Get(ThemeRole.Line), UIShape.Pill);
+        Image track = Plain(rt, ThemeManager.Get(ThemeRole.FillStrong), UIShape.Pill);
 
         RectTransform knob = Rect("Knob", rt);
-        knob.sizeDelta = new Vector2(40f, 40f);
+        knob.sizeDelta = new Vector2(75f, 75f);
         knob.anchorMin = new Vector2(0f, 0.5f);
         knob.anchorMax = new Vector2(0f, 0.5f);
         knob.pivot = new Vector2(0f, 0.5f);
-        knob.anchoredPosition = new Vector2(7f, 0f);
+        knob.anchoredPosition = new Vector2(5.5f, 0f);
 
         Image knobImage = Plain(knob, Color.white, UIShape.Circle);
         knobImage.raycastTarget = false;
@@ -276,6 +291,7 @@ public static class UIFactory
         toggle.transition = Selectable.Transition.None;
 
         SwitchView view = rt.gameObject.AddComponent<SwitchView>();
+        view.inset = 5.5f;
         view.toggle = toggle;
         view.track = track;
         view.knob = knob;
@@ -287,21 +303,22 @@ public static class UIFactory
     public static TMP_InputField InputField(string name, Transform parent,
                                             string placeholderKey, out TextMeshProUGUI placeholder)
     {
+        // 52px tall with 17px type, 14px in from the edge, as Daylight's fields.
         RectTransform rt = Rect(name, parent);
-        Size(rt.gameObject, 96f);
+        Size(rt.gameObject, 144f);
         Fill(rt, ThemeRole.Surface, 1f, UIShape.Rounded);
 
         RectTransform area = Rect("Text Area", rt);
         Stretch(area);
-        area.offsetMin = new Vector2(30f, 8f);
-        area.offsetMax = new Vector2(-30f, -8f);
+        area.offsetMin = new Vector2(39f, 8f);
+        area.offsetMax = new Vector2(-39f, -8f);
         area.gameObject.AddComponent<RectMask2D>();
 
-        placeholder = Text("Placeholder", area, 38f, ThemeRole.TextMuted,
+        placeholder = Text("Placeholder", area, 47f, ThemeRole.TextMuted,
                            TextAlignmentOptions.Left, placeholderKey);
         Stretch(placeholder.rectTransform);
 
-        TextMeshProUGUI textComponent = Text("Text", area, 38f, ThemeRole.TextPrimary,
+        TextMeshProUGUI textComponent = Text("Text", area, 47f, ThemeRole.TextPrimary,
                                              TextAlignmentOptions.Left);
         Stretch(textComponent.rectTransform);
         textComponent.text = string.Empty;
@@ -454,6 +471,10 @@ public static class UIFactory
         Stretch(root);
 
         ScrollRect scroll = root.gameObject.AddComponent<ScrollRect>();
+
+        // Pulled down from its top inside a sheet, the sheet goes; anywhere
+        // else this does nothing.
+        root.gameObject.AddComponent<SheetScrollHandoff>().scroll = scroll;
         scroll.horizontal = false;
         scroll.vertical = true;
 
@@ -471,6 +492,14 @@ public static class UIFactory
         RectTransform viewport = Rect("Viewport", root);
         Stretch(viewport);
         viewport.gameObject.AddComponent<RectMask2D>();
+
+        // Something to touch everywhere inside the list. A drag only reaches the
+        // ScrollRect if it starts on a raycast target, and Daylight's grouped
+        // lists draw their white cards without one - so a swipe that began on
+        // a card's margin or between two groups scrolled nothing at all.
+        Image catcher = viewport.gameObject.AddComponent<Image>();
+        catcher.color = new Color(0f, 0f, 0f, 0f);
+        catcher.raycastTarget = true;
 
         RectTransform content = Rect("Content", viewport);
         content.anchorMin = new Vector2(0f, 1f);

@@ -28,6 +28,10 @@ public class TabNavigationController : MonoBehaviour
     [Header("Chrome")]
     public GameObject bottomNav;
 
+    [Tooltip("The floating glass bar. When it is set it draws the open tab itself, " +
+             "and the labels, icons and pills below are not used.")]
+    public GlassTabBar glass;
+
     [Header("Tabs")]
     public SettingsTabController settingsTab;
 
@@ -114,6 +118,9 @@ public class TabNavigationController : MonoBehaviour
         if (bottomNav != null)
             bottomNav.SetActive(true);
 
+        if (glass != null)
+            glass.ShowActive((int)_tab, true);
+
         SetActive(mapPanel, panelToShow);
         SetActive(cameraPanel, panelToShow);
         SetActive(settingsPanel, panelToShow);
@@ -130,6 +137,9 @@ public class TabNavigationController : MonoBehaviour
 
     void ApplyTabColours()
     {
+        if (glass != null)
+            return;
+
         Apply(mapLabel, mapIcon, mapIndicator, _tab == Tab.Map);
         Apply(cameraLabel, cameraIcon, cameraIndicator, _tab == Tab.Camera);
         Apply(settingsLabel, settingsIcon, settingsIndicator, _tab == Tab.Settings);

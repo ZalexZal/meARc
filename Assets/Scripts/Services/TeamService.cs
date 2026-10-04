@@ -151,6 +151,9 @@ public class TeamService : MonoBehaviour
             Instance = null;
     }
 
+    /// <summary>The trail the team and board were last asked for.</summary>
+    public string World { get { return _world; } }
+
     /// <summary>Reads the team and the board for a trail, in that order.</summary>
     public void Load(string worldId)
     {

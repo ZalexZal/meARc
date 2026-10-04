@@ -106,6 +106,29 @@ public class MarkerQuestionView : MonoBehaviour
     /// <summary>Raised when the reader is done here and wants the sheet closed.</summary>
     public System.Action onDone;
 
+    [Header("Daylight v2")]
+    [Tooltip("Shown once answered: on to the next stop, which closes the sheet.")]
+    public Button nextButton;
+    public TextMeshProUGUI nextLabel;
+
+    [Tooltip("Shown while locked: the rest of the trail, which closes the sheet.")]
+    public Button exploreButton;
+    public TextMeshProUGUI exploreLabel;
+
+    [Tooltip("The verdict's own heading: \"Right · +10 points\", \"Not right\".")]
+    public TextMeshProUGUI bubbleTitle;
+    public Image bubbleIcon;
+    public Sprite rightSprite;
+    public Sprite wrongSprite;
+    public Sprite infoSprite;
+
+    [Tooltip("The countdown ring on the lock card: red, emptying as the wait runs out.")]
+    public Image lockArc;
+    public TextMeshProUGUI lockTitle;
+
+    /// <summary>Raised by Next stop and Explore: the reader is leaving the sheet.</summary>
+    public System.Action onLeave;
+
     void Awake()
     {
         if (checkButton != null)
@@ -131,6 +154,20 @@ public class MarkerQuestionView : MonoBehaviour
 
         if (finishedButton != null)
             finishedButton.onClick.AddListener(Finish);
+
+        if (nextButton != null)
+            nextButton.onClick.AddListener(Leave);
+
+        if (exploreButton != null)
+            exploreButton.onClick.AddListener(Leave);
+    }
+
+    void Leave()
+    {
+        if (onLeave != null)
+            onLeave();
+        else
+            Finish();
     }
 
     void OnEnable()
@@ -203,22 +240,49 @@ public class MarkerQuestionView : MonoBehaviour
     /// </summary>
     void ShowRule()
     {
+        // One line before the question: what it is worth and what a wrong
+        // answer costs. "10 points · a wrong answer locks it for 5 minutes".
+        var parts = new System.Collections.Generic.List<string>();
+
+        TrailService trails = TrailService.Instance;
+        bool scored = trails == null || trails.SelectedIsGame;
+
+        if (scored && _task.points > 0)
+            parts.Add(string.Format(AppStrings.Get("task.worthShort"), _task.points));
+
         WrongAnswerRule rule = _task.Rule;
-        bool worth = rule != WrongAnswerRule.Retry;
-
-        Set(ruleHolder, worth);
-
-        if (!worth || ruleLabel == null)
-            return;
 
         if (rule == WrongAnswerRule.Deduct)
-        {
-            ruleLabel.text = string.Format(AppStrings.Get("task.dedCap"), _task.deduct);
+            parts.Add(string.Format(AppStrings.Get("task.dedLine"), _task.deduct));
+        else if (rule == WrongAnswerRule.Lock)
+            parts.Add(string.Format(AppStrings.Get("task.lockLine"), Duration(_task.lock_seconds)));
+        else if (rule == WrongAnswerRule.Skip)
+            parts.Add(AppStrings.Get("task.skipLine"));
+
+        bool any = parts.Count > 0;
+        Set(ruleHolder, any);
+
+        if (!any || ruleLabel == null)
             return;
+
+        string line = string.Join(" · ", parts);
+        ruleLabel.text = char.ToUpper(line[0]) + line.Substring(1);
+    }
+
+    /// <summary>"5 minutes", "1 minute", "30 seconds".</summary>
+    static string Duration(int seconds)
+    {
+        if (seconds <= 0)
+            seconds = 60;
+
+        if (seconds % 60 == 0)
+        {
+            int minutes = seconds / 60;
+            return minutes == 1 ? AppStrings.Get("time.minute")
+                                : string.Format(AppStrings.Get("time.minutes"), minutes);
         }
 
-        ruleLabel.text = AppStrings.Get(
-            rule == WrongAnswerRule.Lock ? "task.lockCap" : "task.skipCap");
+        return string.Format(AppStrings.Get("time.seconds"), seconds);
     }
 
     void BuildOptions()
@@ -356,7 +420,7 @@ public class MarkerQuestionView : MonoBehaviour
 
             if (!string.IsNullOrWhiteSpace(said))
             {
-                Bubble(Postgrest.InWords(said), ThemeRole.StatusFair, false);
+                Verdict2(Postgrest.InWords(said), null, ThemeRole.StatusFair);
 
                 // The team sheet can be closed on the way in, and nothing on a
                 // question says where it went. Open it rather than describe it.
@@ -364,7 +428,7 @@ public class MarkerQuestionView : MonoBehaviour
                     DoorFlow.Instance.OpenTeam();
             }
             else
-                Bubble("task.offline", ThemeRole.TextSecondary);
+                Verdict2(AppStrings.Get("task.offline"), null, ThemeRole.TextSecondary);
 
             ReArm();
             ShowTheAnswer();
@@ -397,7 +461,7 @@ public class MarkerQuestionView : MonoBehaviour
         // looked at yet - and it was being drawn as a red "Wrong answer".
         if (result.verdict == MarkerTaskService.Verdict.PendingReview)
         {
-            Bubble(AppStrings.Get("task.review"), ThemeRole.StatusFair, false);
+            Verdict2(AppStrings.Get("task.review"), null, ThemeRole.StatusFair);
             ShowTheAnswer();
             Draw();
             return;
@@ -410,15 +474,15 @@ public class MarkerQuestionView : MonoBehaviour
 
         if (right)
         {
-            string text = !string.IsNullOrWhiteSpace(result.feedback)
-                ? result.feedback
-                : AppStrings.Get("task.correct");
-
+            // "Right · +10 points", and under it the creator's fact, which is
+            // the reward for having got there.
             int points = result.progress != null ? result.progress.points : 0;
-            if (points > 0)
-                text += "  " + string.Format(AppStrings.Get("task.awarded"), points);
+            string heading = points > 0
+                ? string.Format(AppStrings.Get("task.rightPts"), points)
+                : AppStrings.Get("task.right");
 
-            Bubble(text, ThemeRole.StatusGood, false);
+            Verdict2(heading, result.feedback, ThemeRole.StatusGood);
+            Haptics.Confirm();
             Draw();
             return;
         }
@@ -430,9 +494,17 @@ public class MarkerQuestionView : MonoBehaviour
             ? result.feedback
             : rule == WrongAnswerRule.Deduct && deducted > 0
                 ? string.Format(AppStrings.Get("task.dedMsg"), deducted)
-                : AppStrings.Get("task.wrong");
+                : null;
 
-        Bubble(message, ThemeRole.StatusPoor, false);
+        Haptics.Reject();
+
+        // A lock says itself on the lock card, with its countdown; a bubble
+        // saying "not right" above it would be the same news twice.
+        if (State().IsLocked)
+            Set(bubbleHolder, false);
+        else
+            Verdict2(AppStrings.Get("task.notRight"), message, ThemeRole.StatusPoor);
+
         Draw();
     }
 
@@ -542,7 +614,7 @@ public class MarkerQuestionView : MonoBehaviour
             return;
 
         if (hintsLabel != null)
-            hintsLabel.text = string.Format(AppStrings.Get("hint.button"), count);
+            hintsLabel.text = AppStrings.Get("hint.title");
     }
 
     void OpenHints()
@@ -579,6 +651,8 @@ public class MarkerQuestionView : MonoBehaviour
             Set(checkHolder, false);
             Set(lockHolder, false);
             Set(scoreHolder, false);
+            Set(nextButton != null ? nextButton.gameObject : null, false);
+            Set(exploreButton != null ? exploreButton.gameObject : null, false);
             return;
         }
 
@@ -608,10 +682,19 @@ public class MarkerQuestionView : MonoBehaviour
         bool scored = trails == null || trails.SelectedIsGame;
         bool worthSaying = scored && _task.points > 0;
 
-        Set(worthHolder, worthSaying);
+        // Said on the policy line above the question now; the chip stays off.
+        Set(worthHolder, false);
 
-        if (worthSaying && worthLabel != null)
-            worthLabel.text = string.Format(AppStrings.Get("task.worth"), _task.points);
+        // The footer: Check while it can be answered, the way on once it has
+        // been, the rest of the trail while it is locked.
+        Set(nextButton != null ? nextButton.gameObject : null, solved || progress.awaitingReview);
+        Set(exploreButton != null ? exploreButton.gameObject : null, locked && !solved);
+
+        if (nextLabel != null)
+            nextLabel.text = AppStrings.Get("task.next");
+
+        if (exploreLabel != null)
+            exploreLabel.text = AppStrings.Get("task.explore");
 
         // Sent for review is answered too. Check stayed live after "Sent. The
         // trail's creator will check it", inviting a second copy for them to read.
@@ -709,15 +792,80 @@ public class MarkerQuestionView : MonoBehaviour
         UpdateCountdown(progress);
     }
 
+    float _lockTotal;
+
     void UpdateCountdown(MarkerTaskService.MarkerProgress progress)
     {
+        float left = Mathf.Max(0f, progress.SecondsLeft);
+
+        // The whole wait, for the ring: the creator's setting where there is one,
+        // and otherwise the longest this lock has been seen to have left.
+        float total = _task != null && _task.lock_seconds > 0 ? _task.lock_seconds : 0f;
+        _lockTotal = Mathf.Max(_lockTotal, total, left);
+
+        if (lockArc != null)
+        {
+            lockArc.fillAmount = _lockTotal > 0f ? left / _lockTotal : 0f;
+            lockArc.color = ThemeManager.Get(ThemeRole.BadDot);
+        }
+
+        if (lockTitle != null)
+            lockTitle.text = AppStrings.Get("task.notRight");
+
         if (lockLabel == null)
             return;
 
-        int left = Mathf.CeilToInt(progress.SecondsLeft);
-        string clock = (left / 60) + ":" + (left % 60).ToString("00");
+        int whole = Mathf.CeilToInt(left);
+        string clock = (whole / 60) + ":" + (whole % 60).ToString("00");
+        string at = System.DateTime.Now.AddSeconds(whole).ToString("H:mm");
 
-        lockLabel.text = string.Format(AppStrings.Get("task.lockMsg"), clock);
+        lockLabel.text = string.Format(AppStrings.Get("task.lockBody"), clock, at);
+    }
+
+    /// <summary>
+    /// The verdict under the options: a heading, and under it the reason or the
+    /// fact, on a wash of the verdict's own colour.
+    /// </summary>
+    void Verdict2(string heading, string body, ThemeRole role)
+    {
+        if (bubbleTitle == null)
+        {
+            Bubble(string.IsNullOrWhiteSpace(body) ? heading : heading + "  " + body, role, false);
+            return;
+        }
+
+        Set(bubbleHolder, true);
+        bubbleTitle.text = heading;
+
+        Color colour = ThemeManager.Get(role);
+        bubbleTitle.color = role == ThemeRole.StatusGood ? colour : ThemeManager.Get(ThemeRole.TextPrimary);
+
+        if (bubbleLabel != null)
+        {
+            bool hasBody = !string.IsNullOrWhiteSpace(body);
+            Set(bubbleLabel.gameObject, hasBody);
+            bubbleLabel.text = hasBody ? body : string.Empty;
+            bubbleLabel.color = ThemeManager.Get(ThemeRole.TextSecondary);
+        }
+
+        if (bubbleIcon != null)
+        {
+            bubbleIcon.sprite = role == ThemeRole.StatusGood ? rightSprite
+                              : role == ThemeRole.StatusPoor ? wrongSprite
+                              : infoSprite;
+            bubbleIcon.color = colour;
+        }
+
+        if (bubbleEdge != null)
+            bubbleEdge.color = new Color(0f, 0f, 0f, 0f);
+
+        if (bubbleFill != null)
+        {
+            Color wash = role == ThemeRole.StatusGood ? ThemeManager.Get(ThemeRole.GoodTint)
+                       : role == ThemeRole.StatusPoor ? ThemeManager.Get(ThemeRole.BadTint)
+                       : ThemeManager.Get(ThemeRole.SurfaceAlt);
+            bubbleFill.color = wash;
+        }
     }
 
     void Bubble(string keyOrText, ThemeRole role, bool isKey = true)
