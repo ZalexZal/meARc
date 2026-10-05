@@ -6,7 +6,7 @@ The Unity project for **AR Trail**, city trails in augmented reality. The websit
 the database and the legal file are in
 [`noit-platform`](https://github.com/ZalexZal/noit-platform).
 
-**Package:** `com.alex.artrail` · **Version:** 0.6.1 (build 21) ·
+**Package:** `com.alex.artrail` · **Version:** 0.6.2 (build 22) ·
 **Unity** 6000.4.10f1 · **ARCore Geospatial** · **Website:**
 [artrails.netlify.app](https://artrails.netlify.app)
 
@@ -145,8 +145,9 @@ proven on a real phone and what still waits for a field test.
 **Map tab**
 - A street map across the whole screen (Stadia Maps Outdoors at double
   resolution, with shops, churches and banks named, because "past the bank,
-  then left" is a direction). Tiles are cached, so a street walked once works
-  without signal.
+  then left" is a direction). Tiles are kept on the phone for seven days, so a
+  street walked once works without signal, and the map never shows black while
+  it loads: a tile still coming shows a blurred piece of a coarser one.
 - At the top, the **trail pill**: the trail's name, its kind, how many stops are
   found and, on a game, the team's points. It opens your trails. Under it, on a
   game, the **team chip** with your team and its place, which opens the team.
@@ -421,7 +422,7 @@ flowchart TD
 | Cached | How |
 |---|---|
 | Stops near you | Last `markers_near` answer on disk, shown first on launch |
-| Map tiles | On disk after first sight, keyed by the full tile URL |
+| Map tiles | On disk after first sight, keyed by the full tile URL, for seven days (as long as the free Stadia plan allows); unpacked off the main thread, the ring just off screen fetched ahead |
 | A stop's contents | Saved as they arrive, used only when the network fails (a live edit wins when online) |
 | Photos | Disk first, always: a new upload is a new URL, so a kept copy is never stale |
 | Video, answers | Need signal, and say so |
@@ -473,7 +474,7 @@ Input System package stays at `activeInputHandler: Both`, because tapping AR
 objects uses legacy Input on purpose.
 
 **Android settings:**
-- Package `com.alex.artrail`, version 0.6.1 (21).
+- Package `com.alex.artrail`, version 0.6.2 (22).
 - Minimum Android 10 (API 29). Targets the newest installed SDK (API 36).
 - ARM64 only, IL2CPP.
 - ARCore is **optional**, so phones without it still get the map, the library
@@ -535,7 +536,7 @@ PROJECT.md, PROJECT-CONTEXT.md   the handbook of the predecessor app, AR Archite
 
 ## Version history
 
-AR Trail was built in thirteen versions between 26 August and 5 October 2026.
+AR Trail was built in fourteen versions between 26 August and 5 October 2026.
 Each one ended with something working end to end. The numbers below are the
 project's own names for those stages. The **Android build** column is what the
 app itself reported: `versionName` 0.1.0 until 23 September, 0.2.0 from 25
@@ -557,6 +558,7 @@ and 0.6 from 5 October.
 | 11 | 1 Oct | Loose ends, and a lock on every page | 0.4.2 (7) | |
 | 12 | 1–3 Oct | AR in the street, for real | 0.4.3 (8), 0.4.4 (9) | |
 | 13 | 3–5 Oct | Daylight: the new interface | **0.5.0 (10)** to 0.6.1 (21) | |
+| 14 | 5 Oct | One Walk, and a map that never goes black | 0.6.2 (22) | |
 
 ### Version 1: The gate (26–28 August)
 
@@ -1059,6 +1061,40 @@ coach during capture.
 
 Commits: app, 3–5 October
 
+### Version 14: One Walk, and a map that never goes black (5 October)
+
+The website was reworked (its README has the detail): the home page is a live
+3D night town that acts out Build, Walk and Find as it is scrolled, every page
+starts on the same town, creators have one way in through My trails, and the
+trail builder is five guided steps. In the app, the map:
+
+- **No more black while the map loads.** Panning showed black strips for half a
+  second or more, and a tab switch or a zoom reloaded the map from scratch.
+  - Tiles are unpacked off the main thread, several at a time, from the phone's
+    own copy wherever there is one.
+  - A tile that has not arrived shows a blurred piece of a coarser tile that has,
+    so no part of the map is ever empty.
+  - On a zoom the old tiles stay on screen until the new ones are ready.
+  - Behind everything is the map's own colour, not the app's background (which
+    is black in dark mode).
+  - The ring of tiles just off screen is fetched ahead, two at a time, whenever
+    nothing on screen is waiting.
+- **Measured on the phone:** a full screen from the phone's copy fills in
+  0.13–0.33 s and a new column in 0.03–0.07 s. Ground never seen before shows
+  the map's colour or a blurred tile until it is sharp, never black.
+- **A tile load could stall for good** if the tab was switched mid-load: stopped
+  downloads were never counted back. Leaving the map now cancels them cleanly,
+  and coming back asks again for anything missing.
+- **Kept tiles are deleted after seven days**, which is as long as the free
+  Stadia plan lets a phone keep them. Downloading whole trails for offline use
+  needs a paid plan and was left out.
+
+Still black for 2–3.5 seconds: the Camera tab the first time it opens after the
+app starts, while Android and ARCore switch the camera on. Later visits are
+instant.
+
+Commits: app and website, 5 October
+
 ## Status
 
 *As of 5 October 2026. The goal is a Google Play release; the date is not
@@ -1072,6 +1108,8 @@ deleted afterwards:
   accuracy).
 - A fresh install launches and joins a trail by code. The map draws, the camera
   works, and a stop opens at 11 m and stays shut at 472 m.
+- The map never goes black while it loads (0.6.2): a full screen from the
+  phone's copy in 0.13–0.33 s, and new ground shown blurred until it arrives.
 - A guest is upgraded to an account without losing the walk.
 - Multiple-choice and typed answers, cooldowns and a teammate's race are scored
   correctly.

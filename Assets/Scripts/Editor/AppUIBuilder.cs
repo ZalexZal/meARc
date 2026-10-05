@@ -1456,9 +1456,11 @@ const float ReferenceWidth = 1080f;
         RectTransform surface = UIFactory.Rect("MapSurface", panel);
         UIFactory.Stretch(surface);
 
-        // The pan gesture lands on this, so it needs a graphic even though it looks
-        // like the panel behind it.
-        UIFactory.Fill(surface, ThemeRole.Background).raycastTarget = true;
+        // The pan gesture lands on this, so it needs a graphic. Its colour is the
+        // map's own ground, set by the tile layer: where a tile has not arrived,
+        // the reader sees map, not the app's background - black in dark mode.
+        Image mapGround = UIFactory.Plain(surface, new Color(0.957f, 0.953f, 0.945f, 1f));
+        mapGround.raycastTarget = true;
         surface.gameObject.AddComponent<RectMask2D>();
 
         MapView map = surface.gameObject.AddComponent<MapView>();
@@ -1477,6 +1479,7 @@ const float ReferenceWidth = 1080f;
         tileLayer.map = map;
         tileLayer.tileParent = tiles;
         tileLayer.stadiaApiKey = StadiaKey;
+        tileLayer.ground = mapGround;
 
         RectTransform content = UIFactory.Rect("Content", surface);
         UIFactory.Stretch(content);
