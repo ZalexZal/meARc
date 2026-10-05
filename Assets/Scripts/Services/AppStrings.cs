@@ -759,6 +759,8 @@ public static class AppStrings
         { "team.members", "In the team" },
         { "badge.earned", "Earned" },
         { "badge.notYet", "Not earned yet" },
+        { "stop.untitledN", "Stop {0}" },
+        { "stop.untitled", "Untitled stop" },
     };
 
     // -------------------------------------------------------------- Bulgarian
@@ -1436,6 +1438,8 @@ public static class AppStrings
         { "team.members", "В отбора" },
         { "badge.earned", "Получена" },
         { "badge.notYet", "Още не е получена" },
+        { "stop.untitledN", "Спирка {0}" },
+        { "stop.untitled", "Спирка без име" },
     };
 
     /// <summary>

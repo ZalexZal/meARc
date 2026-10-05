@@ -144,6 +144,14 @@ public static class UIPreview
         SeedTrail();
 
         Shoot(canvas, rig, "01-map" + t, "MapPanel");
+
+        // The card swiped down to its one line. Nothing runs in a batch render,
+        // so the line is filled from the full card the stand-ins already wrote.
+        Compact(canvas, true);
+        Shoot(canvas, rig, "01b-map-compact" + t, "MapPanel");
+        Shoot(canvas, rig, "02b-camera-compact" + t, "CameraPanel");
+        Compact(canvas, false);
+
         Shoot(canvas, rig, "02-camera" + t, "CameraPanel");
 
         // The camera screen with something wrong with it.
@@ -1102,6 +1110,40 @@ public static class UIPreview
 
             Shoot(canvas, rig, "47-blocked" + t, "SettingsPanel");
             pages.ShowRoot();
+        }
+    }
+
+    static void Compact(Canvas canvas, bool on)
+    {
+        foreach (NextStopCard card in canvas.GetComponentsInChildren<NextStopCard>(true))
+        {
+            if (card.compactRow != null)
+                card.compactRow.SetActive(on);
+
+            foreach (GameObject row in card.fullRows)
+                if (row != null)
+                    row.SetActive(!on);
+
+            if (!on)
+                continue;
+
+            if (card.compactTitle != null && card.titleLabel != null)
+                card.compactTitle.text = card.titleLabel.text;
+
+            if (card.compactBadge != null && card.badge != null)
+                card.compactBadge.color = card.badge.color;
+
+            if (card.compactNumber != null && card.numberLabel != null)
+            {
+                card.compactNumber.text = card.numberLabel.text;
+                card.compactNumber.color = card.numberLabel.color;
+            }
+
+            if (card.compactMeta != null)
+                card.compactMeta.text = "180 m";
+
+            if (card.compactDot != null)
+                card.compactDot.gameObject.SetActive(false);
         }
     }
 

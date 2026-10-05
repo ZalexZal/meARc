@@ -21,6 +21,11 @@ using UnityEngine.UI;
 /// Which stop is next follows the trail: the creator's order for a guided or
 /// scored trail, the nearest unopened one for a freefall trail. Swipe the card
 /// up, or press All stops, for every stop.
+///
+/// Swiped down, or its grabber tapped, it shrinks to one line - the stop, and
+/// how far or "you're here" - and gives the map back. A tap or a swipe up
+/// brings it back, and so does arriving at a stop, once per stop, so "Open the
+/// stop" is there when it is wanted. The map's card and the camera's share it.
 /// </summary>
 public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
@@ -63,6 +68,20 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
     public Sprite cameraSprite;
     public Sprite infoSprite;
 
+    [Header("Compact")]
+    public GameObject compactRow;
+    public Button compactButton;
+    public Button handleButton;
+    [Tooltip("The full card's rows, hidden while it is compact.")]
+    public GameObject[] fullRows = new GameObject[0];
+    public Image compactBadge;
+    public TextMeshProUGUI compactNumber;
+    public Image compactTick;
+    public TextMeshProUGUI compactTitle;
+    public Image compactDot;
+    public BearingArrow compactArrow;
+    public TextMeshProUGUI compactMeta;
+
     BuildingData _next;
     BuildingData _shown;
     int _nextIndex;
@@ -82,8 +101,53 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
 
     public static event System.Action OnNextChanged;
 
+    static bool _compact;
+    static string _arrivedAt;
+    static event System.Action OnCompactChanged;
+
+    /// <summary>One line or the whole card. Shared by the map's card and the camera's.</summary>
+    public static bool IsCompact { get { return _compact; } }
+
+    public static void SetCompact(bool on)
+    {
+        if (_compact == on)
+            return;
+
+        _compact = on;
+        Haptics.Tick();
+
+        if (OnCompactChanged != null)
+            OnCompactChanged();
+    }
+
+    void ApplyCompact()
+    {
+        // The swipe that got here is still settling the card back to where the
+        // other size rested. Let the dock's layout place it instead: settling
+        // to the old place left a shrunk card floating over the map's credit.
+        if (_settle != null)
+        {
+            StopCoroutine(_settle);
+            _settle = null;
+        }
+
+        if (transform.parent is RectTransform dock)
+            LayoutRebuilder.MarkLayoutForRebuild(dock);
+
+        if (compactRow != null && compactRow.activeSelf != _compact)
+            compactRow.SetActive(_compact);
+
+        for (int i = 0; i < fullRows.Length; i++)
+        {
+            if (fullRows[i] != null && fullRows[i].activeSelf == _compact)
+                fullRows[i].SetActive(!_compact);
+        }
+    }
+
     void Awake()
     {
+        if (compactButton != null) compactButton.onClick.AddListener(() => SetCompact(false));
+        if (handleButton != null) handleButton.onClick.AddListener(() => SetCompact(!_compact));
         if (primaryButton != null) primaryButton.onClick.AddListener(() => Run(_primary));
         if (secondaryButton != null) secondaryButton.onClick.AddListener(() => Run(_secondary));
         if (iconButton != null) iconButton.onClick.AddListener(() => Run(_icon));
@@ -102,7 +166,9 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         GuidanceService.OnGuidanceChanged += Refresh;
         DiscoveryTracker.OnDiscoveryChanged += Refresh;
         ThemeManager.OnThemeChanged += Refresh;
+        OnCompactChanged += ApplyCompact;
 
+        ApplyCompact();
         Refresh();
     }
 
@@ -115,6 +181,7 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         GuidanceService.OnGuidanceChanged -= Refresh;
         DiscoveryTracker.OnDiscoveryChanged -= Refresh;
         ThemeManager.OnThemeChanged -= Refresh;
+        OnCompactChanged -= ApplyCompact;
 
         // Switched away mid-drag: rest where the layout put it.
         if (_settle != null)
@@ -228,8 +295,21 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
     {
         _settle = StartCoroutine(Settle());
 
-        if (_dragY > 110f)
+        // Up: a compact card comes back first; the full one opens every stop.
+        // Down: the full card shrinks to its one line.
+        if (_compact)
+        {
+            if (_dragY > 40f)
+                SetCompact(false);
+        }
+        else if (_dragY > 110f)
+        {
             Run(Action.List);
+        }
+        else if (_dragY < -60f)
+        {
+            SetCompact(true);
+        }
     }
 
     float _restY;
@@ -428,23 +508,34 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         Set(headLabel, head);
         DrawBadge(shown, false);
         Set(titleLabel, shown.DisplayName);
+        Set(compactTitle, shown.DisplayName);
+
+        // Arriving opens the card once, so Open the stop is in reach. Shrunk
+        // again at the same stop, it stays shrunk.
+        if (near && _arrivedAt != shown.buildingId)
+        {
+            _arrivedAt = shown.buildingId;
+            SetCompact(false);
+        }
 
         // The status line.
         if (!located || metres < 0d)
         {
             Status(StatusKind.None, AppStrings.Get("map.noLocation"), shown);
+            Compact(StatusKind.None, string.Empty, shown);
         }
         else if (near)
         {
             Status(StatusKind.Here, string.Format(AppStrings.Get("card.here"),
                                                   AppStrings.FormatDistance(metres, approximate)), shown);
+            Compact(StatusKind.Here, AppStrings.Get("list.here"), shown);
         }
         else
         {
             int minutes = Mathf.Max(1, Mathf.RoundToInt((float)(metres / 80d)));
-            Status(StatusKind.Far, string.Format(AppStrings.Get("card.walk"),
-                                                 AppStrings.FormatDistance(metres, approximate),
-                                                 minutes), shown);
+            string distance = AppStrings.FormatDistance(metres, approximate);
+            Status(StatusKind.Far, string.Format(AppStrings.Get("card.walk"), distance, minutes), shown);
+            Compact(StatusKind.Far, distance, shown);
         }
 
         // The actions.
@@ -470,7 +561,9 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         DrawBadge(null, true);
         Set(titleLabel, _routeCount == 1 ? AppStrings.Get("card.allFoundOne")
                                          : string.Format(AppStrings.Get("card.allFound"), _routeCount));
+        Set(compactTitle, titleLabel != null ? titleLabel.text : string.Empty);
         Status(StatusKind.Good, AppStrings.Get("card.completeBody"), null);
+        Compact(StatusKind.Good, string.Format(AppStrings.Get("chip.progress"), _routeCount, _routeCount), null);
 
         // "All stops" is already the link in the corner; the way on is another trail.
         Actions(Action.Trails, "card.another", false, Action.None, null, Action.None);
@@ -485,7 +578,9 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         Set(headLabel, string.Empty);
         DrawBadge(null, false);
         Set(titleLabel, AppStrings.Get(hasTrail ? "strip.loading" : "trails.choose"));
+        Set(compactTitle, titleLabel != null ? titleLabel.text : string.Empty);
         Status(StatusKind.None, string.Empty, null);
+        Compact(StatusKind.None, string.Empty, null);
         Actions(hasTrail ? Action.None : Action.Trails, hasTrail ? null : "card.trails", false,
                 Action.None, null, Action.None);
     }
@@ -528,6 +623,38 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         }
     }
 
+    /// <summary>The compact line's right end: how far, or green for here and done.</summary>
+    void Compact(StatusKind kind, string text, BuildingData target)
+    {
+        bool good = kind == StatusKind.Here || kind == StatusKind.Good;
+
+        if (compactMeta != null)
+        {
+            Set(compactMeta, text);
+            compactMeta.color = onCamera
+                ? (good ? new Color(0.188f, 0.82f, 0.345f) : new Color(0.63f, 0.63f, 0.65f))
+                : ThemeManager.Get(good ? ThemeRole.StatusGood : ThemeRole.TextMuted);
+        }
+
+        if (compactDot != null)
+        {
+            if (compactDot.gameObject.activeSelf != good)
+                compactDot.gameObject.SetActive(good);
+
+            compactDot.color = ThemeManager.Get(ThemeRole.GoodDot);
+        }
+
+        if (compactArrow != null)
+        {
+            bool arrow = kind == StatusKind.Far && target != null;
+            if (compactArrow.gameObject.activeSelf != arrow)
+                compactArrow.gameObject.SetActive(arrow);
+
+            if (arrow)
+                compactArrow.SetTarget(target);
+        }
+    }
+
     void Actions(Action primary, string primaryKey, bool primaryArrow,
                  Action secondary, string secondaryKey, Action icon)
     {
@@ -562,36 +689,42 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
     /// </summary>
     void DrawBadge(BuildingData stop, bool tick)
     {
-        if (badge == null)
+        PaintBadge(badge, numberLabel, badgeTick, stop, tick);
+        PaintBadge(compactBadge, compactNumber, compactTick, stop, tick);
+    }
+
+    static void PaintBadge(Image disc, TextMeshProUGUI number, Image tickImage, BuildingData stop, bool tick)
+    {
+        if (disc == null)
             return;
 
         Color colour = stop != null ? MarkerPalette.Resolve(stop) : ThemeManager.Get(ThemeRole.GoodDot);
-        badge.color = colour;
+        disc.color = colour;
 
         bool showNumber = !tick && stop != null && stop.step > 0;
-        if (numberLabel != null)
+        if (number != null)
         {
-            if (numberLabel.gameObject.activeSelf != showNumber)
-                numberLabel.gameObject.SetActive(showNumber);
+            if (number.gameObject.activeSelf != showNumber)
+                number.gameObject.SetActive(showNumber);
 
             if (showNumber)
             {
-                numberLabel.text = stop.step.ToString();
-                numberLabel.color = MarkerPalette.OnColour(colour);
+                number.text = stop.step.ToString();
+                number.color = MarkerPalette.OnColour(colour);
             }
         }
 
-        if (badgeTick != null)
+        if (tickImage != null)
         {
             bool show = tick || (stop != null && stop.step <= 0);
-            if (badgeTick.gameObject.activeSelf != show)
-                badgeTick.gameObject.SetActive(show);
+            if (tickImage.gameObject.activeSelf != show)
+                tickImage.gameObject.SetActive(show);
 
-            badgeTick.color = MarkerPalette.OnColour(colour);
+            tickImage.color = MarkerPalette.OnColour(colour);
 
             // A stop with no number gets a plain dot rather than a tick: the tick
             // means done, and this one is not.
-            badgeTick.enabled = tick;
+            tickImage.enabled = tick;
         }
     }
 

@@ -158,7 +158,21 @@ public class BuildingData : ScriptableObject
         get
         {
             string chosen = Pick(buildingName, buildingNameBg);
-            return string.IsNullOrWhiteSpace(chosen) ? name : chosen;
+            if (!string.IsNullOrWhiteSpace(chosen))
+                return chosen;
+
+            // A stop from the server is named by its id, and a creator can leave
+            // the title empty: the walker was shown "765d4520-4758-..." in a
+            // toast. Its number says more, and nothing at all is better than a
+            // database key.
+            if (string.IsNullOrWhiteSpace(name) || System.Guid.TryParse(name, out _))
+            {
+                return step > 0
+                    ? string.Format(AppStrings.Get("stop.untitledN"), step)
+                    : AppStrings.Get("stop.untitled");
+            }
+
+            return name;
         }
     }
 

@@ -1741,6 +1741,79 @@ const float ReferenceWidth = 1080f;
         grip.raycastTarget = false;
         PillFit(grip, 14f);
 
+        // A thumb-sized target round the grabber, reaching into the padding
+        // above it and the gap below.
+        RectTransform handleHit = UIFactory.Rect("Hit", handleRow);
+        UIFactory.Stretch(handleHit);
+        handleHit.offsetMin = new Vector2(0f, -28f);
+        handleHit.offsetMax = new Vector2(0f, 17f);
+        Image handleCatch = handleHit.gameObject.AddComponent<Image>();
+        handleCatch.color = new Color(0f, 0f, 0f, 0f);
+        view.handleButton = handleHit.gameObject.AddComponent<Button>();
+        view.handleButton.targetGraphic = handleCatch;
+        view.handleButton.transition = Selectable.Transition.None;
+        Ignore(handleHit);
+
+        // --- compact: the whole card in one line, under the grabber
+        //
+        //   (1)  The Bezisten                        ➤ 299 m
+        //
+        // Swiped down to, and back up from. Its own row rather than the full
+        // card's rows squeezed, so neither has to compromise for the other.
+        RectTransform compact = UIFactory.Rect("Compact", card);
+        UIFactory.Size(compact.gameObject, 72f);
+        HorizontalLayoutGroup compactRow = UIFactory.HorizontalStack(compact, 28f);
+        compactRow.childAlignment = TextAnchor.MiddleLeft;
+        Image compactCatch = compact.gameObject.AddComponent<Image>();
+        compactCatch.color = new Color(0f, 0f, 0f, 0f);
+        view.compactButton = compact.gameObject.AddComponent<Button>();
+        view.compactButton.targetGraphic = compactCatch;
+        view.compactButton.transition = Selectable.Transition.None;
+        view.compactRow = compact.gameObject;
+
+        RectTransform smallBadge = UIFactory.Rect("Badge", compact);
+        UIFactory.Size(smallBadge.gameObject, 72f, 72f).flexibleWidth = 0f;
+        view.compactBadge = UIFactory.Plain(smallBadge, ThemeManager.Get(ThemeRole.Accent), UIShape.Circle);
+        view.compactBadge.raycastTarget = false;
+        BadgeEdge(smallBadge, dark);
+
+        view.compactNumber = UIFactory.Text("Number", smallBadge, Caption, ThemeRole.OnAccent,
+                                            TextAlignmentOptions.Center, null, FontStyles.Bold);
+        UIFactory.Stretch(view.compactNumber.rectTransform);
+        Unthemed(view.compactNumber.gameObject);
+
+        view.compactTick = Icon(smallBadge, AppIcon.Check, 36f, ThemeRole.OnAccent);
+        Unthemed(view.compactTick.gameObject);
+        view.compactTick.gameObject.SetActive(false);
+
+        view.compactTitle = CardText("Title", compact, Body, dark ? darkInk : (Color?)null,
+                                     ThemeRole.TextPrimary, TextAlignmentOptions.Left, true);
+        UIFactory.Flexible(view.compactTitle.gameObject);
+        view.compactTitle.textWrappingMode = TextWrappingModes.NoWrap;
+        view.compactTitle.overflowMode = TextOverflowModes.Ellipsis;
+
+        RectTransform compactMeta = UIFactory.Rect("Meta", compact);
+        HorizontalLayoutGroup metaRow = UIFactory.HorizontalStack(compactMeta, 14f);
+        metaRow.childAlignment = TextAnchor.MiddleRight;
+        metaRow.childForceExpandWidth = false;
+        LayoutElement metaSize = compactMeta.gameObject.AddComponent<LayoutElement>();
+        metaSize.flexibleWidth = 0f;
+
+        RectTransform compactDot = UIFactory.Rect("Dot", compactMeta);
+        UIFactory.Size(compactDot.gameObject, 22f, 22f).flexibleWidth = 0f;
+        view.compactDot = UIFactory.Plain(compactDot, ThemeManager.Get(ThemeRole.GoodDot), UIShape.Circle);
+        view.compactDot.raycastTarget = false;
+
+        view.compactArrow = Arrow(compactMeta, location, dark ? BearingArrow.Frame.DeviceRelative
+                                                              : BearingArrow.Frame.NorthUp, 36f);
+
+        view.compactMeta = CardText("Label", compactMeta, Secondary, dark ? darkMuted : (Color?)null,
+                                    ThemeRole.TextMuted, TextAlignmentOptions.Right, false);
+        view.compactMeta.textWrappingMode = TextWrappingModes.NoWrap;
+        Unthemed(view.compactMeta.gameObject);
+
+        compact.gameObject.SetActive(false);
+
         // --- head: where this stop sits in the trail, and the way to all of them
         RectTransform head = UIFactory.Rect("Head", card);
         UIFactory.Size(head.gameObject, 100f);
@@ -1874,6 +1947,9 @@ const float ReferenceWidth = 1080f;
             Unthemed(view.iconImage.gameObject);
             view.iconImage.color = darkInk;
         }
+
+        // What the compact row stands in for.
+        view.fullRows = new[] { head.gameObject, main.gameObject, actions.gameObject };
 
         EditorUtility.SetDirty(view);
         return view;
