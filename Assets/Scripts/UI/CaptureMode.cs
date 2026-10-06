@@ -505,7 +505,7 @@ public class CaptureMode : MonoBehaviour
 
     void CycleShape()
     {
-        if (_data == null || _busy)
+        if (_data == null || _busy || ShapeOf(_data) == "model")
             return;
 
         int at = System.Array.IndexOf(Shapes, ShapeOf(_data));
@@ -666,6 +666,10 @@ public class CaptureMode : MonoBehaviour
         if (shapeLabel != null)
             shapeLabel.text = string.Format(AppStrings.Get("capture.shape"),
                                             AppStrings.Get("shape." + ShapeOf(_data)));
+
+        // A stop's own model is chosen on the website, not cycled here.
+        if (shapeButton != null)
+            shapeButton.gameObject.SetActive(ShapeOf(_data) != "model");
 
         if (statusLabel == null)
             return;

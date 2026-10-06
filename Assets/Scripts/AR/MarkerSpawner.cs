@@ -51,6 +51,11 @@ public class MarkerSpawner : MonoBehaviour
     [Tooltip("ARCore only tracks a limited number of anchors well. Nearest win.")]
     public int maxActiveMarkers = 20;
 
+    [Tooltip("A stop with its own 3D model stands as the model this close, and as a " +
+             "pin beyond. A model is real-size, so farther off it is a speck anyway, " +
+             "and only the nearest few are held in memory.")]
+    public double modelRadiusMetres = 60d;
+
     [Header("Debug")]
     public bool verboseLogging;
 
@@ -58,6 +63,7 @@ public class MarkerSpawner : MonoBehaviour
     {
         public ARGeospatialAnchor anchor;
         public GameObject marker;
+        public bool asModel;
     }
 
     readonly Dictionary<string, Placed> _placed = new Dictionary<string, Placed>();
@@ -72,6 +78,7 @@ public class MarkerSpawner : MonoBehaviour
             locationService.OnPoseUpdated += Sync;
 
         BuildingDatabase.OnBuildingsChanged += HandleBuildingsChanged;
+        ModelCache.OnModelReady += Replace;
 
         LightFromAmbientColour();
 
@@ -101,6 +108,7 @@ public class MarkerSpawner : MonoBehaviour
             locationService.OnPoseUpdated -= Sync;
 
         BuildingDatabase.OnBuildingsChanged -= HandleBuildingsChanged;
+        ModelCache.OnModelReady -= Replace;
     }
 
     /// <summary>
@@ -182,10 +190,25 @@ public class MarkerSpawner : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// True when this stop should stand as its own model: it has one, the file
+    /// is on the phone, and the reader is near. A little slack once it is up,
+    /// so it does not swap back and forth at the edge.
+    /// </summary>
+    bool WantsModel(BuildingData building, bool already)
+    {
+        return building.markerStyle == "model" &&
+               ModelCache.FileFor(building.buildingId) != null &&
+               locationService.DistanceMetresTo(building) <= modelRadiusMetres + (already ? 10d : 0d);
+    }
+
     IEnumerator Resolve(BuildingData building)
     {
+        // A model stands on the ground; a pin floats at eye height.
+        bool asModel = WantsModel(building, false);
+
         ResolveAnchorOnTerrainPromise promise = anchorManager.ResolveAnchorOnTerrainAsync(
-            building.latitude, building.longitude, altitudeAboveTerrain, Quaternion.identity);
+            building.latitude, building.longitude, asModel ? 0d : altitudeAboveTerrain, Quaternion.identity);
 
         yield return promise;
 
@@ -208,7 +231,10 @@ public class MarkerSpawner : MonoBehaviour
             yield break;
         }
 
-        GameObject marker = Instantiate(ChoosePrefab(building), result.Anchor.transform);
+        GameObject marker = asModel
+            ? new GameObject("Model " + building.buildingId)
+            : Instantiate(ChoosePrefab(building));
+        marker.transform.SetParent(result.Anchor.transform, false);
         marker.transform.localPosition = Vector3.zero;
         marker.transform.localRotation = Quaternion.identity;
 
@@ -230,10 +256,40 @@ public class MarkerSpawner : MonoBehaviour
         _placed[building.buildingId] = new Placed
         {
             anchor = result.Anchor,
-            marker = marker
+            marker = marker,
+            asModel = asModel
         };
 
         Log($"Placed \"{building.DisplayName}\".");
+
+        if (asModel)
+            yield return ShowModel(building, marker);
+    }
+
+    IEnumerator ShowModel(BuildingData building, GameObject holder)
+    {
+        ModelCache.Model model = ModelCache.For(building.buildingId);
+        string file = ModelCache.FileFor(building.buildingId);
+        if (model == null || file == null)
+        {
+            Release(building.buildingId);
+            yield break;
+        }
+
+        System.Threading.Tasks.Task<bool> loading =
+            holder.AddComponent<ModelView>().Show(file, model.height_m, model.heading_deg);
+        yield return new WaitUntil(() => loading.IsCompleted);
+
+        // Taken down while it loaded: nothing to do.
+        if (holder == null)
+            yield break;
+
+        if (!loading.Result)
+        {
+            // A pin, from the next sync on.
+            ModelCache.MarkBroken(building.buildingId);
+            Release(building.buildingId);
+        }
     }
 
     void ReleaseDistant()
@@ -244,8 +300,11 @@ public class MarkerSpawner : MonoBehaviour
         {
             BuildingData building = BuildingDatabase.GetById(pair.Key);
 
+            // Also when it should change between pin and model: taken down
+            // here, it is put up again the other way on the same sync.
             if (building == null ||
-                locationService.DistanceMetresTo(building) > releaseRadiusMetres)
+                locationService.DistanceMetresTo(building) > releaseRadiusMetres ||
+                pair.Value.asModel != WantsModel(building, pair.Value.asModel))
             {
                 stale.Add(pair.Key);
             }

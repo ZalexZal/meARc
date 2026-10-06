@@ -494,7 +494,11 @@ public class InfoPanelController : MonoBehaviour
     {
         titleText.text = data.DisplayName;
         metaText.text = BuildMetaLine(data);
-        descriptionText.text = data.Description;
+        // The credit a model's licence asks for, under the stop's own words.
+        string credit = ModelCache.CreditFor(data.buildingId);
+        descriptionText.text = string.IsNullOrEmpty(credit)
+            ? data.Description
+            : (string.IsNullOrWhiteSpace(data.Description) ? credit : data.Description + "\n\n" + credit);
         currentLink = data.ExternalLink;
 
         learnMoreButton.SetActive(!string.IsNullOrWhiteSpace(currentLink));

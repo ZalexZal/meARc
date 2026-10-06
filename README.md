@@ -6,7 +6,7 @@ The Unity project for **AR Trail**, city trails in augmented reality. The websit
 the database and the legal file are in
 [`noit-platform`](https://github.com/ZalexZal/noit-platform).
 
-**Package:** `com.alex.artrail` · **Version:** 0.6.2 (build 22) ·
+**Package:** `com.alex.artrail` · **Version:** 0.6.3 (build 23) ·
 **Unity** 6000.4.10f1 · **ARCore Geospatial** · **Website:**
 [artrails.netlify.app](https://artrails.netlify.app)
 
@@ -181,6 +181,10 @@ proven on a real phone and what still waits for a field test.
 - A **radar** disc: north-up, every stop as a dot, a wedge for the way you face.
   It opens the stops sheet.
 - The same next-stop card, dark over the camera, and shrinking the same way.
+- A stop with its **own 3D model** stands as that model within 60 m: on the
+  ground, at the height its creator gave it, facing the way they set, its
+  animation looping. Farther off, or until the file has downloaded, it is a
+  pin. Whoever made the model is credited under the stop's text.
 - **Tapping the AR marker is what counts as finding a stop.**
 
 **A stop**
@@ -256,7 +260,8 @@ proven on a real phone and what still waits for a field test.
   capture bar. Its words are written on the website, which publishes it.
 - **Shape**: the capture bar switches a stop between pin, sphere, cone, cube and
   sign, saved at once and swapped in the camera, so the choice is made looking at
-  the thing itself.
+  the thing itself. A stop with its own 3D model keeps it: the button is hidden
+  there.
 
 ### For a creator (the website)
 
@@ -270,7 +275,10 @@ proven on a real phone and what still waits for a field test.
       **shape** the stop takes in the camera: pin, sphere, cone, cube, or a
       **sign** with up to 80 characters of words on it in each language.
     - **Place**: coordinates and an arrival radius, with a warning when radii
-      overlap.
+      overlap. The shape can also be **the stop's own 3D model**: a `.glb` up
+      to 25 MB, checked in the browser and previewed in 3D, with its height
+      (0.2–10 m), the way it faces, and who made it: you, or somebody else,
+      whose name, licence and link are then required.
     - **Answer**: kind, options, accepted spellings, points, the wrong-answer
       rule and the afterword. The rule is one of **retry**, **lock** (a cooldown,
       15 s by default), **deduct** (points off what the stop is worth) or
@@ -283,7 +291,8 @@ proven on a real phone and what still waits for a field test.
 - **A trail from a spreadsheet**: one row per stop (CSV or pasted straight from
   Excel), checked row by row in your language before anything is imported, with a
   template that has an example row filled in. The `shape` column takes the
-  same five shapes, and `sign_bg` / `sign_en` the words on a sign.
+  same five shapes, and `sign_bg` / `sign_en` the words on a sign. A model
+  needs a file, so it is added in the builder.
 - **Building together**: an invite link makes someone an editor. Editors see
   each other live, and a save over someone's newer version is refused instead of
   silently lost.
@@ -315,6 +324,9 @@ proven on a real phone and what still waits for a field test.
   My trails: what was removed, when, the reasons, the note, the rule, that a
   person decided, and how to contest it (the EU Digital Services Act's "statement
   of reasons").
+- A trail with its own 3D models shows each one in the queue with its credit,
+  size, a link to the file and a 3D preview, so the licence is checked before
+  the trail is listed.
 - Block a player from the queue. Rate limits stop scripts: 200 stops and 20
   trails per person per day.
 
@@ -352,7 +364,9 @@ flowchart TD
     BD --> SP["MarkerSpawner<br/>≤ 500 m, ≤ 20 at once"]
     SP --> AN["ARCore terrain anchor<br/>1.5 m above the real ground"]
     AN --> MV["MarkerView<br/>pin, sphere, cone, cube or sign<br/>on a ring, creator's colour"]
+    AN --> MOV["ModelView<br/>a creator's own .glb, within 60 m<br/>file from ModelCache (trail_models)"]
     MV -- tap --> IP["InfoPanelController"]
+    MOV -- tap --> IP
     MAP -- tap --> IP
     IP --> MD["MarkerDetailService<br/>marker_detail: pieces, question, hints"]
     IP --> Q["MarkerQuestionView"]
@@ -374,6 +388,14 @@ flowchart TD
    anchors and releases them past 650 m, a gap that stops flicker at the
    boundary. Failures indoors or before localisation are expected, and the next
    tick retries.
+   A stop with its creator's own 3D model is anchored on the ground instead
+   (0 m) once its file is on the phone and the walker is within 60 m.
+   `ModelCache` downloads a trail's models from `trail_models` once, keyed
+   by when they were last changed. `ModelView` loads one with glTFast, scales
+   it to its height, puts the middle of its base on the anchor and turns it to
+   its heading. The anchor's axes are east, up and south, so a glTF front
+   (+Z) is turned by 180° minus the heading. Past 70 m, or if the file will
+   not load, it goes back to being a pin.
 4. **Hiding.** `OcclusionService` hides a marker behind real buildings using
    Streetscape Geometry meshes, stopping 5 m short so a stop's own facade doesn't
    hide it. Depth covers people and cars nearby. **It fails open:** no mesh means
@@ -461,10 +483,10 @@ Seeing it without a phone:
 | Folder | What lives there |
 |---|---|
 | `Scripts/` | Inherited core: `BuildingData` (a stop in memory), `GeoMath`, `CubeTapManager` / `TappableObject` (tapping AR objects, legacy Input on purpose), `InfoPanelController` (the stop sheet), `TabNavigationController` |
-| `Scripts/AR/` | `MarkerSpawner`, `MarkerView`, `OcclusionService` |
-| `Scripts/Services/` | Backend: `SupabaseConfig`, `SupabaseAuth`, `Postgrest`, `RemoteMarkerSource`, `MarkerDetailService`, `MarkerTaskService`, `TrailService`, `TeamService`, `ProfileService`, `TermsService`, `ConsentService`. Device: `UserLocationService`, `AndroidPermissions`, `AppLifecycleWatcher`, `FrameRate`. Behaviour: `DemoTrail`, `DiscoveryTracker`, `GuidanceService`, `ProximityAlerts`, `HiddenMarkers`, `AccountScope`. Look: `AppStrings`, `ThemeManager`, `MarkerPalette`, `MapInk` |
+| `Scripts/AR/` | `MarkerSpawner`, `MarkerView`, `ModelView` (a creator's own model), `OcclusionService` |
+| `Scripts/Services/` | Backend: `SupabaseConfig`, `SupabaseAuth`, `Postgrest`, `RemoteMarkerSource`, `ModelCache`, `MarkerDetailService`, `MarkerTaskService`, `TrailService`, `TeamService`, `ProfileService`, `TermsService`, `ConsentService`. Device: `UserLocationService`, `AndroidPermissions`, `AppLifecycleWatcher`, `FrameRate`. Behaviour: `DemoTrail`, `DiscoveryTracker`, `GuidanceService`, `ProximityAlerts`, `HiddenMarkers`, `AccountScope`. Look: `AppStrings`, `ThemeManager`, `MarkerPalette`, `MapInk` |
 | `Scripts/UI/` | Every screen and control: map (`MapView`, `MapTileLayer`, `MapPinView`, `NextStopCard`, `TrailChipView`, `TeamChipView`, `UserDotView`), camera (`CameraTabController`, `CameraRadar`, `CaptureMode`, `VpsIndicatorController`, `CoachSweep`, `EdgeIndicator`, `ArHelpView`), sheets (`SheetDetents`, `SheetDragHandle`, `SheetScrollHandoff`, `SheetMenu`, `PagePush`, `StopListView`), doors (`DoorFlow`, `CodeDoor`, `TrailsDoor`, `TeamDoorView`, `ConsentDoorView`, `AgeChoiceView`), stop (`MarkerPieceController`, `MarkerQuestionView`, `HintSheetView`, `MediaPlayerView`, `ReportSheetView`), Profile (`ProfileView`, `Badges`, `BadgeSheetView`, `ThemeChoiceView`, `LanguageChoiceView`, `SwitchView`, `AccountSectionView`, `AccountSecurityView`, `BlockedListView`, `DeleteAccountView`), shared (`PillShape`, `SideDrag`, `GlassTabBar`, `Haptics`) |
-| `Scripts/Editor/` | `AppUIBuilder`, `UIFactory`, `UIIcons`, `UISprites`, `AppFonts`, `AppIcons`, `BuildApk`, `UIPreview`, `MarkerPreview`, `MarkerShapes`, `CacheCheck`, `AccountScopeCheck`, `AndroidPermissionsManifest` |
+| `Scripts/Editor/` | `AppUIBuilder`, `UIFactory`, `UIIcons`, `UISprites`, `AppFonts`, `AppIcons`, `BuildApk`, `UIPreview`, `MarkerPreview` (also `ShootModels`), `MarkerShapes`, `ModelShaders`, `CacheCheck`, `AccountScopeCheck`, `AndroidPermissionsManifest` |
 
 ## Building
 
@@ -474,7 +496,7 @@ Input System package stays at `activeInputHandler: Both`, because tapping AR
 objects uses legacy Input on purpose.
 
 **Android settings:**
-- Package `com.alex.artrail`, version 0.6.2 (22).
+- Package `com.alex.artrail`, version 0.6.3 (23).
 - Minimum Android 10 (API 29). Targets the newest installed SDK (API 36).
 - ARM64 only, IL2CPP.
 - ARCore is **optional**, so phones without it still get the map, the library
@@ -501,7 +523,13 @@ The same actions are under *Tools → Build* in the editor. `BuildApk`:
 
 It **refuses to build** when a keystore is configured but no password is given,
 rather than handing back a debug-signed APK that looks like a release. The IL2CPP
-step needs several GB of RAM, so don't run it alongside other heavy builds.
+step needs several GB of RAM, so don't run it alongside other heavy builds. On
+an 8 GB machine set `BEE_BUILD_THREADS=1`: since glTFast was added, the native
+link runs out of memory beside IL2CPP otherwise. A build then takes about 35
+minutes.
+
+Before building, `BuildApk` also runs `ModelShaders.Make`, which writes any
+missing placeholder material that keeps glTFast's shaders in the player.
 
 **Keys in the app, and why that's fine:**
 - The Supabase URL and anon key (`SupabaseConfig`) are public by design. Every
@@ -536,7 +564,7 @@ PROJECT.md, PROJECT-CONTEXT.md   the handbook of the predecessor app, AR Archite
 
 ## Version history
 
-AR Trail was built in fourteen versions between 26 August and 5 October 2026.
+AR Trail was built in fifteen versions between 26 August and 6 October 2026.
 Each one ended with something working end to end. The numbers below are the
 project's own names for those stages. The **Android build** column is what the
 app itself reported: `versionName` 0.1.0 until 23 September, 0.2.0 from 25
@@ -559,6 +587,7 @@ and 0.6 from 5 October.
 | 12 | 1–3 Oct | AR in the street, for real | 0.4.3 (8), 0.4.4 (9) | |
 | 13 | 3–5 Oct | Daylight: the new interface | **0.5.0 (10)** to 0.6.1 (21) | |
 | 14 | 5 Oct | One Walk, and a map that never goes black | 0.6.2 (22) | |
+| 15 | 5–6 Oct | A model of your own | 0.6.3 (23) | 0055 |
 
 ### Version 1: The gate (26–28 August)
 
@@ -1095,9 +1124,68 @@ instant.
 
 Commits: app and website, 5 October
 
+### Version 15: A model of your own (5–6 October)
+
+A creator can now stand their own 3D model at a stop: a statue, an artefact, a
+character. It is the sixth shape, as designed in version 11.
+
+- **On the website**, Place → **3D model**. The file is checked in the browser
+  before anything is uploaded (`web/src/lib/glb.ts`): a GLB, up to 25 MB and
+  300,000 triangles, textures up to 4096 px, nothing compressed in a way the
+  phone cannot read (Draco, meshopt, KTX2) and no outside files. The result is
+  one line ("0.2 MB · 4,886 triangles · moves"), and a refusal says why. The
+  model turns in a 3D preview (Google's model-viewer, loaded only when a model
+  is shown). Its height starts at the model's own if that makes sense in a
+  street, otherwise 1 m. Its heading is set on a compass, and the preview turns
+  with it.
+- **The credit**: "I made it", or somebody else's name, licence (CC0, CC BY 4.0,
+  CC BY-SA 4.0 or another) and link. Either way, a tick that you have the right
+  to use it. The model is saved with Next like the rest of the stop, and a
+  replaced file is deleted.
+- **In the database (0055)**: `marker_models`, one row per model stop. A trigger
+  checks that the file really is in the stop's own folder and under 25 MB, and
+  takes its size from storage rather than the browser. Models count against the
+  trail's 200 MB and go with the stop, the trail or the account, like photos.
+  `trail_models` gives the app a trail's models with exactly the visibility
+  `markers_near` has.
+- **Deleting a stop in the builder takes its files with it.** It used to leave
+  them in storage.
+- **Review** shows each model with its credit, size, a link to the file and a
+  preview, so the licence is checked before a trail is listed.
+- **In the app (0.6.3, build 23)**: when a trail has model stops, their files
+  are downloaded once and kept on the phone (`ModelCache`); a replaced model is
+  a new file. Within 60 m the stop stands as the model (`ModelView`, with Unity
+  glTFast): on the ground, at its height, facing its heading, its first
+  animation looping, hidden behind buildings like every stop, and tapped like
+  one. Farther off, before the file arrives, or if it will not load, it is a
+  pin. Cameras and lights inside a file are ignored. The credit appears under
+  the stop's text, and the camera's Shape button is hidden on a model stop.
+- **The shaders stay in the build**: glTFast makes its materials at runtime, so
+  nothing referenced its shaders and a build would strip them. 33 placeholder
+  materials in `Assets/Resources/ModelShaders`, one per combination it uses,
+  keep them (`ModelShaders`, run by `BuildApk`).
+- **Two test models**: a hot-air balloon made in Blender for this (3.1 m, a
+  6-second float) and Khronos's Fox (CC BY 4.0, by PixelMannen, rigged by
+  tomkranis).
+
+Tested against the live database with throwaway accounts, deleted afterwards:
+the upload, a file outside the stop's folder refused, the size taken from
+storage, a guest walker seeing and downloading the model, and a stranger
+changing nothing. The builder was tested in a browser at computer and phone
+widths. Both models were loaded in the editor through the app's own loader: the
+balloon stands at 0.00–3.10 m with its loop, and the Fox faces its heading. The
+build is installed on the phone and starts cleanly; the outdoor test is on
+6 October.
+
+Building the app now takes one build step at a time on the 8 GB laptop
+(`BEE_BUILD_THREADS=1`, about 35 minutes). With glTFast added, the native link
+ran out of memory beside IL2CPP.
+
+Commits: website 5 October, app 6 October
+
 ## Status
 
-*As of 5 October 2026. The goal is a Google Play release; the date is not
+*As of 6 October 2026. The goal is a Google Play release; the date is not
 set.*
 
 **Proven.** Each of these has been checked on a Samsung Galaxy A54 (Android 16),
@@ -1127,6 +1215,9 @@ deleted afterwards:
 - Outdoors: Stop here, switching a shape from the camera, and the next-stop
   card opening by itself on arrival.
 - Two phones racing at one stop outdoors.
+- Creators' own 3D models in the street (0.6.3): the switch between pin and
+  model at 60 m, colours, heading and tapping. The upload and every server
+  check are proven on the live site.
 
 **Waiting on the operator:**
 - An email service in Supabase, so email confirmation and parent emails reach
@@ -1150,7 +1241,7 @@ deleted afterwards:
 | 6 Public library with an approval queue | ✅ | Versions 3, 5 |
 | 7 Capture mode | ✅ built | Versions 6 and 9 (add a stop, shape), outdoor test pending |
 | 8 Competition mode with server-side answers and anti-spoofing | ✅ | Versions 3, 6 |
-| 9 Creators' own 3D models | 🟡 started | Version 9: five built-in shapes; uploads designed (version 11), built after the outdoor test |
+| 9 Creators' own 3D models | ✅ built | Version 9: five built-in shapes; version 15: uploads, checks, credit and the model in the camera. Outdoor test pending |
 | 10 Store preparation | 🟡 | Built; the operator's steps remain |
 | 11 iPhone | ⏸ | Needs a Mac |
 
@@ -1198,7 +1289,8 @@ the commits that were written together say so.
 
 Maps © Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors (app);
 OpenFreeMap © OpenStreetMap contributors (website). AR by Google ARCore. Backend
-by Supabase. Typefaces Inter (app), Unbounded, Onest and JetBrains Mono (website), all
+by Supabase. Creators' 3D models are loaded with Unity glTFast (app) and
+previewed with Google's model-viewer (website), both under the Apache License 2.0. Typefaces Inter (app), Unbounded, Onest and JetBrains Mono (website), all
 under the SIL Open Font License.
 
 Both repositories are private, and no licence to reuse the code is granted.

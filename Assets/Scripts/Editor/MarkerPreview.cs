@@ -192,6 +192,118 @@ public static class MarkerPreview
             }
         }
 
+        Photograph(cam, from, pitch, name);
+
+        for (int i = 0; i < pins.Length; i++)
+            Object.DestroyImmediate(pins[i]);
+    }
+
+    /// <summary>
+    /// Creators' own models, loaded through the same ModelView the phone uses,
+    /// standing on the ground at the height and heading the website saved.
+    /// Runs without -quit, because glTFast loads asynchronously; it exits by
+    /// itself, 0 when every model loaded.
+    ///
+    ///   set ARTRAIL_MODELS=&lt;folder with hot-air-balloon.glb and Fox.glb&gt;
+    ///   Unity.exe -batchmode -projectPath &lt;project&gt; -executeMethod MarkerPreview.ShootModels -logFile -
+    /// </summary>
+    public static async void ShootModels()
+    {
+        int code = 1;
+        GameObject stage = null;
+
+        try
+        {
+            EditorSceneManager.OpenScene("Assets/Scenes/Main.unity", OpenSceneMode.Single);
+            stage = new GameObject("Stage");
+            Directory.CreateDirectory(Output);
+            string folder = System.Environment.GetEnvironmentVariable("ARTRAIL_MODELS");
+
+            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.transform.SetParent(stage.transform);
+            ground.transform.localScale = Vector3.one * 4f;
+            ground.GetComponent<Renderer>().sharedMaterial =
+                MarkerShapes.Surface("PreviewGround", new Color(0.62f, 0.60f, 0.57f), 0.05f);
+
+            RenderSettings.ambientProbe = new UnityEngine.Rendering.SphericalHarmonicsL2();
+            MarkerSpawner.LightFromAmbientColour();
+
+            Camera cam = new GameObject("Camera").AddComponent<Camera>();
+            cam.transform.SetParent(stage.transform);
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.55f, 0.68f, 0.80f);
+            cam.fieldOfView = 55f;
+
+            // The balloon at the height the e2e test saved; the Fox at the one
+            // the builder offered; both facing the camera, which stands north.
+            var models = new (string file, float height, float x)[]
+            {
+                ("hot-air-balloon.glb", 3.1f, -1.4f),
+                ("Fox.glb", 0.8f, 1.3f),
+            };
+
+            bool all = true;
+            foreach (var m in models)
+            {
+                GameObject holder = new GameObject(m.file);
+                holder.transform.SetParent(stage.transform);
+                holder.transform.position = new Vector3(m.x, 0f, 0f);
+
+                bool ok = await holder.AddComponent<ModelView>().Show(Path.Combine(folder, m.file), m.height, 0);
+                all &= ok;
+
+                Renderer[] renderers = holder.GetComponentsInChildren<Renderer>();
+                Bounds b = new Bounds(holder.transform.position, Vector3.zero);
+                foreach (Renderer r in renderers)
+                    b.Encapsulate(r.bounds);
+                Animation anim = holder.GetComponentInChildren<Animation>();
+                Debug.Log("[MarkerPreview] " + m.file + " loaded=" + ok +
+                          " renderers=" + renderers.Length +
+                          " bottom=" + b.min.y.ToString("F2") + " top=" + b.max.y.ToString("F2") +
+                          " width=" + b.size.x.ToString("F2") +
+                          " shader=" + (renderers.Length > 0 && renderers[0].sharedMaterial != null
+                                        ? renderers[0].sharedMaterial.shader.name : "none") +
+                          " clip=" + (anim != null && anim.clip != null
+                                      ? anim.clip.name + " " + anim.clip.length.ToString("F1") + "s loop=" + (anim.wrapMode == WrapMode.Loop)
+                                      : "none"));
+            }
+
+            // In batch mode a material made in code never has its colours
+            // uploaded to the SRP batcher before a one-off Render - the same
+            // reason the ground above is coloured through a property block -
+            // so every colour factor rendered as white. Textures were fine.
+            // The materials themselves are right (logged once: envelope blue
+            // 0.16/0.59/1.0); the batcher is off for these shots only.
+            var urp = (UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)
+                UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+            bool batcher = urp.useSRPBatcher;
+            urp.useSRPBatcher = false;
+            try
+            {
+                Photograph(cam, new Vector3(0f, 1.6f, -7f), 4f, "models");
+                Photograph(cam, new Vector3(1.3f, 1.1f, -2.4f), 14f, "models-fox");
+            }
+            finally
+            {
+                urp.useSRPBatcher = batcher;
+            }
+            code = all ? 0 : 1;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+        finally
+        {
+            if (stage != null)
+                Object.DestroyImmediate(stage);
+            EditorApplication.Exit(code);
+        }
+    }
+
+    /// <summary>What the camera sees from here, written to MarkerShots/name.png.</summary>
+    static void Photograph(Camera cam, Vector3 from, float pitch, string name)
+    {
         cam.transform.position = from;
         cam.transform.rotation = Quaternion.Euler(pitch, 0f, 0f);
 
@@ -225,8 +337,5 @@ public static class MarkerPreview
         Object.DestroyImmediate(shot);
         target.Release();
         Object.DestroyImmediate(target);
-
-        for (int i = 0; i < pins.Length; i++)
-            Object.DestroyImmediate(pins[i]);
     }
 }

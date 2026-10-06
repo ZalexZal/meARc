@@ -356,6 +356,9 @@ public static class BuildApk
         RestorePreloadedAssets();
         ReportPreloads("as the build will use it");
 
+        // glTFast's shaders, which nothing else references, for creators' models.
+        ModelShaders.Make();
+
         // Signing, with the password kept out of everything that gets committed.
         //
         // Unity's -keystorePass and -keyaliasPass command line arguments are
