@@ -28,8 +28,14 @@ public static class MarkerPalette
         if (building.category != null)
             return building.category.markerColour;
 
-        return Color.white;
+        // A stop its creator never gave a colour takes the one default every
+        // stop starts with on the website (30 October 2026): the brand blue.
+        // Until then it was white.
+        return DefaultStopColour;
     }
+
+    /// <summary>The default for a stop with no colour of its own: #0066CC.</summary>
+    public static readonly Color DefaultStopColour = new Color(0f, 0x66 / 255f, 0xCC / 255f);
 
     /// <summary>
     /// The ring drawn around a pin or dot. White on a dark theme, near-black on a
