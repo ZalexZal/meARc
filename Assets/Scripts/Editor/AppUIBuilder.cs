@@ -4490,7 +4490,7 @@ const float ReferenceWidth = 1080f;
 
         // ---- somebody: their face, their name, since when
         RectTransform me = UIFactory.Rect("Me", card);
-        UIFactory.Size(me.gameObject, 166f);
+        UIFactory.Size(me.gameObject, 220f);
         HorizontalLayoutGroup meRow = UIFactory.HorizontalStack(me, 39f, false);
         meRow.childAlignment = TextAnchor.MiddleLeft;
         view.meGroup = me.gameObject;
@@ -4520,6 +4520,25 @@ const float ReferenceWidth = 1080f;
         view.subLabel = UIFactory.Text("Sub", who, Secondary, ThemeRole.TextMuted,
                                        TextAlignmentOptions.Left, null);
         UIFactory.Size(view.subLabel.gameObject, 56f);
+
+        // The level (0056): "Level 6 · Walker I" and a thin bar to the next.
+        view.levelLabel = UIFactory.Text("Level", who, Secondary, ThemeRole.Accent,
+                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.levelLabel.gameObject, 50f);
+        view.levelLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        view.levelLabel.overflowMode = TextOverflowModes.Ellipsis;
+
+        RectTransform bar = UIFactory.Rect("LevelBar", who);
+        UIFactory.Size(bar.gameObject, 14f);
+        UIFactory.Fill(bar, ThemeRole.SurfaceAlt, 1f, UIShape.Pill).raycastTarget = false;
+        RectTransform fill = UIFactory.Rect("Fill", bar);
+        fill.anchorMin = Vector2.zero; fill.anchorMax = new Vector2(0f, 1f);
+        fill.offsetMin = Vector2.zero; fill.offsetMax = Vector2.zero;
+        UIFactory.Fill(fill, ThemeRole.Accent, 1f, UIShape.Pill).raycastTarget = false;
+        view.levelBar = bar.gameObject;
+        view.levelFill = fill;
+        view.levelLabel.gameObject.SetActive(false);
+        bar.gameObject.SetActive(false);
         me.gameObject.SetActive(false);
 
         // ---- the three numbers, each a card of its own, under the head card

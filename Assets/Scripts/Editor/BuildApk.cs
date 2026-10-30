@@ -377,6 +377,14 @@ public static class BuildApk
         // no build, because it installs and runs and cannot be updated later.
         string keyPass = Environment.GetEnvironmentVariable("ARTRAIL_KEYSTORE_PASS");
 
+        // The keystore is found in the keys folder of whoever is building, like
+        // the ARCore key, so the same project builds on Windows and on Kubuntu.
+        // ProjectSettings keeps a C:/ path that only exists on one of them.
+        string keystore = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                       "keys", "artrail-release.keystore");
+        if (File.Exists(keystore))
+            PlayerSettings.Android.keystoreName = keystore.Replace('\\', '/');
+
         if (!string.IsNullOrEmpty(keyPass))
         {
             PlayerSettings.Android.useCustomKeystore = true;

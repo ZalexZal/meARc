@@ -21,6 +21,12 @@ public class ProfileView : MonoBehaviour
     public TextMeshProUGUI nameLabel;
     public TextMeshProUGUI subLabel;
 
+    [Tooltip("\"Level 6 · Walker I\" under the name (0056).")]
+    public TextMeshProUGUI levelLabel;
+    [Tooltip("The bar under it: its fill's right anchor is the progress.")]
+    public GameObject levelBar;
+    public RectTransform levelFill;
+
     [Header("Numbers")]
     public GameObject statsGroup;
     public TextMeshProUGUI trailsValue;
@@ -130,7 +136,8 @@ public class ProfileView : MonoBehaviour
         ProfileService service = ProfileService.Instance;
         ProfileService.ProfileData data = service != null ? service.Latest : null;
 
-        Render(guest, data, auth != null ? auth.DisplayName : null, auth != null ? auth.Email : null);
+        Render(guest, data, auth != null ? auth.DisplayName : null, auth != null ? auth.Email : null,
+               service != null ? service.Level : null);
     }
 
     /// <summary>
@@ -138,9 +145,11 @@ public class ProfileView : MonoBehaviour
     /// passes a sample, because in the editor nobody is signed in and every
     /// picture would otherwise be of a guest.
     /// </summary>
-    public void Render(bool guest, ProfileService.ProfileData data, string displayName, string email)
+    public void Render(bool guest, ProfileService.ProfileData data, string displayName, string email,
+                       ProfileService.LevelData level = null)
     {
         DrawWho(guest, data, displayName, email);
+        DrawLevel(guest, level);
 
         if (guestGroup != null)
             guestGroup.SetActive(guest);
@@ -210,6 +219,25 @@ public class ProfileView : MonoBehaviour
 
         if (faceGuestIcon != null)
             faceGuestIcon.SetActive(guest);
+    }
+
+    void DrawLevel(bool guest, ProfileService.LevelData level)
+    {
+        bool show = !guest && level != null && level.level > 0;
+
+        if (levelLabel != null)
+        {
+            levelLabel.gameObject.SetActive(show);
+            if (show)
+                levelLabel.text = string.Format(AppStrings.Get("profile.level"), level.level,
+                                                ProfileService.LevelName(level.level));
+        }
+
+        if (levelBar != null)
+            levelBar.SetActive(show);
+
+        if (show && levelFill != null)
+            levelFill.anchorMax = new Vector2(level.Progress, 1f);
     }
 
     void DrawMedals(bool guest, ProfileService.ProfileData data)

@@ -28,6 +28,9 @@ public class ProfileService : MonoBehaviour
     /// <summary>False when the server does not have my_profile yet.</summary>
     public bool Available { get; private set; } = true;
 
+    /// <summary>The level my_level last reported (0056), or null.</summary>
+    public LevelData Level { get; private set; }
+
     bool _loading;
 
     void Awake()
@@ -55,6 +58,7 @@ public class ProfileService : MonoBehaviour
     {
         // A different person may be signed in now; their numbers are not these.
         Latest = null;
+        Level = null;
         Raise();
         Load();
     }
@@ -119,7 +123,36 @@ public class ProfileService : MonoBehaviour
             }
         }
 
+        // The level after the profile, on purpose: my_profile is where a
+        // finished trail is recorded, and with it its creator's finish bonus.
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/my_level"), "{}", null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try { Level = JsonUtility.FromJson<LevelData>(request.downloadHandler.text); }
+                catch (Exception exception) { Debug.LogWarning("[Profile] Unreadable level: " + exception.Message); }
+            }
+            else
+            {
+                Debug.LogWarning("[Profile] my_level failed (" + request.responseCode + "): " + Postgrest.Said(request));
+            }
+        }
+
         Raise();
+    }
+
+    /// <summary>
+    /// "Walker I" for level 6: ten titles, each held for five levels, I to V,
+    /// the same names the website uses (web/src/lib/levels.ts).
+    /// </summary>
+    public static string LevelName(int level)
+    {
+        int i = Mathf.Clamp(level - 1, 0, 49);
+        string[] tiers = { "I", "II", "III", "IV", "V" };
+        return AppStrings.Get("level.t" + (i / 5)) + " " + tiers[i % 5];
     }
 
     /// <summary>
@@ -173,6 +206,28 @@ public class ProfileService : MonoBehaviour
     }
 
     // ---------------------------------------------------------------- shapes
+
+    /// <summary>my_level(): XP, the level, where it starts, where the next one does.</summary>
+    [Serializable]
+    public class LevelData
+    {
+        public int xp;
+        public int level;
+        public int floor;
+        public int next;   // null at the top level, which reads as 0 here
+        public int max;
+
+        /// <summary>How far through this level, 0 to 1; 1 at the top.</summary>
+        public float Progress
+        {
+            get
+            {
+                if (level >= max || next <= floor)
+                    return 1f;
+                return Mathf.Clamp01((xp - floor) / (float)(next - floor));
+            }
+        }
+    }
 
     [Serializable]
     public class ProfileData

@@ -248,7 +248,8 @@ public static class UIPreview
 
         if (you != null)
         {
-            you.Render(false, sample, "Alex Scan", "alex@example.com");
+            you.Render(false, sample, "Alex Scan", "alex@example.com",
+                       new ProfileService.LevelData { xp = 220, level = 6, floor = 190, next = 234, max = 50 });
             Shoot(canvas, rig, "35-you" + t, "SettingsPanel");
         }
 
