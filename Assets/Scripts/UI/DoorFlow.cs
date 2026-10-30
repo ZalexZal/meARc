@@ -63,6 +63,16 @@ public class DoorFlow : MonoBehaviour
     [Tooltip("The account form, opened from the team card.")]
     public GameObject accountPanel;
 
+    [Tooltip("The account door's title, its guest line and its Later button's " +
+             "words: the same door is the guest warning (0058 design, part 5).")]
+    public TMPro.TextMeshProUGUI accountTitle;
+    public GameObject guestNote;
+    public TMPro.TextMeshProUGUI accountLaterLabel;
+
+    // The account door, as itself or as the guest warning.
+    bool _guestMode;
+    const string GuestWarnedKey = "guestWarned";
+
     [Tooltip("The card at the end of the demo.")]
     public GameObject readyPanel;
 
@@ -414,9 +424,43 @@ public class DoorFlow : MonoBehaviour
         TrailService trails = TrailService.Instance;
 
         if (trails != null)
-            trails.LoadNeedsAccount(trails.SelectedId, () => StartCoroutine(TeamGate()));
+            trails.LoadNeedsAccount(trails.SelectedId, AfterEntered);
         else
-            StartCoroutine(TeamGate());
+            AfterEntered();
+    }
+
+    /// <summary>
+    /// A guest is told once, before their first stop, what walking as a guest
+    /// means (YambolTrails' warning): the account door, with its own title, a
+    /// line about where the walk is kept, and "Continue as a guest". Then the
+    /// team gate, as always.
+    /// </summary>
+    void AfterEntered()
+    {
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        string key = AccountScope.Key(GuestWarnedKey);
+        if (!DemoTrail.Active && auth != null && auth.IsAnonymous && PlayerPrefs.GetInt(key, 0) == 0)
+        {
+            PlayerPrefs.SetInt(key, 1);
+            PlayerPrefs.Save();
+            _guestMode = true;
+            _dismissed = false;
+            PaintAccountDoor();
+            Show(Door.Account);
+            return;
+        }
+
+        StartCoroutine(TeamGate());
+    }
+
+    void PaintAccountDoor()
+    {
+        if (accountTitle != null)
+            accountTitle.text = AppStrings.Get(_guestMode ? "guest.title" : "accountDoor.title");
+        if (guestNote != null)
+            guestNote.SetActive(_guestMode);
+        if (accountLaterLabel != null)
+            accountLaterLabel.text = AppStrings.Get(_guestMode ? "guest.continue" : "trails.notNow");
     }
 
     // ----------------------------------------------------------- account
@@ -429,6 +473,8 @@ public class DoorFlow : MonoBehaviour
     public void OpenAccount()
     {
         _dismissed = false;
+        _guestMode = false;
+        PaintAccountDoor();
         Show(Door.Account);
     }
 

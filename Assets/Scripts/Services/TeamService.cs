@@ -31,6 +31,13 @@ public class TeamService : MonoBehaviour
     {
         public string name;
         public bool is_me;
+
+        // Since 0058: who it is (for the captain's controls), whether they are
+        // the captain, and whether their phone said location works (null, not
+        // checked yet, reads as false here).
+        public string id;
+        public bool is_captain;
+        public bool gps;
     }
 
     /// <summary>
@@ -72,6 +79,24 @@ public class TeamService : MonoBehaviour
 
         public bool disqualified;
         public string disqualified_reason;
+
+        /// <summary>Since 0058: this phone's person leads the team.</summary>
+        public bool i_am_captain;
+
+        /// <summary>Since 0058: the captain gave up for everybody.</summary>
+        public bool gave_up;
+
+        public Member Me
+        {
+            get
+            {
+                if (members != null)
+                    for (int i = 0; i < members.Length; i++)
+                        if (members[i] != null && members[i].is_me)
+                            return members[i];
+                return null;
+            }
+        }
 
         public bool Moved
         {
@@ -202,6 +227,62 @@ public class TeamService : MonoBehaviour
         StartCoroutine(Rpc("leave_team", "{\"p_team\":\"" + Escape(Team.id) + "\"}", done));
     }
 
+    // ------------------------------------------------- the captain (0058)
+
+    /// <summary>Hands the captaincy to a teammate.</summary>
+    public void TransferCaptain(string userId, Action<string> done)
+    {
+        if (Team == null || !Team.on_team) { if (done != null) done(null); return; }
+        StartCoroutine(Rpc("transfer_captain",
+            "{\"p_team\":\"" + Escape(Team.id) + "\",\"p_user\":\"" + Escape(userId) + "\"}", done));
+    }
+
+    /// <summary>Takes a player off the team. They may join again with the code.</summary>
+    public void RemoveMember(string userId, Action<string> done)
+    {
+        if (Team == null || !Team.on_team) { if (done != null) done(null); return; }
+        StartCoroutine(Rpc("remove_member",
+            "{\"p_team\":\"" + Escape(Team.id) + "\",\"p_user\":\"" + Escape(userId) + "\"}", done));
+    }
+
+    /// <summary>The captain stops the game for the whole team.</summary>
+    public void GiveUp(Action<string> done)
+    {
+        if (Team == null || !Team.on_team) { if (done != null) done(null); return; }
+        StartCoroutine(Rpc("give_up_team", "{\"p_team\":\"" + Escape(Team.id) + "\"}", done));
+    }
+
+    string _gpsSentFor;
+
+    /// <summary>
+    /// Tells the team (and the organiser) that location works on this phone,
+    /// once per team: whether it works, never where it is (0058).
+    /// </summary>
+    void ReportGps()
+    {
+        UserLocationService location = UserLocationService.Instance;
+        if (Team == null || !Team.on_team || location == null || !location.HasValidPose)
+            return;
+        Member me = Team.Me;
+        if (me == null || me.gps || _gpsSentFor == Team.id)
+            return;
+        _gpsSentFor = Team.id;
+        StartCoroutine(Fire("set_gps_ready", "{\"p_team\":\"" + Escape(Team.id) + "\",\"p_ok\":true}"));
+    }
+
+    IEnumerator Fire(string rpc, string body)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        if (config == null)
+            yield break;
+        using (UnityWebRequest request = SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/" + rpc), body, null))
+        {
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success)
+                Debug.LogWarning("[Team] " + rpc + " failed (" + request.responseCode + "): " + Postgrest.Said(request));
+        }
+    }
+
     IEnumerator LoadBoth()
     {
         Busy = true;
@@ -250,6 +331,8 @@ public class TeamService : MonoBehaviour
             });
 
         Busy = false;
+
+        ReportGps();
 
         if (OnTeamChanged != null)
             OnTeamChanged();

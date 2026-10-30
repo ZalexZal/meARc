@@ -116,6 +116,24 @@ public class TeamDoorView : MonoBehaviour
     [Tooltip("The Leave button's face: clear until armed, then the warning red.")]
     public Image leaveFace;
 
+    [Header("The captain (0058)")]
+    [Tooltip("Each member row, as a button: the captain taps a teammate to act on them.")]
+    public Button[] memberButtons = new Button[MaxMembers];
+
+    [Tooltip("Shown under the names once the captain has tapped a teammate.")]
+    public GameObject captainGroup;
+    public TextMeshProUGUI captainLabel;
+    public Button makeCaptainButton;
+    public Button removeButton;
+
+    [Tooltip("Only the captain sees it; armed by the first tap, like Leave.")]
+    public Button giveUpButton;
+    public Image giveUpFace;
+
+    string _chosenId;
+    bool _removeArmed, _giveUpArmed;
+    float _armedAt;
+
     void OnEnable()
     {
         if (createButton != null)
@@ -140,6 +158,33 @@ public class TeamDoorView : MonoBehaviour
         {
             copyButton.onClick.RemoveAllListeners();
             copyButton.onClick.AddListener(CopyCode);
+        }
+
+        for (int i = 0; i < memberButtons.Length; i++)
+        {
+            if (memberButtons[i] == null)
+                continue;
+            int row = i;
+            memberButtons[i].onClick.RemoveAllListeners();
+            memberButtons[i].onClick.AddListener(() => Choose(row));
+        }
+
+        if (makeCaptainButton != null)
+        {
+            makeCaptainButton.onClick.RemoveAllListeners();
+            makeCaptainButton.onClick.AddListener(MakeCaptain);
+        }
+
+        if (removeButton != null)
+        {
+            removeButton.onClick.RemoveAllListeners();
+            removeButton.onClick.AddListener(Remove);
+        }
+
+        if (giveUpButton != null)
+        {
+            giveUpButton.onClick.RemoveAllListeners();
+            giveUpButton.onClick.AddListener(GiveUp);
         }
 
         if (shareButton != null)
@@ -186,6 +231,8 @@ public class TeamDoorView : MonoBehaviour
     void OnDisable()
     {
         _leaveArmed = false;
+        _removeArmed = _giveUpArmed = false;
+        _chosenId = null;
         DrawLeave();
         TeamService.OnTeamChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
@@ -235,6 +282,7 @@ public class TeamDoorView : MonoBehaviour
         // Leave's words are this view's own (it rewrites them as it arms), so
         // they follow the language from here rather than from a localiser.
         DrawLeave();
+        DrawCaptain();
 
         TeamService teams = TeamService.Instance;
         TeamService.Detail team = teams != null ? teams.Team : null;
@@ -344,11 +392,24 @@ public class TeamDoorView : MonoBehaviour
                 TeamService.Member member = team.members[i];
 
                 // "you" beside your own row, because on a four-person board every
-                // name looks equally like somebody else.
-                memberRows[i].text = member.is_me
+                // name looks equally like somebody else; then the captain's star
+                // and whether their location works (0058).
+                string line = member.is_me
                     ? member.name + "  " + AppStrings.Get("team.you")
                     : member.name;
+                if (member.is_captain)
+                    line += "  \u2605 " + AppStrings.Get("team.captainTag");
+                if (member.gps)
+                    line += "  \u00b7 " + AppStrings.Get("team.gpsTag");
+                memberRows[i].text = line;
+
+                // Only the captain's taps on a teammate do anything.
+                if (i < memberButtons.Length && memberButtons[i] != null)
+                    memberButtons[i].interactable = team.i_am_captain && !member.is_me && !team.gave_up;
             }
+
+            if (team.gave_up && teamMeta != null)
+                teamMeta.text = AppStrings.Get("team.gaveUp");
 
         }
 
@@ -578,6 +639,124 @@ public class TeamDoorView : MonoBehaviour
             _leaveArmed = false;
             DrawLeave();
         }
+
+        // And so do Remove and Give up.
+        if ((_removeArmed || _giveUpArmed) && Time.unscaledTime - _armedAt > 4f)
+        {
+            _removeArmed = _giveUpArmed = false;
+            DrawCaptain();
+        }
+    }
+
+    // ------------------------------------------------------- the captain (0058)
+
+    TeamService.Member Chosen
+    {
+        get
+        {
+            TeamService.Detail team = TeamService.Instance != null ? TeamService.Instance.Team : null;
+            if (team == null || team.members == null || string.IsNullOrEmpty(_chosenId))
+                return null;
+            foreach (TeamService.Member m in team.members)
+                if (m != null && m.id == _chosenId)
+                    return m;
+            return null;
+        }
+    }
+
+    /// <summary>The captain taps a teammate: what can be done to them appears.</summary>
+    void Choose(int row)
+    {
+        TeamService.Detail team = TeamService.Instance != null ? TeamService.Instance.Team : null;
+        if (team == null || !team.i_am_captain || team.members == null || row >= team.members.Length)
+            return;
+        TeamService.Member m = team.members[row];
+        if (m == null || m.is_me)
+            return;
+        _chosenId = _chosenId == m.id ? null : m.id;
+        _removeArmed = false;
+        Haptics.Tick();
+        DrawCaptain();
+    }
+
+    void DrawCaptain()
+    {
+        TeamService.Detail team = TeamService.Instance != null ? TeamService.Instance.Team : null;
+        bool captain = team != null && team.on_team && team.i_am_captain && !team.gave_up;
+        TeamService.Member chosen = captain ? Chosen : null;
+
+        if (captainGroup != null)
+            captainGroup.SetActive(chosen != null);
+        if (captainLabel != null && chosen != null)
+            captainLabel.text = chosen.name;
+
+        SetLabel(removeButton, _removeArmed ? "team.removeConfirm" : "team.remove");
+
+        if (giveUpButton != null)
+        {
+            giveUpButton.gameObject.SetActive(captain);
+            SetLabel(giveUpButton, _giveUpArmed ? "team.giveUpConfirm" : "team.giveUp");
+            TextMeshProUGUI label = giveUpButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (label != null)
+                label.color = _giveUpArmed ? Color.white : ThemeManager.Get(ThemeRole.StatusPoor);
+            if (giveUpFace != null)
+            {
+                Color red = ThemeManager.Get(ThemeRole.BadDot);
+                red.a = _giveUpArmed ? 1f : 0f;
+                giveUpFace.color = red;
+            }
+        }
+    }
+
+    static void SetLabel(Button button, string key)
+    {
+        TextMeshProUGUI label = button != null ? button.GetComponentInChildren<TextMeshProUGUI>() : null;
+        if (label != null)
+            label.text = AppStrings.Get(key);
+    }
+
+    void MakeCaptain()
+    {
+        TeamService.Member m = Chosen;
+        if (m == null || TeamService.Instance == null)
+            return;
+        _chosenId = null;
+        Say("team.working");
+        TeamService.Instance.TransferCaptain(m.id, Done);
+    }
+
+    void Remove()
+    {
+        TeamService.Member m = Chosen;
+        if (m == null || TeamService.Instance == null)
+            return;
+        if (!_removeArmed)
+        {
+            _removeArmed = true;
+            _armedAt = Time.unscaledTime;
+            DrawCaptain();
+            return;
+        }
+        _removeArmed = false;
+        _chosenId = null;
+        Say("team.working");
+        TeamService.Instance.RemoveMember(m.id, Done);
+    }
+
+    void GiveUp()
+    {
+        if (TeamService.Instance == null)
+            return;
+        if (!_giveUpArmed)
+        {
+            _giveUpArmed = true;
+            _armedAt = Time.unscaledTime;
+            DrawCaptain();
+            return;
+        }
+        _giveUpArmed = false;
+        Say("team.working");
+        TeamService.Instance.GiveUp(Done);
     }
 
     /// <summary>
@@ -733,6 +912,8 @@ public class TeamDoorView : MonoBehaviour
                    : e.Contains("team is full") ? "team.err.full"
                    : e.Contains("already on a team") || e.Contains("leave your team") ? "team.err.already"
                    : e.Contains("a guide, not a game") ? "team.err.guide"
+                   : e.Contains("hands over or gives up") ? "team.err.captain"
+                   : e.Contains("given up") ? "team.err.gaveUp"
                    : null;
 
         return key != null ? AppStrings.Get(key) : error;

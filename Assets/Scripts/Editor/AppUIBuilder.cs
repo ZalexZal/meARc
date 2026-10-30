@@ -6905,13 +6905,25 @@ const float ReferenceWidth = 1080f;
         card.anchorMax = new Vector2(1f, 1f);
         card.pivot = new Vector2(0.5f, 1f);
 
-        SheetTitle(card, "accountDoor.title");
+        // The same door is the guest warning, so DoorFlow writes its title, its
+        // guest line and Later's words itself.
+        flow.accountTitle = SheetTitle(card, "accountDoor.title");
+        DropLocalizer(flow.accountTitle);
+
+        TextMeshProUGUI guestLine = UIFactory.Text("GuestNote", card, Secondary, ThemeRole.TextSecondary,
+                                                   TextAlignmentOptions.TopLeft, "guest.body");
+        UIFactory.FitsItsText(guestLine);
+        guestLine.raycastTarget = false;
+        flow.guestNote = guestLine.gameObject;
+        guestLine.gameObject.SetActive(false);
 
         BuildAccountCard(card, label: false);
 
         Button later = QuietAction(card, "Later", "trails.notNow", flow.AccountDone,
                                    "account later");
         later.gameObject.AddComponent<WayOut>();
+        flow.accountLaterLabel = later.GetComponentInChildren<TextMeshProUGUI>();
+        DropLocalizer(flow.accountLaterLabel);
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
@@ -7300,7 +7312,36 @@ const float ReferenceWidth = 1080f;
                                                 TextAlignmentOptions.Left);
             UIFactory.Size(view.memberRows[i].gameObject, 52f);
             view.memberRows[i].gameObject.SetActive(false);
+
+            // A button over the row: the captain taps a teammate (0058).
+            view.memberButtons[i] = view.memberRows[i].gameObject.AddComponent<Button>();
+            view.memberButtons[i].targetGraphic = view.memberRows[i];
+            view.memberButtons[i].transition = Selectable.Transition.None;
         }
+
+        // What the captain can do to the teammate they tapped.
+        RectTransform captain = UIFactory.Rect("Captain", who);
+        UIFactory.VerticalStack(captain, 12f, false);
+        UIFactory.Fill(captain, ThemeRole.SurfaceAlt, 1f, UIShape.Rounded).raycastTarget = false;
+        captain.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(24, 24, 20, 20);
+        ContentSizeFitter captainFit = captain.gameObject.AddComponent<ContentSizeFitter>();
+        captainFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        view.captainGroup = captain.gameObject;
+
+        view.captainLabel = UIFactory.Text("Name", captain, Body, ThemeRole.TextPrimary,
+                                           TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(view.captainLabel.gameObject, 52f);
+        view.captainLabel.raycastTarget = false;
+
+        RectTransform captainRow = UIFactory.Rect("Actions", captain);
+        UIFactory.Size(captainRow.gameObject, Btn);
+        UIFactory.HorizontalStack(captainRow, 22f).childAlignment = TextAnchor.MiddleLeft;
+        view.makeCaptainButton = WideButton(captainRow, "MakeCaptain", ThemeRole.Accent, ThemeRole.OnAccent,
+                                            "team.makeCaptain", out TextMeshProUGUI _);
+        view.removeButton = WideButton(captainRow, "Remove", ThemeRole.Fill, ThemeRole.StatusPoor,
+                                       "team.remove", out TextMeshProUGUI removeLabel);
+        DropLocalizer(removeLabel);
+        captain.gameObject.SetActive(false);
 
         // Red words, and a red button once armed: TeamDoorView paints both.
         RectTransform leave = UIFactory.Rect("Leave", who);
@@ -7314,6 +7355,20 @@ const float ReferenceWidth = 1080f;
         UIFactory.Stretch(leaveLabel.rectTransform);
         DropLocalizer(leaveLabel);
         Unthemed(leaveLabel.gameObject);
+
+        // The captain's: the same red-until-armed button, for the whole team.
+        RectTransform giveUp = UIFactory.Rect("GiveUp", who);
+        UIFactory.Size(giveUp.gameObject, Btn);
+        view.giveUpFace = UIFactory.Plain(giveUp, new Color(1f, 0.23f, 0.19f, 0f), UIShape.Pill);
+        view.giveUpButton = giveUp.gameObject.AddComponent<Button>();
+        view.giveUpButton.targetGraphic = view.giveUpFace;
+        UIFactory.Feedback(view.giveUpButton);
+        TextMeshProUGUI giveUpLabel = UIFactory.Text("Label", giveUp, Body, ThemeRole.StatusPoor,
+                                                     TextAlignmentOptions.Center, "team.giveUp");
+        UIFactory.Stretch(giveUpLabel.rectTransform);
+        DropLocalizer(giveUpLabel);
+        Unthemed(giveUpLabel.gameObject);
+        giveUp.gameObject.SetActive(false);
 
         // ---------------------------------------------------------- status
         view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,

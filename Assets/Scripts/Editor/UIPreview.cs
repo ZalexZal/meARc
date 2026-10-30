@@ -457,6 +457,66 @@ public static class UIPreview
 
         Shoot(canvas, rig, "26-team" + t, "MapPanel", "Doors/Backdrop", "Doors/Team");
 
+        // The captain's view (0058): a star, GPS on the rows, a teammate tapped
+        // and what can be done to them, and Give up.
+        TeamDoorView captainDoor = canvas.GetComponentInChildren<TeamDoorView>(true);
+        if (captainDoor != null && captainDoor.memberRows.Length > 1 && captainDoor.memberRows[1] != null)
+        {
+            string[] was = new string[captainDoor.memberRows.Length];
+            for (int i = 0; i < captainDoor.memberRows.Length; i++)
+                if (captainDoor.memberRows[i] != null) was[i] = captainDoor.memberRows[i].text;
+
+            captainDoor.memberRows[0].text = "Alex Scan  " + AppStrings.Get("team.you") + "  \u2605 " +
+                                             AppStrings.Get("team.captainTag") + "  \u00b7 " + AppStrings.Get("team.gpsTag");
+            captainDoor.memberRows[1].text = "\u041c\u0430\u0440\u0438\u044f  \u00b7 " + AppStrings.Get("team.gpsTag");
+            captainDoor.memberRows[1].gameObject.SetActive(true);
+            if (captainDoor.captainGroup != null) captainDoor.captainGroup.SetActive(true);
+            if (captainDoor.captainLabel != null) captainDoor.captainLabel.text = "\u041c\u0430\u0440\u0438\u044f";
+            if (captainDoor.giveUpButton != null) captainDoor.giveUpButton.gameObject.SetActive(true);
+
+            // The members sit below the standings: put the standings' rows away
+            // for this one shot, so the captain's part is on screen.
+            bool[] rowsWere = new bool[captainDoor.boardRows.Length];
+            for (int i = 0; i < captainDoor.boardRows.Length; i++)
+                if (captainDoor.boardRows[i] != null)
+                {
+                    rowsWere[i] = captainDoor.boardRows[i].gameObject.activeSelf;
+                    captainDoor.boardRows[i].gameObject.SetActive(false);
+                }
+            bool tailWas = captainDoor.teamGroupTail != null && captainDoor.teamGroupTail.activeSelf;
+            if (captainDoor.teamGroupTail != null) captainDoor.teamGroupTail.SetActive(true);
+            Canvas.ForceUpdateCanvases();
+            Shoot(canvas, rig, "26b-team-captain" + t, "MapPanel", "Doors/Backdrop", "Doors/Team");
+            if (captainDoor.teamGroupTail != null) captainDoor.teamGroupTail.SetActive(tailWas);
+            for (int i = 0; i < captainDoor.boardRows.Length; i++)
+                if (captainDoor.boardRows[i] != null) captainDoor.boardRows[i].gameObject.SetActive(rowsWere[i]);
+
+            for (int i = 0; i < captainDoor.memberRows.Length; i++)
+                if (captainDoor.memberRows[i] != null) captainDoor.memberRows[i].text = was[i];
+            if (captainDoor.captainGroup != null) captainDoor.captainGroup.SetActive(false);
+            if (captainDoor.giveUpButton != null) captainDoor.giveUpButton.gameObject.SetActive(false);
+        }
+
+        // The guest warning: the account door with its own title, line and way on.
+        DoorFlow guestFlow = canvas.GetComponentInChildren<DoorFlow>(true);
+        if (guestFlow != null && guestFlow.accountTitle != null)
+        {
+            guestFlow.accountTitle.text = AppStrings.Get("guest.title");
+            if (guestFlow.guestNote != null) guestFlow.guestNote.SetActive(true);
+            if (guestFlow.accountLaterLabel != null) guestFlow.accountLaterLabel.text = AppStrings.Get("guest.continue");
+            // As a guest sees it: only the half for somebody with no account.
+            AccountSectionView guestCard = guestFlow.accountPanel != null
+                ? guestFlow.accountPanel.GetComponentInChildren<AccountSectionView>(true) : null;
+            bool signedWas = guestCard != null && guestCard.signedInGroup != null && guestCard.signedInGroup.activeSelf;
+            if (guestCard != null && guestCard.signedInGroup != null) guestCard.signedInGroup.SetActive(false);
+            if (guestCard != null && guestCard.anonymousGroup != null) guestCard.anonymousGroup.SetActive(true);
+            Shoot(canvas, rig, "26c-guest-warning" + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
+            if (guestCard != null && guestCard.signedInGroup != null) guestCard.signedInGroup.SetActive(signedWas);
+            guestFlow.accountTitle.text = AppStrings.Get("accountDoor.title");
+            if (guestFlow.guestNote != null) guestFlow.guestNote.SetActive(false);
+            if (guestFlow.accountLaterLabel != null) guestFlow.accountLaterLabel.text = AppStrings.Get("trails.notNow");
+        }
+
         // And the state a walker meets on a trail that will not take an
         // anonymous identity. Drawn by hand for the same reason the rest of this
         // card is: TeamDoorView reads it off TrailService and SupabaseAuth, and

@@ -577,6 +577,26 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
 
         Set(headLabel, string.Empty);
         DrawBadge(null, false);
+
+        // A live event that has not started (0058): its stops are not sent yet,
+        // so say when they will be rather than "looking for stops".
+        TrailService.StartInfo start = hasTrail ? TrailService.Instance.SelectedStart : null;
+        if (start != null && start.Waiting)
+        {
+            System.DateTime when = default(System.DateTime);
+            bool timed = start.start_mode == "auto" &&
+                         System.DateTime.TryParse(start.starts_at ?? string.Empty,
+                             System.Globalization.CultureInfo.InvariantCulture,
+                             System.Globalization.DateTimeStyles.AdjustToUniversal, out when);
+            Set(titleLabel, timed ? string.Format(AppStrings.Get("card.startsAt"), when.ToLocalTime().ToString("HH:mm"))
+                                  : AppStrings.Get("card.startsManual"));
+            Set(compactTitle, titleLabel != null ? titleLabel.text : string.Empty);
+            Status(StatusKind.None, AppStrings.Get("card.startsBody"), null);
+            Compact(StatusKind.None, string.Empty, null);
+            Actions(Action.None, null, false, Action.None, null, Action.None);
+            return;
+        }
+
         Set(titleLabel, AppStrings.Get(hasTrail ? "strip.loading" : "trails.choose"));
         Set(compactTitle, titleLabel != null ? titleLabel.text : string.Empty);
         Status(StatusKind.None, string.Empty, null);

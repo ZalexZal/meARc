@@ -178,7 +178,73 @@ public class TrailService : MonoBehaviour
             }
         }
 
+        // Whether it has started (0058), asked with the summary.
+        yield return FetchStart(worldId);
+
         if (done != null) done();
+    }
+
+    /// <summary>trail_start (0058): whether, and when, a live event begins.</summary>
+    [Serializable]
+    public class StartInfo
+    {
+        public string start_mode;
+        public string starts_at;
+        public bool started;
+        public bool ended;
+
+        /// <summary>A trail that waits for its start and has not had it.</summary>
+        public bool Waiting { get { return start_mode != null && start_mode != "none" && !started; } }
+    }
+
+    /// <summary>The selected trail's start, or null until asked.</summary>
+    public StartInfo SelectedStart { get; private set; }
+
+    Coroutine _startWatch;
+
+    IEnumerator FetchStart(string worldId)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        if (config == null)
+            yield break;
+
+        string body = "{\"p_world\":\"" + worldId.Replace("\"", "") + "\"}";
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/trail_start"), body, null))
+        {
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success || worldId != SelectedId)
+                yield break;
+
+            bool wasWaiting = SelectedStart != null && SelectedStart.Waiting;
+            try { SelectedStart = JsonUtility.FromJson<StartInfo>(request.downloadHandler.text); }
+            catch (Exception exception) { Debug.LogWarning("[Trails] Unreadable start: " + exception.Message); yield break; }
+
+            // The whistle has just gone: the stops exist now, so ask for them at
+            // once rather than after 300 m of walking.
+            if (wasWaiting && SelectedStart != null && !SelectedStart.Waiting)
+            {
+                RemoteMarkerSource source = FindFirstObjectByType<RemoteMarkerSource>();
+                if (source != null)
+                    source.Refresh();
+            }
+        }
+
+        // Waiting: ask again every 20 seconds until it starts.
+        if (SelectedStart != null && SelectedStart.Waiting && _startWatch == null)
+            _startWatch = StartCoroutine(WatchStart(worldId));
+
+        Raise();
+    }
+
+    IEnumerator WatchStart(string worldId)
+    {
+        while (SelectedId == worldId && SelectedStart != null && SelectedStart.Waiting)
+        {
+            yield return new WaitForSeconds(20f);
+            yield return FetchStart(worldId);
+        }
+        _startWatch = null;
     }
 
     [Serializable]
@@ -316,6 +382,7 @@ public class TrailService : MonoBehaviour
         SelectedNeedsAccount = false;
         SelectedSummaryMode = null;
         SummaryFor = string.Empty;
+        SelectedStart = null;
         PlayerPrefs.SetString(AccountScope.Key(SelectedKey), worldId ?? string.Empty);
         PlayerPrefs.Save();
 
