@@ -177,8 +177,16 @@ public class ProfileService : MonoBehaviour
         if (config == null)
             yield break;
 
+        // Where the phone is: since 0057 the server counts a visit only from
+        // the stop (radius + accuracy + 200 m, a fix within 50 m, no mock
+        // location), as it does an answer. No fix sends nulls, and the server
+        // says "no_position" rather than refusing the call.
+        string where = MarkerTaskService.Where();
+        if (string.IsNullOrEmpty(where))
+            where = ",\"p_lat\":null,\"p_lng\":null,\"p_accuracy\":null";
+
         string body = "{\"p_marker\":\"" + markerId.Replace("\"", "") +
-                      "\",\"p_via\":\"" + via + "\"}";
+                      "\",\"p_via\":\"" + via + "\"" + where + "}";
 
         using (UnityWebRequest request =
                SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/record_visit"), body, null))
@@ -191,6 +199,11 @@ public class ProfileService : MonoBehaviour
                                  Postgrest.Said(request));
                 yield break;
             }
+
+            // "ok", or why it did not count: far, inaccurate, mock, fast, no_position.
+            string verdict = request.downloadHandler.text.Trim().Trim('"');
+            if (verdict != "ok")
+                Debug.Log("[Profile] Visit not counted: " + verdict);
         }
 
         // The numbers on the You tab just changed; ask again next time it opens

@@ -397,9 +397,9 @@ public class MarkerTaskService : MonoBehaviour
     /// phone says is simulated, one from far off the stop, and one that implies
     /// travelling faster than anybody can (0045). Guides ignore all four. Sent
     /// in the invariant culture: a Bulgarian phone writes 42,48, which is not a
-    /// number in JSON.
+    /// number in JSON. Visits send the same (ProfileService, 0057).
     /// </summary>
-    static string Where()
+    public static string Where()
     {
         UserLocationService location = UserLocationService.Instance;
 
