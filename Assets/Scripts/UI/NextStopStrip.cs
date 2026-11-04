@@ -175,8 +175,9 @@ public class NextStopStrip : MonoBehaviour
             if (trails == null || trails.Selected == null)
                 return false;
 
-            return string.Equals(trails.Selected.mode, "freefall",
-                                 System.StringComparison.OrdinalIgnoreCase);
+            // Any trail with no order: Freefall and Educational alike (lab fix -
+            // Educational used to be walked in step order here, against its mode).
+            return !TrailService.IsOrdered(trails.Selected.mode);
         }
     }
 

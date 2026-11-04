@@ -1495,7 +1495,7 @@ public static class UIPreview
             "търговското сърце на града.");
 
         Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Name", "Кой знае повече?");
-        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Sub", "Състезание · 2 от 5 · 20 точки");
+        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Sub", "С точки · По ред · 2 от 5 · 20 точки");
         Set(root, "MapPanel/Safe/TopBar/TeamRow/TeamChip/Label", "Северняците · 3-то място");
 
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +

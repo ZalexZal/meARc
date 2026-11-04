@@ -649,8 +649,8 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
         _route.Clear();
 
         TrailService trails = TrailService.Instance;
-        bool freefall = trails != null && trails.Selected != null &&
-                        string.Equals(trails.Selected.mode, "freefall", StringComparison.OrdinalIgnoreCase);
+        // No route line on a trail with no order: Freefall and Educational alike.
+        bool freefall = trails != null && trails.Selected != null && !TrailService.IsOrdered(trails.Selected.mode);
 
         if (!freefall)
         {
