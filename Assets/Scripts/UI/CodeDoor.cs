@@ -25,6 +25,11 @@ public class CodeDoor : MonoBehaviour
 
     bool _busy;
 
+    // LAB: one code box. A code that is not a trail's may be a team's; then the
+    // trail is joined first and the team straight after (lab_trail_code_for_team).
+    bool _triedTeam;
+    string _teamCode;
+
     void OnEnable()
     {
         AppStrings.OnLanguageChanged += RefreshLabels;
@@ -40,6 +45,7 @@ public class CodeDoor : MonoBehaviour
     public void Begin()
     {
         _busy = false;
+        _triedTeam = false;
 
         if (boxes != null)
         {
@@ -92,11 +98,22 @@ public class CodeDoor : MonoBehaviour
         SetBusyLabel(true);
         SetMessage(string.Empty);
 
+        _triedTeam = false;
         StartCoroutine(service.Join(boxes.Code, Done));
     }
 
     void Done(bool joined, string detail)
     {
+        if (!joined && detail == "unknown" && !_triedTeam && boxes != null)
+        {
+            _triedTeam = true;
+            // On the trail service, not on this screen: joining the trail
+            // selects it, the door closes, and a coroutine on a closed screen
+            // stops before it reaches the team (seen on the phone, 5 Nov).
+            TrailService.Instance.StartCoroutine(TryTeamCode(boxes.Code));
+            return;
+        }
+
         _busy = false;
         SetBusyLabel(false);
 
@@ -141,6 +158,41 @@ public class CodeDoor : MonoBehaviour
             boxes.Clear();
 
         boxes.Focus();
+    }
+
+    /// <summary>The code as a team's: its trail, joined, then the team itself.</summary>
+    System.Collections.IEnumerator TryTeamCode(string code)
+    {
+        string trailCode = null;
+        yield return TrailService.Instance.TrailCodeForTeam(code, c => trailCode = c);
+
+        if (string.IsNullOrEmpty(trailCode))
+        {
+            Done(false, "unknown");
+            yield break;
+        }
+
+        _teamCode = code;
+        yield return TrailService.Instance.Join(trailCode, JoinedForTeam);
+    }
+
+    void JoinedForTeam(bool joined, string detail)
+    {
+        if (!joined || TeamService.Instance == null)
+        {
+            Done(joined, detail);
+            return;
+        }
+
+        // In the trail. The team next; if that is refused (full, a guest on a
+        // game) the walker is still in the trail and the team door explains why.
+        TeamService.Instance.Join(_teamCode, error =>
+        {
+            if (!string.IsNullOrEmpty(error))
+                Debug.LogWarning("[Code] Joined the trail, not the team: " + error);
+
+            Done(true, detail);
+        });
     }
 
     void SetBusyLabel(bool busy)

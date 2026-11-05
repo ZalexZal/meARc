@@ -635,6 +635,37 @@ public class TrailService : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// LAB: the trail code behind a team code, or null. Lets one code box take
+    /// either kind of code (lab_trail_code_for_team; undone by lab_revert.sql).
+    /// </summary>
+    public IEnumerator TrailCodeForTeam(string code, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        if (config == null || SupabaseAuth.Instance == null || !SupabaseAuth.Instance.IsSignedIn)
+        {
+            if (done != null) done(null);
+            yield break;
+        }
+
+        string body = "{\"p_code\":\"" + (code ?? string.Empty).Trim().Replace("\"", string.Empty) + "\"}";
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/lab_trail_code_for_team"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            string found = null;
+            if (request.result == UnityWebRequest.Result.Success && request.downloadHandler != null)
+            {
+                string text = request.downloadHandler.text.Trim();
+                if (text != "null" && text.Length > 2)
+                    found = text.Trim('"');
+            }
+
+            if (done != null) done(found);
+        }
+    }
+
     void Raise()
     {
         if (OnTrailsChanged != null)
