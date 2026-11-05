@@ -107,7 +107,10 @@ public class CodeDoor : MonoBehaviour
         if (!joined && detail == "unknown" && !_triedTeam && boxes != null)
         {
             _triedTeam = true;
-            StartCoroutine(TryTeamCode(boxes.Code));
+            // On the trail service, not on this screen: joining the trail
+            // selects it, the door closes, and a coroutine on a closed screen
+            // stops before it reaches the team (seen on the phone, 5 Nov).
+            TrailService.Instance.StartCoroutine(TryTeamCode(boxes.Code));
             return;
         }
 
