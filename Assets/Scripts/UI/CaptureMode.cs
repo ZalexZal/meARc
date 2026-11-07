@@ -81,12 +81,11 @@ public class CaptureMode : MonoBehaviour
     float _drawTimer;
     string _said;
 
-    public bool Active { get { return _data != null || _placing; } }
+    public bool Active { get { return _data != null; } }
 
     /// <summary>The bar is on screen. It is active exactly while it is open.</summary>
     public static bool IsOpen { get; private set; }
 
-    bool _placing;
 
     void OnEnable()
     {
@@ -97,18 +96,6 @@ public class CaptureMode : MonoBehaviour
     public static bool CanEdit(BuildingData data)
     {
         if (data == null || DemoTrail.Owns(data))
-            return false;
-
-        TrailService trails = TrailService.Instance;
-        TrailService.Trail trail = trails != null ? trails.Selected : null;
-
-        return trail != null && (trail.role == "owner" || trail.role == "editor");
-    }
-
-    /// <summary>Whether this reader may add stops to the open trail: it is theirs, or they edit it.</summary>
-    public static bool CanAddHere()
-    {
-        if (DemoTrail.Active)
             return false;
 
         TrailService trails = TrailService.Instance;
@@ -190,7 +177,6 @@ public class CaptureMode : MonoBehaviour
     void OnDisable()
     {
         IsOpen = false;
-        _placing = false;
         LiftCoach(false);
 
         // Leaving the camera tab mid-capture is a cancel, not a save. Coroutines
@@ -335,158 +321,6 @@ public class CaptureMode : MonoBehaviour
 
         if (marker != null)
             marker.localPosition = new Vector3((float)east, 0f, (float)-north);
-    }
-
-    // --------------------------------------------------------------- adding one
-
-    /// <summary>
-    /// Camera: "Add a stop here". The bar opens at once and says it is placing,
-    /// because the request and the refetch take a second or two and a button
-    /// that does nothing visible for that long gets pressed again.
-    /// </summary>
-    public void AddHere()
-    {
-        if (_busy || _placing || !CanAddHere())
-            return;
-
-        if (_data != null)
-        {
-            Preview(0d, 0d);
-            _data = null;
-        }
-
-        _placing = true;
-        _said = null;
-
-        if (tabs != null)
-            tabs.ShowCamera();
-
-        foreach (GameObject other in hideWhileOpen)
-            if (other != null) other.SetActive(false);
-
-        gameObject.SetActive(true);
-        LiftCoach(true);
-        SetInteractable(false);
-        if (cancelButton != null)
-            cancelButton.interactable = true;
-
-        Say(AppStrings.Get("capture.newTitle"), AppStrings.Get("capture.placing"));
-        StartCoroutine(Place());
-    }
-
-    IEnumerator Place()
-    {
-        UserLocationService location = UserLocationService.Instance;
-        TrailService trails = TrailService.Instance;
-        SupabaseConfig config = SupabaseConfig.Instance;
-
-        if (location == null || trails == null || config == null || string.IsNullOrEmpty(trails.SelectedId))
-        {
-            Refuse(AppStrings.Get("report.failed"));
-            yield break;
-        }
-
-        // The same rules as "put it where I'm standing": never a faked position,
-        // and never a fix too rough to be better than a map.
-        if (location.IsMocked)
-        {
-            Refuse(AppStrings.Get("task.position.mock"));
-            yield break;
-        }
-
-        if (!location.HasValidPose || location.HorizontalAccuracy > RoughestHere)
-        {
-            Refuse(string.Format(AppStrings.Get("capture.tooRough"),
-                                 location.HasValidPose
-                                     ? Mathf.RoundToInt((float)location.HorizontalAccuracy).ToString()
-                                     : "?"));
-            yield break;
-        }
-
-        // Named in both languages whatever this phone is set to: the stop belongs
-        // to the trail, and its readers may read either.
-        string body = string.Format(CultureInfo.InvariantCulture,
-            "{{\"p_world\":\"{0}\",\"p_lat\":{1:R},\"p_lng\":{2:R}," +
-            "\"p_content\":{{\"bg\":{{\"title\":\"Нова спирка\"}},\"en\":{{\"title\":\"New stop\"}}}}," +
-            "\"p_style_key\":\"pin\",\"p_status\":\"draft\",\"p_radius_m\":30}}",
-            trails.SelectedId.Replace("\"", ""), location.Latitude, location.Longitude);
-
-        string id = null;
-
-        using (UnityWebRequest request =
-               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/place_marker"), body, null))
-        {
-            yield return request.SendWebRequest();
-
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                string said = Postgrest.Said(request) ?? string.Empty;
-                Debug.LogWarning("[Capture] place_marker failed (" + request.responseCode + "): " + said);
-                Refuse(AppStrings.Get(said.Contains("not yours") ? "capture.notYours"
-                                    : said.Contains("200 stops") ? "capture.daily"
-                                    : "report.failed"));
-                yield break;
-            }
-
-            // One row comes back; PostgREST may send it bare or in a list.
-            string text = request.downloadHandler.text.Trim();
-            if (text.StartsWith("["))
-                text = text.Substring(1, text.Length - 2);
-
-            PlacedRow row = JsonUtility.FromJson<PlacedRow>(text);
-            id = row != null ? row.id : null;
-        }
-
-        if (string.IsNullOrEmpty(id))
-        {
-            Refuse(AppStrings.Get("report.failed"));
-            yield break;
-        }
-
-        // Fetched like every other stop, so what is moved is exactly what the
-        // spawner draws. Bounded: the stop exists either way, and the website has it.
-        RemoteMarkerSource source = FindAnyObjectByType<RemoteMarkerSource>();
-        if (source != null)
-            source.Refresh();
-
-        BuildingData made = null;
-        float waited = 0f;
-
-        while (made == null && waited < 12f)
-        {
-            yield return new WaitForSeconds(0.5f);
-            waited += 0.5f;
-            made = BuildingDatabase.GetById(id);
-        }
-
-        _placing = false;
-
-        if (made == null)
-        {
-            Refuse(AppStrings.Get("capture.placedNotShown"));
-            yield break;
-        }
-
-        Begin(made);
-        _said = AppStrings.Get("capture.added");
-        Draw();
-    }
-
-    [System.Serializable]
-    class PlacedRow
-    {
-        public string id;
-    }
-
-    /// <summary>A placing that did not happen: said on the bar, with only Cancel left.</summary>
-    void Refuse(string message)
-    {
-        _placing = false;
-        Say(AppStrings.Get("capture.newTitle"), message);
-        SetInteractable(false);
-
-        if (cancelButton != null)
-            cancelButton.interactable = true;
     }
 
     void Say(string title, string status)
@@ -648,7 +482,6 @@ public class CaptureMode : MonoBehaviour
         if (_busy)
             return;
 
-        _placing = false;
         Preview(0d, 0d);
         End();
     }

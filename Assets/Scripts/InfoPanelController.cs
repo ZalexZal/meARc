@@ -558,7 +558,9 @@ public class InfoPanelController : MonoBehaviour
             distanceText.text = text;
 
         bool good = found || near;
-        distanceText.color = ThemeManager.Get(good ? ThemeRole.StatusGood : ThemeRole.TextMuted);
+        // Green only where it calls for action ("you're here"); a visited stop
+        // is a quiet fact, not a prize (a tool, not a game - 6 Nov 2026).
+        distanceText.color = ThemeManager.Get(near && !found ? ThemeRole.StatusGood : ThemeRole.TextMuted);
 
         if (statusDot != null && statusDot.gameObject.activeSelf != good)
             statusDot.gameObject.SetActive(good);

@@ -78,6 +78,8 @@ public class MapPinView : MonoBehaviour
     void OnDisable()
     {
         ThemeManager.OnThemeChanged -= Refresh;
+        // An interrupted arrival must not leave a half-sized pin behind.
+        transform.localScale = Vector3.one;
     }
 
     public void SetState(State state)
@@ -226,6 +228,42 @@ public class MapPinView : MonoBehaviour
             at.x = shift;
             plate.anchoredPosition = at;
         }
+    }
+
+    /// <summary>
+    /// The pin arrives with a small spring - scale 0 to 1 with one gentle
+    /// overshoot - after a delay, so a trail's stops land one after another
+    /// rather than all at once. Under half a second in all; scale only, so the
+    /// layout around it never moves.
+    /// </summary>
+    public void Appear(float delay)
+    {
+        if (!isActiveAndEnabled)
+            return;
+
+        StopAllCoroutines();
+        StartCoroutine(Spring(delay));
+    }
+
+    System.Collections.IEnumerator Spring(float delay)
+    {
+        transform.localScale = Vector3.zero;
+
+        if (delay > 0f)
+            yield return new WaitForSecondsRealtime(delay);
+
+        // A damped spring: stiffness 260, damping 22 - one small bounce.
+        float x = 0f, v = 0f;
+        for (float t = 0f; t < 0.6f; t += Time.unscaledDeltaTime)
+        {
+            float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
+            v += (260f * (1f - x) - 22f * v) * dt;
+            x += v * dt;
+            transform.localScale = new Vector3(x, x, 1f);
+            yield return null;
+        }
+
+        transform.localScale = Vector3.one;
     }
 
     void Raise()

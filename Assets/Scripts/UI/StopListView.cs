@@ -69,18 +69,214 @@ public class StopListView : MonoBehaviour
 
     public void Open()
     {
-        gameObject.SetActive(true);
+        // Over a stop's sheet it is the next page, so it slides in from the
+        // side with a Back. As the first sheet up - from the card, the radar -
+        // it rises from the bottom, the way a sheet does.
+        bool overStop = infoPanel != null && infoPanel.Current != null;
 
-        // Back only when there is a stop under the list to go back to. Opened
-        // from the card or the radar, it is the first sheet up, and Daylight
-        // gives a first sheet only its close.
-        PageBack.Show(backButton, infoPanel != null && infoPanel.Current != null);
-        Draw();
+        if (overStop || sheet == null)
+        {
+            StopMoving();
+            SetPush(true);
+            gameObject.SetActive(true);
+            SetOffset(0f);
+            PageBack.Show(backButton, overStop);
+            Draw();
+            return;
+        }
+
+        BeginPull(SheetHeight());
+        EndPull(0f, true);
     }
 
     public void Close()
     {
+        StopMoving();
+        _pulling = false;
         gameObject.SetActive(false);
+        SetOffset(0f);
+    }
+
+    // ------------------------------------------------------- pulled up by hand
+    //
+    // The next-stop card hands its upward drag here: the list comes up under
+    // the finger from the card's top edge, and on letting go springs open or
+    // sinks back into the card. One spring for all of it, nearly critically
+    // damped, so it lands with the faintest give and never bounces off the
+    // bottom of the screen.
+
+    [Header("Pulled up from the card")]
+    [Tooltip("The sheet that moves; the page's dim (on the panel) follows it.")]
+    public RectTransform sheet;
+    public Image scrim;
+    public float scrimAlpha = 0.3f;
+
+    const float Stiffness = 320f;
+    const float Damping = 33f;
+
+    bool _pulling;
+    bool _haveRest;
+    float _restY;
+    float _offset;
+    float _start;
+    float _velocity;
+    float _lastTime;
+    Coroutine _move;
+
+    /// <summary>Whether a pull is under way (from the card).</summary>
+    public bool Pulling { get { return _pulling; } }
+
+    /// <summary>
+    /// Shows the list sunk <paramref name="startOffset"/> reference pixels below
+    /// where it rests, ready to follow the finger.
+    /// </summary>
+    public void BeginPull(float startOffset)
+    {
+        StopMoving();
+        SetPush(false);
+        gameObject.SetActive(true);
+        PageBack.Show(backButton, false);
+        Draw();
+
+        _pulling = true;
+        _start = Mathf.Max(1f, startOffset);
+        _velocity = 0f;
+        _lastTime = Time.unscaledTime;
+        SetOffset(_start);
+    }
+
+    /// <summary>Moves it with the finger, up for a positive delta.</summary>
+    public void Pull(float deltaUp)
+    {
+        if (!_pulling)
+            return;
+
+        float now = Time.unscaledTime;
+        float v = -deltaUp / Mathf.Max(0.001f, now - _lastTime);
+        _velocity = Mathf.Lerp(_velocity, v, 0.45f);
+        _lastTime = now;
+
+        float next = _offset - deltaUp;
+
+        // Past the top it gives a little and stops, rather than coming away
+        // from the bottom of the screen.
+        if (next < 0f)
+            next = -24f * (1f - 1f / (1f + -next / 120f));
+
+        SetOffset(Mathf.Min(next, _start + 60f));
+    }
+
+    /// <summary>Let go: open when it is most of the way or flicked up, else back into the card.</summary>
+    public void EndPull(float velocityUp, bool forceOpen = false)
+    {
+        if (!_pulling)
+            return;
+
+        _pulling = false;
+
+        float v = forceOpen ? 0f : (Mathf.Abs(velocityUp) > 1f ? -velocityUp : _velocity);
+        bool open = forceOpen || v < -900f || (v < 600f && _offset < _start * 0.7f);
+
+        if (open)
+            Haptics.Tick();
+
+        _move = StartCoroutine(SpringTo(open ? 0f : _start, v, !open));
+    }
+
+    /// <summary>How tall the sheet is: rising from below the screen means from that far down.</summary>
+    float SheetHeight()
+    {
+        return sheet != null && sheet.rect.height > 1f ? sheet.rect.height + 40f : 2000f;
+    }
+
+    /// <summary>How far below its resting place a point in world space is, in the sheet's units.</summary>
+    public float OffsetTo(Vector3 worldTop)
+    {
+        if (sheet == null || sheet.parent == null)
+            return SheetHeight();
+
+        RememberRest();
+        Vector3[] corners = new Vector3[4];
+        sheet.GetWorldCorners(corners);
+        float top = sheet.parent.InverseTransformPoint(corners[1]).y - (sheet.anchoredPosition.y - _restY);
+        float card = sheet.parent.InverseTransformPoint(worldTop).y;
+        return Mathf.Clamp(top - card, 1f, SheetHeight());
+    }
+
+    System.Collections.IEnumerator SpringTo(float target, float v, bool closeAtEnd)
+    {
+        float x = _offset;
+
+        while (true)
+        {
+            float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
+            float a = -Stiffness * (x - target) - Damping * v;
+            v += a * dt;
+            x += v * dt;
+            SetOffset(Mathf.Max(x, -8f));
+
+            if (Mathf.Abs(x - target) < 0.75f && Mathf.Abs(v) < 8f)
+                break;
+
+            yield return null;
+        }
+
+        SetOffset(target);
+        _move = null;
+
+        if (closeAtEnd)
+            Close();
+    }
+
+    void StopMoving()
+    {
+        if (_move != null)
+        {
+            StopCoroutine(_move);
+            _move = null;
+        }
+    }
+
+    void RememberRest()
+    {
+        if (_haveRest || sheet == null)
+            return;
+
+        _restY = sheet.anchoredPosition.y;
+        _haveRest = true;
+    }
+
+    void SetOffset(float offset)
+    {
+        _offset = offset;
+
+        if (sheet != null)
+        {
+            RememberRest();
+            sheet.anchoredPosition = new Vector2(sheet.anchoredPosition.x, _restY - offset);
+        }
+
+        if (scrim != null)
+        {
+            float k = _start > 1f ? Mathf.Clamp01(1f - offset / _start) : 1f;
+            Color c = scrim.color;
+            c.a = scrimAlpha * k;
+            scrim.color = c;
+        }
+    }
+
+    void SetPush(bool on)
+    {
+        if (sheet == null)
+            return;
+
+        PagePush push = sheet.GetComponent<PagePush>();
+        if (push != null)
+        {
+            push.enabled = on;
+            if (!on)
+                sheet.anchoredPosition = new Vector2(0f, sheet.anchoredPosition.y);
+        }
     }
 
     void Update()

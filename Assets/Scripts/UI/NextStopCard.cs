@@ -122,32 +122,33 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
 
     void ApplyCompact()
     {
-        // The swipe that got here is still settling the card back to where the
-        // other size rested. Let the dock's layout place it instead: settling
-        // to the old place left a shrunk card floating over the map's credit.
-        if (_settle != null)
-        {
-            StopCoroutine(_settle);
-            _settle = null;
-        }
+        // This card is changing size under a finger or a spring; it sets its
+        // own rows when it lands.
+        if (_resizing)
+            return;
 
         if (transform.parent is RectTransform dock)
             LayoutRebuilder.MarkLayoutForRebuild(dock);
 
-        if (compactRow != null && compactRow.activeSelf != _compact)
-            compactRow.SetActive(_compact);
+        ShowRows(_compact);
+    }
+
+    void ShowRows(bool compact)
+    {
+        if (compactRow != null && compactRow.activeSelf != compact)
+            compactRow.SetActive(compact);
 
         for (int i = 0; i < fullRows.Length; i++)
         {
-            if (fullRows[i] != null && fullRows[i].activeSelf == _compact)
-                fullRows[i].SetActive(!_compact);
+            if (fullRows[i] != null && fullRows[i].activeSelf == compact)
+                fullRows[i].SetActive(!compact);
         }
     }
 
     void Awake()
     {
-        if (compactButton != null) compactButton.onClick.AddListener(() => SetCompact(false));
-        if (handleButton != null) handleButton.onClick.AddListener(() => SetCompact(!_compact));
+        if (compactButton != null) compactButton.onClick.AddListener(() => Animate(false));
+        if (handleButton != null) handleButton.onClick.AddListener(() => Animate(!_compact));
         if (primaryButton != null) primaryButton.onClick.AddListener(() => Run(_primary));
         if (secondaryButton != null) secondaryButton.onClick.AddListener(() => Run(_secondary));
         if (iconButton != null) iconButton.onClick.AddListener(() => Run(_icon));
@@ -183,13 +184,14 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         ThemeManager.OnThemeChanged -= Refresh;
         OnCompactChanged -= ApplyCompact;
 
-        // Switched away mid-drag: rest where the layout put it.
-        if (_settle != null)
+        // Switched away mid-gesture: land in the state it was in.
+        if (_resizing)
+            EndResize();
+
+        if (_pullingList && stopList != null)
         {
-            StopCoroutine(_settle);
-            _settle = null;
-            Vector3 p = transform.localPosition;
-            transform.localPosition = new Vector3(p.x, _restY, p.z);
+            _pullingList = false;
+            stopList.EndPull(0f);
         }
     }
 
@@ -252,87 +254,298 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         }
     }
 
-    // Swipe up for every stop. A vertical gesture on purpose: the tab bar under
-    // the card is the horizontal one.
+    // ------------------------------------------------------------- gestures
     //
-    // Measured from where the card rests, which the dock's layout decides. This
-    // used to write a height of 0 - the bottom of the dock, not the card's place
-    // in it - so any drag, even a downward one, dropped the card into the tab
-    // bar and left it there. Down is not a gesture here, as in Daylight: the
-    // card gives a little under the finger and comes back.
+    // Vertical on purpose: the tab bar under the card is the horizontal one.
+    //
+    //   full card, up      the stop list comes up out of the card's top edge,
+    //                      under the finger, and springs open or sinks back
+    //   full card, down    the card shrinks with the finger to its one line
+    //   compact, up        it grows back with the finger
+    //
+    // Sizes are the layout's own: the card's height is held by a LayoutElement
+    // while it moves, so the dock keeps it standing on the tab bar and only its
+    // top edge travels, and let go again when it lands. The rows it is leaving
+    // fade as it goes; whatever it is heading for fades in.
+
+    const float Stiffness = 320f;
+    const float Damping = 33f;
+
+    LayoutElement _size;
+    RectMask2D _clip;
+    readonly List<CanvasGroup> _fullFades = new List<CanvasGroup>();
+    CanvasGroup _compactFade;
+    bool _resizing;
+    bool _pullingList;
+    bool _growing;
+    float _fullH;
+    float _compactH;
+    float _height;
+    float _velocity;
+    float _lastTime;
+    float _scale = 1f;
+    Coroutine _spring;
+
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (_settle != null)
-        {
-            StopCoroutine(_settle);
-            _settle = null;
-        }
-        else
-        {
-            _restY = transform.localPosition.y;
-        }
-
+        Canvas canvas = GetComponentInParent<Canvas>();
+        _scale = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
         _dragY = 0f;
+        _velocity = 0f;
+        _lastTime = Time.unscaledTime;
+        _pullingList = false;
+
+        StopSpring();
+
+        if (_resizing)
+            return;
+
+        if (_compact)
+        {
+            // Growing: the full rows are laid out now, held at the one-line
+            // height and invisible, and appear as the finger lifts the card.
+            BeginResize(true);
+        }
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        Canvas canvas = GetComponentInParent<Canvas>();
-        float scale = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
-        _dragY += eventData.delta.y / scale;
+        float delta = eventData.delta.y / _scale;
+        _dragY += delta;
 
-        // Up a third of the way the finger goes; down only a few pixels however
-        // far it is pulled, never as far as the tab bar.
-        float offset = _dragY >= 0f
-            ? _dragY * 0.35f
-            : -18f * (1f - 1f / (1f + -_dragY / 90f));
+        float now = Time.unscaledTime;
+        _velocity = Mathf.Lerp(_velocity, delta / Mathf.Max(0.001f, now - _lastTime), 0.45f);
+        _lastTime = now;
 
-        Vector3 p = transform.localPosition;
-        transform.localPosition = new Vector3(p.x, _restY + offset, p.z);
+        if (_pullingList)
+        {
+            stopList.Pull(delta);
+            return;
+        }
+
+        if (!_resizing)
+        {
+            if (_dragY > 10f && stopList != null)
+            {
+                // Out of the card's top edge, already as far as the finger is.
+                Vector3[] corners = new Vector3[4];
+                ((RectTransform)transform).GetWorldCorners(corners);
+                _pullingList = true;
+                stopList.BeginPull(stopList.OffsetTo(corners[1]));
+                stopList.Pull(_dragY);
+                return;
+            }
+
+            if (_dragY < -6f)
+                BeginResize(false);
+            else
+                return;
+        }
+
+        float travel = _fullH - _compactH;
+        float h = (_growing ? _compactH : _fullH) + _dragY;
+
+        // A little give past either end, never more.
+        if (h > _fullH)
+            h = _fullH + 30f * (1f - 1f / (1f + (h - _fullH) / 90f));
+        else if (h < _compactH)
+            h = _compactH - 20f * (1f - 1f / (1f + (_compactH - h) / 90f));
+
+        SetHeight(h, travel);
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        _settle = StartCoroutine(Settle());
+        if (_pullingList)
+        {
+            _pullingList = false;
+            stopList.EndPull(0f);
+            return;
+        }
 
-        // Up: a compact card comes back first; the full one opens every stop.
-        // Down: the full card shrinks to its one line.
-        if (_compact)
+        if (!_resizing)
         {
-            if (_dragY > 40f)
-                SetCompact(false);
+            // No list to pull up (an old scene): the old way to every stop.
+            if (_dragY > 110f && stopList == null)
+                Run(Action.List);
+            return;
         }
-        else if (_dragY > 110f)
-        {
-            Run(Action.List);
-        }
-        else if (_dragY < -60f)
-        {
-            SetCompact(true);
-        }
+
+        float travel = Mathf.Max(1f, _fullH - _compactH);
+        float shown = (_height - _compactH) / travel;
+        bool toCompact = _velocity < -500f || (_velocity < 500f && shown < 0.6f);
+        if (_growing)
+            toCompact = !(_velocity > 500f || (_velocity > -500f && shown > 0.3f));
+
+        _spring = StartCoroutine(SpringHeight(toCompact ? _compactH : _fullH, _velocity, toCompact));
     }
 
-    float _restY;
-    Coroutine _settle;
-
-    /// <summary>Back to where it rests, quickly and without a bounce.</summary>
-    System.Collections.IEnumerator Settle()
+    /// <summary>The grabber and the one-line row: the same change, by spring rather than by finger.</summary>
+    void Animate(bool compact)
     {
-        float from = transform.localPosition.y;
-        float t = 0f;
+        if (compact == _compact && !_resizing)
+            return;
 
-        while (t < 1f)
+        if (!isActiveAndEnabled)
         {
-            t = Mathf.Min(1f, t + Time.unscaledDeltaTime / 0.3f);
-            float k = 1f - Mathf.Pow(1f - t, 3f);
-            Vector3 p = transform.localPosition;
-            transform.localPosition = new Vector3(p.x, Mathf.Lerp(from, _restY, k), p.z);
+            SetCompact(compact);
+            return;
+        }
+
+        StopSpring();
+
+        if (!_resizing)
+            BeginResize(_compact);
+
+        _spring = StartCoroutine(SpringHeight(compact ? _compactH : _fullH, 0f, compact));
+    }
+
+    void BeginResize(bool growing)
+    {
+        RectTransform rect = (RectTransform)transform;
+
+        if (_size == null)
+        {
+            _size = GetComponent<LayoutElement>();
+            if (_size == null)
+                _size = gameObject.AddComponent<LayoutElement>();
+        }
+
+        if (_clip == null)
+        {
+            _clip = GetComponent<RectMask2D>();
+            if (_clip == null)
+                _clip = gameObject.AddComponent<RectMask2D>();
+        }
+
+        if (_fullFades.Count == 0)
+        {
+            for (int i = 0; i < fullRows.Length; i++)
+                if (fullRows[i] != null)
+                    _fullFades.Add(Fade(fullRows[i]));
+
+            if (compactRow != null)
+                _compactFade = Fade(compactRow);
+        }
+
+        _resizing = true;
+        _growing = growing;
+        _clip.enabled = true;
+
+        float now = rect.rect.height;
+        _size.preferredHeight = -1f;
+
+        _fullH = Measure(rect, false);
+        _compactH = Measure(rect, true);
+
+        // From here on the card shows its full rows, clipped to its height;
+        // the one-line row comes back only if it lands compact.
+        ShowRows(false);
+        SetHeight(now > 1f ? now : (growing ? _compactH : _fullH), _fullH - _compactH);
+    }
+
+    float Measure(RectTransform rect, bool compact)
+    {
+        ShowRows(compact);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
+        return LayoutUtility.GetPreferredHeight(rect);
+    }
+
+    static CanvasGroup Fade(GameObject row)
+    {
+        CanvasGroup group = row.GetComponent<CanvasGroup>();
+        return group != null ? group : row.AddComponent<CanvasGroup>();
+    }
+
+    void SetHeight(float h, float travel)
+    {
+        _height = h;
+        _size.preferredHeight = h;
+
+        // The full rows come in over the top half of the travel, so the card
+        // is never a box of half-drawn buttons.
+        float k = travel > 1f ? Mathf.Clamp01((h - _compactH) / travel) : 1f;
+        float alpha = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.9f, k));
+        for (int i = 0; i < _fullFades.Count; i++)
+            if (_fullFades[i] != null) _fullFades[i].alpha = alpha;
+
+        if (transform.parent is RectTransform dock)
+            LayoutRebuilder.MarkLayoutForRebuild(dock);
+    }
+
+    System.Collections.IEnumerator SpringHeight(float target, float v, bool compact)
+    {
+        float travel = _fullH - _compactH;
+        float x = _height;
+
+        while (true)
+        {
+            float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
+            float a = -Stiffness * (x - target) - Damping * v;
+            v += a * dt;
+            x += v * dt;
+            SetHeight(x, travel);
+
+            if (Mathf.Abs(x - target) < 0.75f && Mathf.Abs(v) < 8f)
+                break;
+
             yield return null;
         }
 
-        _settle = null;
+        _spring = null;
+        EndResize(compact);
+
+        // The one line arrives softly rather than appearing.
+        if (compact && _compactFade != null)
+        {
+            float t = 0f;
+            while (t < 1f)
+            {
+                t = Mathf.Min(1f, t + Time.unscaledDeltaTime / 0.16f);
+                _compactFade.alpha = t;
+                yield return null;
+            }
+        }
     }
 
+    void EndResize()
+    {
+        StopSpring();
+        EndResize(_compact);
+    }
+
+    void EndResize(bool compact)
+    {
+        _resizing = false;
+
+        if (_size != null) _size.preferredHeight = -1f;
+        if (_clip != null) _clip.enabled = false;
+
+        for (int i = 0; i < _fullFades.Count; i++)
+            if (_fullFades[i] != null) _fullFades[i].alpha = 1f;
+
+        if (_compactFade != null)
+            _compactFade.alpha = compact ? 0f : 1f;
+
+        // Said to every card (the map's and the camera's share it); this one
+        // lays out its own rows here, since it skipped them while moving.
+        bool changed = compact != _compact;
+        SetCompact(compact);
+        if (!changed)
+            ApplyCompact();
+
+        if (!isActiveAndEnabled && _compactFade != null)
+            _compactFade.alpha = 1f;
+    }
+
+    void StopSpring()
+    {
+        if (_spring != null)
+        {
+            StopCoroutine(_spring);
+            _spring = null;
+        }
+    }
 
     // ---------------------------------------------------------------- deciding
 
@@ -516,7 +729,8 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         if (near && _arrivedAt != shown.buildingId)
         {
             _arrivedAt = shown.buildingId;
-            SetCompact(false);
+            if (_compact)
+                Animate(false);
         }
 
         // The status line.
@@ -563,7 +777,9 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         Set(titleLabel, _routeCount == 1 ? AppStrings.Get("card.allFoundOne")
                                          : string.Format(AppStrings.Get("card.allFound"), _routeCount));
         Set(compactTitle, titleLabel != null ? titleLabel.text : string.Empty);
-        Status(StatusKind.Good, AppStrings.Get("card.completeBody"), null);
+        // No second line: the title already says every stop was visited, and a
+        // green "all done" under it was the same news as a prize (6 Nov 2026).
+        Status(StatusKind.None, string.Empty, null);
         Compact(StatusKind.Good, string.Format(AppStrings.Get("chip.progress"), _routeCount, _routeCount), null);
 
         // "All stops" is already the link in the corner; the way on is another trail.
@@ -612,16 +828,20 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
     {
         Set(statusLabel, text);
 
+        // An empty status is no line at all, not a blank one.
+        if (statusLabel != null && statusLabel.transform.parent != null)
+        {
+            bool any = !string.IsNullOrEmpty(text);
+            GameObject row = statusLabel.transform.parent.gameObject;
+            if (row != gameObject && row.activeSelf != any)
+                row.SetActive(any);
+        }
+
         if (statusLabel != null)
         {
             statusLabel.color = ThemeManager.Get(kind == StatusKind.Here || kind == StatusKind.Good
                 ? ThemeRole.StatusGood
                 : ThemeRole.TextMuted);
-
-            if (onCamera && kind != StatusKind.Here && kind != StatusKind.Good)
-                statusLabel.color = new Color(0.63f, 0.63f, 0.65f);
-            else if (onCamera)
-                statusLabel.color = new Color(0.188f, 0.82f, 0.345f);
         }
 
         if (statusDot != null)
@@ -652,9 +872,7 @@ public class NextStopCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEnd
         if (compactMeta != null)
         {
             Set(compactMeta, text);
-            compactMeta.color = onCamera
-                ? (good ? new Color(0.188f, 0.82f, 0.345f) : new Color(0.63f, 0.63f, 0.65f))
-                : ThemeManager.Get(good ? ThemeRole.StatusGood : ThemeRole.TextMuted);
+            compactMeta.color = ThemeManager.Get(good ? ThemeRole.StatusGood : ThemeRole.TextMuted);
         }
 
         if (compactDot != null)

@@ -637,7 +637,7 @@ public class TrailService : MonoBehaviour
 
     /// <summary>
     /// LAB: the trail code behind a team code, or null. Lets one code box take
-    /// either kind of code (lab_trail_code_for_team; undone by lab_revert.sql).
+    /// either kind of code (lab_trail_code_for_team, migration 0062).
     /// </summary>
     public IEnumerator TrailCodeForTeam(string code, Action<string> done)
     {

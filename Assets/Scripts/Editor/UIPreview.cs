@@ -27,12 +27,24 @@ using UnityEngine.UI;
 public static class UIPreview
 {
     const string ScenePath = "Assets/Scenes/Main.unity";
-    const string OutputFolder = "PreviewShots";
+    // ARTRAIL_PREVIEW_LANG=bg renders the app in Bulgarian into PreviewShots-bg,
+    // for the website's Bulgarian pages (tools/app-shots.py in noit-platform).
+    static readonly bool Bulgarian =
+        System.Environment.GetEnvironmentVariable("ARTRAIL_PREVIEW_LANG") == "bg";
+    static readonly string OutputFolder = Bulgarian ? "PreviewShots-bg" : "PreviewShots";
 
     const int Width = 1080;
     const int Height = 1920;
 
     public static void CaptureAll()
+    {
+        AppLanguage before = AppStrings.CurrentLanguage;
+        AppStrings.SetLanguage(Bulgarian ? AppLanguage.Bulgarian : AppLanguage.English);
+        try { CaptureAllIn(); }
+        finally { AppStrings.SetLanguage(before); }
+    }
+
+    static void CaptureAllIn()
     {
         EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
@@ -144,6 +156,33 @@ public static class UIPreview
         SeedTrail();
 
         Shoot(canvas, rig, "01-map" + t, "MapPanel");
+
+        // The chip's pull-down, with three trails and the first one open.
+        TrailMenuView menu = canvas.GetComponentInChildren<TrailMenuView>(true);
+        if (menu != null && menu.rowTemplate != null)
+        {
+            menu.gameObject.SetActive(true);
+            string[] names = { "Кой знае повече?", "Разходка из стария град", "Ямбол през вековете" };
+            string[] subs = { "По ред · Отбори и класиране", "Свободен ред", "По ред" };
+            var made = new System.Collections.Generic.List<GameObject>();
+            for (int i = 0; i < names.Length; i++)
+            {
+                RectTransform row = Object.Instantiate(menu.rowTemplate, menu.rowsParent);
+                row.gameObject.SetActive(true);
+                row.Find("Text/Name").GetComponent<TMPro.TextMeshProUGUI>().text = names[i];
+                row.Find("Text/Sub").GetComponent<TMPro.TextMeshProUGUI>().text = subs[i];
+                row.Find("Check/Icon").GetComponent<UnityEngine.UI.Image>().enabled = i == 0;
+                row.Find("Rule").gameObject.SetActive(i > 0);
+                made.Add(row.gameObject);
+            }
+            menu.ShowStill();
+            Shoot(canvas, rig, "01c-trail-menu" + t, "MapPanel");
+            foreach (GameObject go in made)
+                Object.DestroyImmediate(go);
+            menu.gameObject.SetActive(false);
+            if (menu.chevron != null)
+                menu.chevron.localRotation = Quaternion.identity;
+        }
 
         // The card swiped down to its one line. Nothing runs in a batch render,
         // so the line is filled from the full card the stand-ins already wrote.
@@ -1095,8 +1134,6 @@ public static class UIPreview
 
         // Capture mode's bar where the dock was.
         CaptureMode capture = canvas.GetComponentInChildren<CaptureMode>(true);
-        CameraTabController camera = canvas.GetComponentInChildren<CameraTabController>(true);
-
         if (capture != null)
         {
             foreach (GameObject other in capture.hideWhileOpen)
@@ -1114,35 +1151,16 @@ public static class UIPreview
 
             Shoot(canvas, rig, "45-capture" + t, "CameraPanel");
 
-            // A stop just made on site: a draft, and it says so.
-            if (capture.titleLabel != null)
-                capture.titleLabel.text = string.Format(AppStrings.Get("capture.title"),
-                                                        AppStrings.Get("capture.newTitle"));
-            if (capture.statusLabel != null)
-                capture.statusLabel.text = AppStrings.Get("capture.added") + "\n" +
-                                           AppStrings.Get("capture.draftNote");
-            if (capture.shapeLabel != null)
-                capture.shapeLabel.text = string.Format(AppStrings.Get("capture.shape"),
-                                                        AppStrings.Get("shape.pin"));
-
-            Shoot(canvas, rig, "46-capture-new" + t, "CameraPanel");
-
             capture.gameObject.SetActive(false);
             foreach (GameObject other in capture.hideWhileOpen)
                 if (other != null) other.SetActive(true);
-
-            // The camera as a trail's creator sees it: Add a stop here above the dock.
-            if (camera != null && camera.addStopButton != null)
-            {
-                camera.addStopButton.gameObject.SetActive(true);
-                Shoot(canvas, rig, "47-camera-creator" + t, "CameraPanel");
-                camera.addStopButton.gameObject.SetActive(false);
-            }
         }
         else
         {
             Debug.LogWarning("[Preview] No capture bar to draw.");
         }
+
+        CameraTabController camera = canvas.GetComponentInChildren<CameraTabController>(true);
 
         if (camera != null && camera.arNotice != null)
         {
@@ -1495,7 +1513,7 @@ public static class UIPreview
             "търговското сърце на града.");
 
         Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Name", "Кой знае повече?");
-        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Sub", "С точки · По ред · 2 от 5 · 20 точки");
+        Set(root, "MapPanel/Safe/TopBar/TrailChip/Row/Text/Sub", "По ред · 2 от 5 · 20 точки");
         Set(root, "MapPanel/Safe/TopBar/TeamRow/TeamChip/Label", "Северняците · 3-то място");
 
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +
@@ -2398,10 +2416,7 @@ public static class UIPreview
                 }
 
                 bool good = done || near;
-                Color dark = new Color(0.63f, 0.63f, 0.65f);
-                card.statusLabel.color = good
-                    ? (card.onCamera ? new Color(0.188f, 0.82f, 0.345f) : ThemeManager.Get(ThemeRole.StatusGood))
-                    : (card.onCamera ? dark : ThemeManager.Get(ThemeRole.TextMuted));
+                card.statusLabel.color = ThemeManager.Get(good ? ThemeRole.StatusGood : ThemeRole.TextMuted);
 
                 Show(card.statusDot != null ? card.statusDot.gameObject : null, good);
                 Show(card.statusArrow != null ? card.statusArrow.gameObject : null, !good);

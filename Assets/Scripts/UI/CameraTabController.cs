@@ -75,8 +75,6 @@ public class CameraTabController : MonoBehaviour
     public GameObject dock;
     public Button dockButton;
 
-    [Tooltip("\"Add a stop here\", for the open trail's owner and editors.")]
-    public Button addStopButton;
     public CaptureMode capture;
     public Image dockDot;
     public Image dockRing;
@@ -197,11 +195,27 @@ public class CameraTabController : MonoBehaviour
     public Button arNoticeContinue;
     public Button arNoticeLearnMore;
 
+    [Tooltip("Hidden while the notice is up: the next-stop card and the radar " +
+             "sat under it and showed through (design scan, 6 Nov 2026).")]
+    public GameObject[] hideWithArNotice = new GameObject[0];
+
+    void ShowArNotice(bool on)
+    {
+        if (arNotice != null)
+            arNotice.SetActive(on);
+
+        for (int i = 0; i < hideWithArNotice.Length; i++)
+        {
+            if (hideWithArNotice[i] != null)
+                hideWithArNotice[i].SetActive(!on);
+        }
+    }
+
     void WakeCamera()
     {
         if (PlayerPrefs.GetInt(ArNoticeKey, 0) == 0 && arNotice != null)
         {
-            arNotice.SetActive(true);
+            ShowArNotice(true);
             return;
         }
 
@@ -244,8 +258,7 @@ public class CameraTabController : MonoBehaviour
         PlayerPrefs.SetInt(ArNoticeKey, 1);
         PlayerPrefs.Save();
 
-        if (arNotice != null)
-            arNotice.SetActive(false);
+        ShowArNotice(false);
 
         WakeCamera();
     }
@@ -484,14 +497,6 @@ public class CameraTabController : MonoBehaviour
     /// </summary>
     void RefreshDock()
     {
-        if (addStopButton != null)
-        {
-            // IsOpen, not Active: a refused placing leaves the bar up with
-            // nothing in it, and the button stood on top of it.
-            addStopButton.gameObject.SetActive(capture != null && !CaptureMode.IsOpen &&
-                                               CaptureMode.CanAddHere());
-        }
-
         if (dock == null)
             return;
 

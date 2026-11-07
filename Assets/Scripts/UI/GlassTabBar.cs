@@ -310,8 +310,11 @@ public class GlassTabBar : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         }
 
         // How far into the camera the lens is: 1 on the camera tab, 0 a tab away.
-        float dark = Mathf.Max(0f, 1f - Mathf.Abs(_p - 1f));
+        // Only in dark mode: in light mode the camera keeps the light bar, as
+        // its card does - the bar used to go dark there and the whole tab read
+        // as dark mode (feedback, 6 Nov 2026).
         bool night = ThemeManager.IsDark;
+        float dark = night ? Mathf.Max(0f, 1f - Mathf.Abs(_p - 1f)) : 0f;
 
         Color darkGlass = new Color(30f / 255f, 30f / 255f, 33f / 255f, 0.72f);
         Color darkRim = new Color(1f, 1f, 1f, 0.12f);

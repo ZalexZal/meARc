@@ -510,6 +510,8 @@ public class MapView : MonoBehaviour, IDragHandler, IBeginDragHandler, IScrollHa
             MapPinView pin = Instantiate(pinPrefab, contentParent);
             pin.gameObject.name = "Pin - " + all[i].DisplayName;
             pin.Bind(all[i], RaiseSelected);
+            // One after another, 40 ms apart, never longer than half a second.
+            pin.Appear(Mathf.Min(_pins.Count * 0.04f, 0.5f));
 
             _pins.Add(all[i], pin);
         }

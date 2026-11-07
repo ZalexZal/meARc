@@ -497,6 +497,8 @@ public class MarkerQuestionView : MonoBehaviour
                 : null;
 
         Haptics.Reject();
+        Shake(optionsParent != null && optionsParent.gameObject.activeInHierarchy
+                  ? optionsParent : openHolder != null ? openHolder.transform as RectTransform : null);
 
         // A lock says itself on the lock card, with its countdown; a bubble
         // saying "not right" above it would be the same news twice.
@@ -904,5 +906,28 @@ public class MarkerQuestionView : MonoBehaviour
     {
         if (go != null && go.activeSelf != on)
             go.SetActive(on);
+    }
+
+    /// <summary>
+    /// "No": three quick side-to-side swings that die away in 0.35 s, as iOS
+    /// shakes a wrong passcode. Position only, put back exactly at the end.
+    /// </summary>
+    void Shake(RectTransform target)
+    {
+        if (target != null && isActiveAndEnabled)
+            StartCoroutine(ShakeRoutine(target));
+    }
+
+    System.Collections.IEnumerator ShakeRoutine(RectTransform target)
+    {
+        Vector2 home = target.anchoredPosition;
+        const float length = 0.35f;
+        for (float t = 0f; t < length; t += Time.unscaledDeltaTime)
+        {
+            float fade = 1f - t / length;
+            target.anchoredPosition = home + new Vector2(Mathf.Sin(t * 60f) * 18f * fade, 0f);
+            yield return null;
+        }
+        target.anchoredPosition = home;
     }
 }

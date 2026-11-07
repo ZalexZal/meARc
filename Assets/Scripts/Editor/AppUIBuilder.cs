@@ -281,12 +281,7 @@ const float ReferenceWidth = 1080f;
         EditorUtility.SetDirty(settingsTab);
 
         // Over the tab bar, as every sheet is.
-        ProfileView profileView = settingsPanel.GetComponentInChildren<ProfileView>(true);
-        if (profileView != null)
-        {
-            profileView.badgeSheet = BuildBadgeSheet(root, profileView.badgeSprites);
-            EditorUtility.SetDirty(profileView);
-        }
+        // No badge sheet: AR Trails is a tool, not a game (6 Nov 2026).
 
         settingsTab.languageSheet = BuildLanguageSheet(root, settingsTab.languageValueLabel);
 
@@ -663,7 +658,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(badge.gameObject, 89f, 89f).flexibleWidth = 0f;
         controller.colourDot = UIFactory.Plain(badge, ThemeManager.Get(ThemeRole.Accent), UIShape.Circle);
         controller.colourDot.raycastTarget = false;
-        BadgeEdge(badge, false);
+        BadgeEdge(badge);
 
         controller.numberLabel = UIFactory.Text("Number", badge, Secondary, ThemeRole.OnAccent,
                                                 TextAlignmentOptions.Center, null, FontStyles.Bold);
@@ -1228,6 +1223,10 @@ const float ReferenceWidth = 1080f;
 
         StopListView view = panel.gameObject.AddComponent<StopListView>();
         view.locationService = location;
+        // Pulled up out of the next-stop card: the sheet moves, the dim follows.
+        view.sheet = (RectTransform)panel.Find("Safe/Sheet");
+        view.scrim = panel.GetComponent<Image>();
+        view.scrimAlpha = 0.3f;
         view.infoPanel = info;
         view.backButton = back;
         view.closeButton = close;
@@ -1260,7 +1259,7 @@ const float ReferenceWidth = 1080f;
         RectTransform hole = UIFactory.Rect("Hole", badge);
         UIFactory.Corner(hole, new Vector2(0.5f, 0.5f), new Vector2(58f, 58f), Vector2.zero);
         UIFactory.Plain(hole, ThemeManager.Get(ThemeRole.SurfaceAlt), UIShape.Circle).raycastTarget = false;
-        BadgeEdge(badge, false);
+        BadgeEdge(badge);
 
         TextMeshProUGUI number = UIFactory.Text("Number", badge, Caption, ThemeRole.OnAccent,
                                                 TextAlignmentOptions.Center, null, FontStyles.Bold);
@@ -1616,11 +1615,146 @@ const float ReferenceWidth = 1080f;
         Ignore(creditRect);
         credit.textWrappingMode = TextWrappingModes.NoWrap;
         credit.overflowMode = TextOverflowModes.Ellipsis;
+        // Small print, like Apple Maps' "Legal": required, readable, never in
+        // the way of a pin (it was body-sized - design scan, 6 Nov 2026).
+        credit.fontSize = 24f;
+        creditRect.sizeDelta = new Vector2(-170f, 32f);
         credit.text = "\u00A9 Stadia Maps \u00B7 OpenMapTiles \u00B7 OpenStreetMap";
         OnMap(credit, MapInk.MutedInk);
 
+        // The chip's pull-down, over everything else on the map.
+        chip.menu = BuildTrailMenu(panel, chipRect, chip.chevron != null
+                                                       ? (RectTransform)chip.chevron.transform : null);
+
         EditorUtility.SetDirty(controller);
         return controller;
+    }
+
+    /// <summary>
+    /// The trail chip's menu: the trails joined, a tick on the open one, then
+    /// "Join with a code" and "All trails". Hung under the chip by the view.
+    /// </summary>
+    static TrailMenuView BuildTrailMenu(RectTransform panel, RectTransform chip, RectTransform chevron)
+    {
+        RectTransform root = UIFactory.Rect("TrailMenu", panel);
+        UIFactory.Stretch(root);
+        TrailMenuView view = root.gameObject.AddComponent<TrailMenuView>();
+        view.anchor = chip;
+        view.chevron = chevron;
+
+        // A tap anywhere off the menu folds it; so does Back.
+        RectTransform scrimRect = UIFactory.Rect("Scrim", root);
+        UIFactory.Stretch(scrimRect);
+        view.scrim = UIFactory.Plain(scrimRect, new Color(0f, 0f, 0f, 0f));
+        view.scrim.raycastTarget = true;
+        view.scrimButton = scrimRect.gameObject.AddComponent<Button>();
+        view.scrimButton.targetGraphic = view.scrim;
+        view.scrimButton.transition = Selectable.Transition.None;
+        scrimRect.gameObject.AddComponent<WayOut>();
+
+        RectTransform card = UIFactory.Rect("Card", root);
+        card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
+        card.pivot = new Vector2(1f, 1f);
+        card.sizeDelta = new Vector2(820f, 400f);
+        view.card = card;
+        view.cardGroup = card.gameObject.AddComponent<CanvasGroup>();
+
+        Image face = UIFactory.Fill(card, ThemeRole.Surface, 1f, UIShape.Card);
+        face.raycastTarget = true;
+
+        RectTransform edge = UIFactory.Rect("Outline", card);
+        UIFactory.Stretch(edge);
+        Image line = UIFactory.Fill(edge, ThemeRole.Line);
+        line.sprite = UISprites.CardOutline;
+        line.type = Image.Type.Sliced;
+        line.pixelsPerUnitMultiplier = 1f;
+        line.raycastTarget = false;
+        Ignore(edge);
+
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(card, 0f);
+        stack.padding = new RectOffset(0, 0, 14, 14);
+
+        RectTransform rows = UIFactory.Rect("Trails", card);
+        UIFactory.VerticalStack(rows, 0f);
+        view.rowsParent = rows;
+
+        // --- one trail:  [✓]  Name
+        //                      In order · Teams & standings
+        RectTransform row = UIFactory.Rect("Row", rows);
+        UIFactory.Size(row.gameObject, 150f);
+        UIFactory.Button(row, ThemeRole.Fill, 0f);
+        RectTransform rule = UIFactory.Rect("Rule", row);
+        UIFactory.TopStretch(rule, 3f);
+        rule.offsetMin = new Vector2(122f, rule.offsetMin.y);
+        UIFactory.Fill(rule, ThemeRole.Line).raycastTarget = false;
+        Ignore(rule);
+
+        RectTransform checkBox = UIFactory.Rect("Check", row);
+        UIFactory.Corner(checkBox, new Vector2(0f, 0.5f), new Vector2(122f, 150f), Vector2.zero);
+        Image tick = Icon(checkBox, AppIcon.Check, 46f, ThemeRole.AccentText);
+        tick.gameObject.name = "Icon";
+
+        RectTransform text = UIFactory.Rect("Text", row);
+        UIFactory.Stretch(text);
+        text.offsetMin = new Vector2(122f, 0f);
+        text.offsetMax = new Vector2(-44f, 0f);
+        UIFactory.VerticalStack(text, 2f, false).childAlignment = TextAnchor.MiddleLeft;
+
+        TextMeshProUGUI name = UIFactory.Text("Name", text, Body, ThemeRole.TextPrimary,
+                                              TextAlignmentOptions.Left);
+        UIFactory.Size(name.gameObject, 58f);
+        name.textWrappingMode = TextWrappingModes.NoWrap;
+        name.overflowMode = TextOverflowModes.Ellipsis;
+
+        TextMeshProUGUI sub = UIFactory.Text("Sub", text, Caption, ThemeRole.TextSecondary,
+                                             TextAlignmentOptions.Left);
+        UIFactory.Size(sub.gameObject, 40f);
+        sub.textWrappingMode = TextWrappingModes.NoWrap;
+        sub.overflowMode = TextOverflowModes.Ellipsis;
+
+        view.rowTemplate = row;
+        row.gameObject.SetActive(false);
+
+        // --- the way to the rest
+        RectTransform gap = UIFactory.Rect("Gap", card);
+        UIFactory.Size(gap.gameObject, 17f);
+        UIFactory.Fill(gap, ThemeRole.SurfaceAlt).raycastTarget = false;
+
+        view.joinButton = MenuRow(card, "Join", AppIcon.Plus, "trails.join", false);
+        view.allButton = MenuRow(card, "All", AppIcon.List, "menu.allTrails", true);
+
+        root.gameObject.SetActive(false);
+        EditorUtility.SetDirty(view);
+        return view;
+    }
+
+    static Button MenuRow(RectTransform card, string name, AppIcon icon, string key, bool rule)
+    {
+        RectTransform row = UIFactory.Rect(name, card);
+        UIFactory.Size(row.gameObject, 140f);
+        Button button = UIFactory.Button(row, ThemeRole.Fill, 0f);
+
+        if (rule)
+        {
+            RectTransform line = UIFactory.Rect("Rule", row);
+            UIFactory.TopStretch(line, 3f);
+            line.offsetMin = new Vector2(122f, line.offsetMin.y);
+            UIFactory.Fill(line, ThemeRole.Line).raycastTarget = false;
+            Ignore(line);
+        }
+
+        RectTransform glyph = UIFactory.Rect("Glyph", row);
+        UIFactory.Corner(glyph, new Vector2(0f, 0.5f), new Vector2(122f, 140f), Vector2.zero);
+        Icon(glyph, icon, 50f, ThemeRole.TextPrimary);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", row, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, key);
+        UIFactory.Stretch(label.rectTransform);
+        label.rectTransform.offsetMin = new Vector2(122f, 0f);
+        label.rectTransform.offsetMax = new Vector2(-44f, 0f);
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+
+        return button;
     }
 
     /// <summary>
@@ -1697,27 +1831,22 @@ const float ReferenceWidth = 1080f;
     /// it is painted in fixed colours because the feed behind it is the same in
     /// either theme.
     /// </summary>
-    static NextStopCard BuildNextStopCard(RectTransform parent, UserLocationService location, bool dark)
+    static NextStopCard BuildNextStopCard(RectTransform parent, UserLocationService location, bool onCamera)
     {
-        RectTransform card = UIFactory.Rect(dark ? "CameraCard" : "NextStop", parent);
+        RectTransform card = UIFactory.Rect(onCamera ? "CameraCard" : "NextStop", parent);
 
-        Color darkFace = new Color(28f / 255f, 28f / 255f, 30f / 255f, 0.94f);
-        Color darkInk = new Color(0.961f, 0.961f, 0.969f);
-        Color darkMuted = new Color(0.631f, 0.631f, 0.651f);
-        Color darkLink = new Color(0.161f, 0.592f, 1f);
-        Color darkFill = new Color(1f, 1f, 1f, 0.12f);
 
         RectTransform face = UIFactory.Rect("Face", card);
         UIFactory.Stretch(face);
-        Image faceImage = dark ? UIFactory.Plain(face, darkFace, UIShape.Card)
-                               : UIFactory.Fill(face, ThemeRole.Surface, 1f, UIShape.Card);
+        // Themed on the camera too: a light card over the feed in light mode,
+        // as Apple Maps does in its AR walking view.
+        Image faceImage = UIFactory.Fill(face, ThemeRole.Surface, 1f, UIShape.Card);
         faceImage.raycastTarget = true;
         Ignore(face);
 
         RectTransform edge = UIFactory.Rect("Outline", card);
         UIFactory.Stretch(edge);
-        Image line = dark ? UIFactory.Plain(edge, new Color(1f, 1f, 1f, 0.10f))
-                          : UIFactory.Fill(edge, ThemeRole.Line);
+        Image line = UIFactory.Fill(edge, ThemeRole.Line);
         line.sprite = UISprites.CardOutline;
         line.type = Image.Type.Sliced;
         line.pixelsPerUnitMultiplier = 1f;
@@ -1730,7 +1859,7 @@ const float ReferenceWidth = 1080f;
 
         NextStopCard view = card.gameObject.AddComponent<NextStopCard>();
         view.locationService = location;
-        view.onCamera = dark;
+        view.onCamera = onCamera;
         view.cameraSprite = UIIcons.Get(AppIcon.Camera);
         view.infoSprite = UIIcons.Get(AppIcon.Info);
 
@@ -1739,8 +1868,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(handleRow.gameObject, 14f);
         RectTransform handle = UIFactory.Rect("Bar", handleRow);
         UIFactory.Corner(handle, new Vector2(0.5f, 0.5f), new Vector2(100f, 14f), Vector2.zero);
-        Image grip = dark ? UIFactory.Plain(handle, new Color(1f, 1f, 1f, 0.22f), UIShape.Pill)
-                          : UIFactory.Fill(handle, ThemeRole.FillStrong, 1f, UIShape.Pill);
+        Image grip = UIFactory.Fill(handle, ThemeRole.FillStrong, 1f, UIShape.Pill);
         grip.raycastTarget = false;
         PillFit(grip, 14f);
 
@@ -1778,7 +1906,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(smallBadge.gameObject, 72f, 72f).flexibleWidth = 0f;
         view.compactBadge = UIFactory.Plain(smallBadge, ThemeManager.Get(ThemeRole.Accent), UIShape.Circle);
         view.compactBadge.raycastTarget = false;
-        BadgeEdge(smallBadge, dark);
+        BadgeEdge(smallBadge);
 
         view.compactNumber = UIFactory.Text("Number", smallBadge, Caption, ThemeRole.OnAccent,
                                             TextAlignmentOptions.Center, null, FontStyles.Bold);
@@ -1789,7 +1917,7 @@ const float ReferenceWidth = 1080f;
         Unthemed(view.compactTick.gameObject);
         view.compactTick.gameObject.SetActive(false);
 
-        view.compactTitle = CardText("Title", compact, Body, dark ? darkInk : (Color?)null,
+        view.compactTitle = CardText("Title", compact, Body, null,
                                      ThemeRole.TextPrimary, TextAlignmentOptions.Left, true);
         UIFactory.Flexible(view.compactTitle.gameObject);
         view.compactTitle.textWrappingMode = TextWrappingModes.NoWrap;
@@ -1807,10 +1935,10 @@ const float ReferenceWidth = 1080f;
         view.compactDot = UIFactory.Plain(compactDot, ThemeManager.Get(ThemeRole.GoodDot), UIShape.Circle);
         view.compactDot.raycastTarget = false;
 
-        view.compactArrow = Arrow(compactMeta, location, dark ? BearingArrow.Frame.DeviceRelative
+        view.compactArrow = Arrow(compactMeta, location, onCamera ? BearingArrow.Frame.DeviceRelative
                                                               : BearingArrow.Frame.NorthUp, 36f);
 
-        view.compactMeta = CardText("Label", compactMeta, Secondary, dark ? darkMuted : (Color?)null,
+        view.compactMeta = CardText("Label", compactMeta, Secondary, null,
                                     ThemeRole.TextMuted, TextAlignmentOptions.Right, false);
         view.compactMeta.textWrappingMode = TextWrappingModes.NoWrap;
         Unthemed(view.compactMeta.gameObject);
@@ -1823,7 +1951,7 @@ const float ReferenceWidth = 1080f;
         HorizontalLayoutGroup headRow = UIFactory.HorizontalStack(head, 16f);
         headRow.childAlignment = TextAnchor.MiddleLeft;
 
-        view.headLabel = CardText("Label", head, Secondary, dark ? darkMuted : (Color?)null,
+        view.headLabel = CardText("Label", head, Secondary, null,
                                   ThemeRole.TextMuted, TextAlignmentOptions.Left, false);
         UIFactory.Flexible(view.headLabel.gameObject);
         view.headLabel.textWrappingMode = TextWrappingModes.NoWrap;
@@ -1832,7 +1960,7 @@ const float ReferenceWidth = 1080f;
         RectTransform list = UIFactory.Rect("All", head);
         UIFactory.Size(list.gameObject, Tap, 360f).flexibleWidth = 0f;
         view.listButton = UIFactory.Button(list, ThemeRole.Surface, 0f);
-        view.listLabel = CardText("Label", list, Secondary, dark ? darkLink : (Color?)null,
+        view.listLabel = CardText("Label", list, Secondary, null,
                                   ThemeRole.AccentText, TextAlignmentOptions.Right, false);
         UIFactory.Stretch(view.listLabel.rectTransform);
         view.listLabel.text = AppStrings.Get("card.all");
@@ -1846,7 +1974,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(badge.gameObject, 89f, 89f).flexibleWidth = 0f;
         view.badge = UIFactory.Plain(badge, ThemeManager.Get(ThemeRole.Accent), UIShape.Circle);
         view.badge.raycastTarget = false;
-        BadgeEdge(badge, dark);
+        BadgeEdge(badge);
 
         view.numberLabel = UIFactory.Text("Number", badge, Secondary, ThemeRole.OnAccent,
                                           TextAlignmentOptions.Center, null, FontStyles.Bold);
@@ -1861,7 +1989,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(text, 11f, false);
         UIFactory.Flexible(text.gameObject);
 
-        view.titleLabel = CardText("Title", text, Title, dark ? darkInk : (Color?)null,
+        view.titleLabel = CardText("Title", text, Title, null,
                                    ThemeRole.TextPrimary, TextAlignmentOptions.TopLeft, true);
         view.titleLabel.textWrappingMode = TextWrappingModes.Normal;
         view.titleLabel.overflowMode = TextOverflowModes.Ellipsis;
@@ -1877,10 +2005,10 @@ const float ReferenceWidth = 1080f;
         view.statusDot = UIFactory.Plain(statusDot, ThemeManager.Get(ThemeRole.GoodDot), UIShape.Circle);
         view.statusDot.raycastTarget = false;
 
-        view.statusArrow = Arrow(status, location, dark ? BearingArrow.Frame.DeviceRelative
+        view.statusArrow = Arrow(status, location, onCamera ? BearingArrow.Frame.DeviceRelative
                                                         : BearingArrow.Frame.NorthUp, 39f);
 
-        view.statusLabel = CardText("Label", status, Secondary, dark ? darkMuted : (Color?)null,
+        view.statusLabel = CardText("Label", status, Secondary, null,
                                     ThemeRole.TextMuted, TextAlignmentOptions.Left, false);
         UIFactory.Flexible(view.statusLabel.gameObject);
         view.statusLabel.textWrappingMode = TextWrappingModes.NoWrap;
@@ -1914,42 +2042,17 @@ const float ReferenceWidth = 1080f;
         RectTransform secondary = UIFactory.Rect("Secondary", actions);
         UIFactory.Size(secondary.gameObject, Btn);
         UIFactory.Flexible(secondary.gameObject);
-        if (dark)
-        {
-            Image fill = UIFactory.Plain(secondary, darkFill, UIShape.Pill);
-            view.secondaryButton = secondary.gameObject.AddComponent<Button>();
-            view.secondaryButton.targetGraphic = fill;
-            UIFactory.Feedback(view.secondaryButton);
-        }
-        else
-        {
-            view.secondaryButton = UIFactory.Button(secondary, ThemeRole.Fill, 1f, UIShape.Pill);
-        }
+        view.secondaryButton = UIFactory.Button(secondary, ThemeRole.Fill, 1f, UIShape.Pill);
 
-        view.secondaryLabel = CardText("Label", secondary, Body, dark ? darkInk : (Color?)null,
+        view.secondaryLabel = CardText("Label", secondary, Body, null,
                                        ThemeRole.TextPrimary, TextAlignmentOptions.Center, false);
         UIFactory.Stretch(view.secondaryLabel.rectTransform);
 
         RectTransform iconHolder = UIFactory.Rect("Icon", actions);
         UIFactory.Size(iconHolder.gameObject, Btn, Btn).flexibleWidth = 0f;
-        if (dark)
-        {
-            Image fill = UIFactory.Plain(iconHolder, darkFill, UIShape.Circle);
-            view.iconButton = iconHolder.gameObject.AddComponent<Button>();
-            view.iconButton.targetGraphic = fill;
-            UIFactory.Feedback(view.iconButton);
-        }
-        else
-        {
-            view.iconButton = UIFactory.Button(iconHolder, ThemeRole.Fill, 1f, UIShape.Circle);
-        }
+        view.iconButton = UIFactory.Button(iconHolder, ThemeRole.Fill, 1f, UIShape.Circle);
 
         view.iconImage = Icon(iconHolder, AppIcon.Info, 61f, ThemeRole.TextPrimary);
-        if (dark)
-        {
-            Unthemed(view.iconImage.gameObject);
-            view.iconImage.color = darkInk;
-        }
 
         // What the compact row stands in for.
         view.fullRows = new[] { head.gameObject, main.gameObject, actions.gameObject };
@@ -1972,12 +2075,11 @@ const float ReferenceWidth = 1080f;
     /// The hairline round a stop's number disc, drawn over its colour. Barely
     /// there on a coloured disc; the whole edge of a white one.
     /// </summary>
-    static void BadgeEdge(RectTransform badge, bool dark)
+    static void BadgeEdge(RectTransform badge)
     {
         RectTransform edge = UIFactory.Rect("Edge", badge);
         UIFactory.Stretch(edge);
-        Image ring = dark ? UIFactory.Plain(edge, new Color(1f, 1f, 1f, 0.16f))
-                          : UIFactory.Fill(edge, ThemeRole.Line);
+        Image ring = UIFactory.Fill(edge, ThemeRole.Line);
         ring.sprite = UISprites.RingThin;
         ring.type = Image.Type.Simple;
         ring.raycastTarget = false;
@@ -2281,14 +2383,6 @@ const float ReferenceWidth = 1080f;
         BuildWarningBanner(safe, controller);
         BuildEdgeIndicator(safe, location, info);
 
-        // For the trail's owner and editors only; the controller shows it. A
-        // small pill in the other top corner, where it is found when wanted and
-        // costs nothing when not.
-        controller.addStopButton = DarkPill(safe, "AddStop", AppIcon.Plus, "capture.addHere",
-                                            new Vector2(1f, 1f), new Vector2(-Gutter, -Gutter));
-        controller.addStopButton.gameObject.SetActive(false);
-        controller.vpsIndicator.avoid = (RectTransform)controller.addStopButton.transform;
-
         // --- bottom: the radar over the card, both above the tab bar
         RectTransform dockArea = UIFactory.Rect("Panel", safe);
         UIFactory.BottomStretch(dockArea, 0f, 255f);
@@ -2304,6 +2398,7 @@ const float ReferenceWidth = 1080f;
                 // Google's notice before the first Geospatial session. Over everything
         // else on the tab, because nothing behind it is running yet.
         BuildArNotice(safe, controller);
+        controller.hideWithArNotice = new[] { dockArea.gameObject };
 
         // In the dock's place while a stop is being moved: the same spot at the
         // bottom of the camera, where a thumb already is.
@@ -2313,7 +2408,6 @@ const float ReferenceWidth = 1080f;
                                                  ? controller.radar.transform.parent.gameObject : null };
 
         controller.capture = info.capture;
-        Wire(controller.addStopButton.onClick, info.capture.AddHere, "Add a stop here");
         EditorUtility.SetDirty(info);
 
         // Siblings render in hierarchy order, so the sheet is raised last - otherwise
@@ -2332,10 +2426,13 @@ const float ReferenceWidth = 1080f;
 
     static void BuildArNotice(RectTransform parent, CameraTabController controller)
     {
+        // At the foot of the tab, where the next-stop card sits (hidden while
+        // this is up), like a sheet - not floating over the middle.
         RectTransform card = UIFactory.Rect("ArNotice", parent);
-        card.anchorMin = new Vector2(0f, 0.5f);
-        card.anchorMax = new Vector2(1f, 0.5f);
-        card.pivot = new Vector2(0.5f, 0.5f);
+        card.anchorMin = new Vector2(0f, 0f);
+        card.anchorMax = new Vector2(1f, 0f);
+        card.pivot = new Vector2(0.5f, 0f);
+        card.anchoredPosition = Vector2.zero;
         card.sizeDelta = new Vector2(-Margin * 2f, 0f);
         UIFactory.Card(card, 30f, 16f);
         Outline(card);
@@ -2455,21 +2552,31 @@ const float ReferenceWidth = 1080f;
         banner.anchoredPosition = new Vector2(0f, -(Gutter + 111f + 22f));
         UIFactory.Plain(banner, new Color(28f / 255f, 28f / 255f, 30f / 255f, 0.86f), UIShape.Rounded);
 
+        // As tall as its words: a fixed 144 cut a four-line warning off at the
+        // top (design scan, 6 Nov 2026). The icon and close button sit outside
+        // the layout, pinned to the sides.
+        VerticalLayoutGroup bannerStack = banner.gameObject.AddComponent<VerticalLayoutGroup>();
+        bannerStack.padding = new RectOffset(117, 132, 30, 30);
+        bannerStack.childControlWidth = true; bannerStack.childControlHeight = true;
+        bannerStack.childForceExpandWidth = true; bannerStack.childForceExpandHeight = false;
+        ContentSizeFitter bannerFit = banner.gameObject.AddComponent<ContentSizeFitter>();
+        bannerFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
         Image warning = Icon(banner, AppIcon.Warning, 50f, ThemeRole.WarnDot, out RectTransform warningRect);
+        warningRect.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
         UIFactory.Corner(warningRect, new Vector2(0f, 0.5f), new Vector2(50f, 50f), new Vector2(39f, 0f));
         Unthemed(warning.gameObject);
         warning.color = new Color(1f, 0.624f, 0.039f);
 
         controller.warningLabel = UIFactory.Text("Label", banner, Secondary, ThemeRole.OnAccent,
                                                  TextAlignmentOptions.Left);
-        UIFactory.Stretch(controller.warningLabel.rectTransform);
-        controller.warningLabel.rectTransform.offsetMin = new Vector2(117f, 0f);
-        controller.warningLabel.rectTransform.offsetMax = new Vector2(-(122f + 10f), 0f);
+        controller.warningLabel.textWrappingMode = TextWrappingModes.Normal;
         Unthemed(controller.warningLabel.gameObject);
         controller.warningLabel.color = Color.white;
         controller.warningLabel.text = AppStrings.Get("camera.refused");
 
         RectTransform dismiss = UIFactory.Rect("Dismiss", banner);
+        dismiss.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
         UIFactory.Corner(dismiss, new Vector2(1f, 0.5f), new Vector2(122f, 122f), new Vector2(-11f, 0f));
         controller.warningDismissButton = UIFactory.Button(dismiss, ThemeRole.Surface, 0f, UIShape.Circle);
         White(Icon(dismiss, AppIcon.Close, 44f, ThemeRole.OnAccent));
@@ -2508,7 +2615,9 @@ const float ReferenceWidth = 1080f;
         RectTransform rt = UIFactory.Rect("Radar", row);
         UIFactory.Corner(rt, new Vector2(1f, 0.5f), new Vector2(Size, Size), Vector2.zero);
 
-        Image disc = UIFactory.Plain(rt, new Color(28f / 255f, 28f / 255f, 30f / 255f, 0.6f), UIShape.Circle);
+        // The card's own surface, a little see-through, so the radar and the
+        // card under it are one family in light mode as well as dark.
+        Image disc = UIFactory.Fill(rt, ThemeRole.Surface, 0.88f, UIShape.Circle);
         disc.sprite = UISprites.MaskCircle;
         Button open = rt.gameObject.AddComponent<Button>();
         open.targetGraphic = disc;
@@ -2541,10 +2650,8 @@ const float ReferenceWidth = 1080f;
         wedge.raycastTarget = false;
         radar.facing = facing;
 
-        TextMeshProUGUI north = UIFactory.Text("North", rt, 25f, ThemeRole.OnAccent,
+        TextMeshProUGUI north = UIFactory.Text("North", rt, 25f, ThemeRole.TextSecondary,
                                                TextAlignmentOptions.Center, "radar.north", FontStyles.Bold);
-        Unthemed(north.gameObject);
-        north.color = Color.white;
         UIFactory.Corner(north.rectTransform, new Vector2(0.5f, 1f), new Vector2(40f, 30f), new Vector2(0f, -8f));
 
         RectTransform dots = UIFactory.Rect("Dots", rt);
@@ -2890,40 +2997,6 @@ const float ReferenceWidth = 1080f;
         EditorUtility.SetDirty(shadow);
 
         text.fontSharedMaterial = shadow;
-    }
-
-    /// <summary>A 40px dark-glass pill with an icon and a word, in a corner of the feed.</summary>
-    static Button DarkPill(RectTransform parent, string name, AppIcon icon, string key,
-                           Vector2 corner, Vector2 offset)
-    {
-        RectTransform rt = UIFactory.Rect(name, parent);
-        rt.anchorMin = rt.anchorMax = corner;
-        rt.pivot = corner;
-        rt.sizeDelta = new Vector2(300f, 111f);
-        rt.anchoredPosition = offset;
-
-        Image glass = UIFactory.Plain(rt, DarkGlass, UIShape.Pill);
-        Button button = rt.gameObject.AddComponent<Button>();
-        button.targetGraphic = glass;
-        UIFactory.Feedback(button);
-
-        HorizontalLayoutGroup row = UIFactory.HorizontalStack(rt, 17f);
-        row.padding = new RectOffset(28, 39, 0, 0);
-        row.childAlignment = TextAnchor.MiddleCenter;
-        ContentSizeFitter fit = rt.gameObject.AddComponent<ContentSizeFitter>();
-        fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        Image glyph = Icon(rt, icon, 50f, ThemeRole.OnAccent);
-        Unthemed(glyph.gameObject);
-        glyph.color = Color.white;
-
-        TextMeshProUGUI label = UIFactory.Text("Label", rt, Secondary, ThemeRole.OnAccent,
-                                               TextAlignmentOptions.Left, key, FontStyles.Bold);
-        Unthemed(label.gameObject);
-        label.color = Color.white;
-        label.textWrappingMode = TextWrappingModes.NoWrap;
-        UIFactory.Size(label.gameObject, 111f).preferredWidth = -1f;
-        return button;
     }
 
     /// <summary>
@@ -3875,14 +3948,8 @@ const float ReferenceWidth = 1080f;
         // --- who: the guest's reason to make a profile, or the person
         ProfileView profile = BuildProfileCard(content, controller);
 
-        // --- the badges, every one of them
-        GroupLabel(content, "profile.badges", out TextMeshProUGUI badgesTitle);
-        profile.badgesTitle = badgesTitle;
-        RectTransform badgeGroup = Group(content, "BadgesGroup");
-        profile.badgesGroup = badgeGroup.gameObject;
-        // Each badge opens its own sheet, as Daylight's do; the full list is
-        // "All badges".
-        profile.medalButtons = BuildBadgeGrid(badgeGroup, profile);
+        // No badges, levels or XP: a tool, not a game (6 Nov 2026).
+        profile.medalButtons = new Button[0];
 
         // --- what is being walked now
         GroupLabel(content, "now.title", out TextMeshProUGUI nowLabel);
@@ -3951,7 +4018,6 @@ const float ReferenceWidth = 1080f;
         // --- the pages a row opens
         controller.sourcesPage = SubPage(rt, "SourcesPage", "settings.dataSources", "sub.sources.body");
         controller.aboutPage = SubPage(rt, "AboutPage", "settings.about", "sub.about.body");
-        controller.badgesPage = BuildBadgesPage(rt);
         controller.securityPage = BuildSecurityPage(rt);
         controller.blockedPage = BuildBlockedPage(rt);
         controller.feedbackPage = BuildFeedbackPage(rt);
@@ -3961,7 +4027,7 @@ const float ReferenceWidth = 1080f;
         navigator.pages = new List<GameObject>
         {
             controller.sourcesPage, controller.aboutPage,
-            controller.badgesPage, controller.securityPage, controller.blockedPage,
+            controller.securityPage, controller.blockedPage,
             controller.feedbackPage, controller.accountPage
         };
 
@@ -4199,6 +4265,8 @@ const float ReferenceWidth = 1080f;
             UIFactory.Stretch(view.labels[i].rectTransform);
             view.labels[i].text = AppStrings.Get(keys[i]);
             view.labels[i].textWrappingMode = TextWrappingModes.NoWrap;
+            // "Automatic" fits its third of the bar; the old "Like the phone"
+            // did not. (Auto-sizing here collapsed the whole control - 6 Nov.)
             Unthemed(view.labels[i].gameObject);
         }
 
@@ -4521,27 +4589,9 @@ const float ReferenceWidth = 1080f;
                                        TextAlignmentOptions.Left, null);
         UIFactory.Size(view.subLabel.gameObject, 56f);
 
-        // The level (0056): "Level 6 · Walker I" and a thin bar to the next.
-        view.levelLabel = UIFactory.Text("Level", who, Secondary, ThemeRole.Accent,
-                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(view.levelLabel.gameObject, 50f);
-        view.levelLabel.textWrappingMode = TextWrappingModes.NoWrap;
-        view.levelLabel.overflowMode = TextOverflowModes.Ellipsis;
-
-        RectTransform bar = UIFactory.Rect("LevelBar", who);
-        UIFactory.Size(bar.gameObject, 14f);
-        UIFactory.Fill(bar, ThemeRole.SurfaceAlt, 1f, UIShape.Pill).raycastTarget = false;
-        RectTransform fill = UIFactory.Rect("Fill", bar);
-        fill.anchorMin = Vector2.zero; fill.anchorMax = new Vector2(0f, 1f);
-        fill.offsetMin = Vector2.zero; fill.offsetMax = Vector2.zero;
-        UIFactory.Fill(fill, ThemeRole.Accent, 1f, UIShape.Pill).raycastTarget = false;
-        view.levelBar = bar.gameObject;
-        view.levelFill = fill;
-        view.levelLabel.gameObject.SetActive(false);
-        bar.gameObject.SetActive(false);
         me.gameObject.SetActive(false);
 
-        // ---- the three numbers, each a card of its own, under the head card
+        // ---- the two numbers, each a card of its own, under the head card
         RectTransform stats = UIFactory.Rect("Stats", content);
         UIFactory.Size(stats.gameObject, 177f);
         UIFactory.HorizontalStack(stats, 22f, true);
@@ -4549,7 +4599,6 @@ const float ReferenceWidth = 1080f;
 
         view.trailsValue = StatCell(stats, "profile.trails");
         view.stopsValue = StatCell(stats, "profile.stops");
-        view.badgesValue = StatCell(stats, "profile.badgesStat");
 
         return view;
     }

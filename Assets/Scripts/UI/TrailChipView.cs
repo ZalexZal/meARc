@@ -30,6 +30,9 @@ public class TrailChipView : MonoBehaviour
     [Tooltip("The chevron that says this is a control rather than a heading.")]
     public GameObject chevron;
 
+    [Tooltip("The pull-down the chip opens; without one it opens the trail screen.")]
+    public TrailMenuView menu;
+
     [Tooltip("Kept so older scenes load. Reporting a trail lives in My trails now.")]
     public Button reportButton;
     public ReportSheetView reportSheet;
@@ -94,6 +97,14 @@ public class TrailChipView : MonoBehaviour
 
     void Open()
     {
+        // The chevron says "menu": a pull-down of the trails joined, with the
+        // full trail screen one row further (design feedback, 6 Nov 2026).
+        if (menu != null)
+        {
+            menu.Toggle();
+            return;
+        }
+
         if (DoorFlow.Instance != null)
             DoorFlow.Instance.OpenTrails();
     }
@@ -109,7 +120,7 @@ public class TrailChipView : MonoBehaviour
         bool hasName = trail != null && !string.IsNullOrWhiteSpace(trail.name);
 
         if (nameLabel != null)
-            nameLabel.text = hasName ? trail.name : AppStrings.Get("trails.choose");
+            nameLabel.text = hasName ? trail.name : AppStrings.Get("trails.title");
 
         if (modeChip != null && modeChip.activeSelf)
             modeChip.SetActive(false);
@@ -117,8 +128,14 @@ public class TrailChipView : MonoBehaviour
         if (reportButton != null && reportButton.gameObject.activeSelf)
             reportButton.gameObject.SetActive(false);
 
+        // No trail: one word ("Trails") and no second line. The card under it
+        // already says what to do; the chip said it twice more (scan, 6 Nov).
         if (subLabel != null)
-            subLabel.text = hasName ? Line(trail, service) : AppStrings.Get("chip.none");
+        {
+            subLabel.text = hasName ? Line(trail, service) : string.Empty;
+            if (subLabel.gameObject.activeSelf != hasName)
+                subLabel.gameObject.SetActive(hasName);
+        }
 
         if (chevron != null)
             chevron.SetActive(service != null);
@@ -132,9 +149,10 @@ public class TrailChipView : MonoBehaviour
     {
         var parts = new System.Collections.Generic.List<string>();
 
-        string mode = string.IsNullOrEmpty(trail.mode) ? "guide" : trail.mode;
-        string named = AppStrings.Get("mode." + mode);
-        parts.Add(named.StartsWith("mode.") ? mode : named);
+        // Only the order here: the full mode line ("Teams & standings · In
+        // order") is on the trail's row, and the points further along already
+        // say there are teams. One line on the map, never an ellipsis.
+        parts.Add(AppStrings.Get(TrailService.IsOrdered(trail.mode) ? "chip.inOrder" : "chip.anyOrder"));
 
         var all = BuildingDatabase.AllBuildings;
         int total = all.Count;
