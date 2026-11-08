@@ -110,7 +110,14 @@ public class ModelCache : MonoBehaviour
     public static string CreditFor(string markerId)
     {
         Model model = For(markerId);
-        if (model == null || model.credit_source != "other")
+        if (model == null)
+            return "";
+
+        // Made by AI in the builder from a photo or a description (7 Nov 2026).
+        if (model.credit_source == "ai")
+            return AppStrings.Get("model.creditAi");
+
+        if (model.credit_source != "other")
             return "";
 
         return string.Format(AppStrings.Get("model.credit"),
