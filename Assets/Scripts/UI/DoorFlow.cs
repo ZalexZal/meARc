@@ -183,6 +183,7 @@ public class DoorFlow : MonoBehaviour
         SupabaseAuth.OnSessionChanged += Evaluate;
         SupabaseAuth.OnSessionChanged += AccountMaybeMade;
         SupabaseAuth.OnWorkMissing += OweWork;
+        TabNavigationController.OnTabShown += AskWorkIfOwed;
     }
 
     void OnDisable()
@@ -193,6 +194,7 @@ public class DoorFlow : MonoBehaviour
         SupabaseAuth.OnSessionChanged -= Evaluate;
         SupabaseAuth.OnSessionChanged -= AccountMaybeMade;
         SupabaseAuth.OnWorkMissing -= OweWork;
+        TabNavigationController.OnTabShown -= AskWorkIfOwed;
     }
 
     void Start()
@@ -523,7 +525,14 @@ public class DoorFlow : MonoBehaviour
 
     void AskWorkIfOwed()
     {
-        if (!_workOwed || workSheet == null)
+        if (!_workOwed || workSheet == null || Current != Door.None)
+            return;
+
+        // Not over the camera, a walk being guided or the demo: somebody looking
+        // at a street through the phone is not filling in a form. Still owed,
+        // and asked on the next Map or Profile view.
+        if (TabNavigationController.CameraOpen || GuidanceService.IsGuiding ||
+            DemoTrail.Active || (coach != null && coach.Running))
             return;
 
         SupabaseAuth auth = SupabaseAuth.Instance;

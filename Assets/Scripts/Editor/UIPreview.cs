@@ -609,11 +609,10 @@ public static class UIPreview
                 guestCard.signedInGroup.SetActive(false);
                 guestCard.anonymousGroup.SetActive(true);
                 guestCard.workChoice.Select(null);
-                if (guestCard.statusLabel != null)
+                if (guestCard.workError != null)
                 {
-                    guestCard.statusLabel.text = AppStrings.Get("err.work");
-                    guestCard.statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
-                    guestCard.statusLabel.gameObject.SetActive(true);
+                    guestCard.workError.text = AppStrings.Get("err.work");
+                    guestCard.workError.gameObject.SetActive(true);
                 }
 
                 ScrollRect form = guestCard.GetComponentInParent<ScrollRect>(true);
@@ -628,11 +627,8 @@ public static class UIPreview
 
                 if (form != null) form.verticalNormalizedPosition = 1f;
 
-                if (guestCard.statusLabel != null)
-                {
-                    guestCard.statusLabel.text = string.Empty;
-                    guestCard.statusLabel.gameObject.SetActive(false);
-                }
+                if (guestCard.workError != null)
+                    guestCard.workError.gameObject.SetActive(false);
                 guestCard.signedInGroup.SetActive(signedWas);
             }
             else

@@ -100,7 +100,11 @@ const float ReferenceWidth = 1080f;
         "MapPanel", "CameraPanel", "BrowsePanel", "SearchPanel", "SettingsPanel",
         "InfoPanel", "InfoSheet", "BottomNav", "ProximityToast", "Tutorial",
         "NearbyButton", "VpsIndicator", "NearbyPanel", "LiveARView", "ReadyStateView",
-        "SearchContent", "SettingsContent", "Doors", "WorkSheet"
+        "SearchContent", "SettingsContent", "Doors", "WorkSheet",
+
+        // Built at the Canvas root and missing from this list until Task 14, so
+        // every build left the last one behind - the scene had seventeen.
+        "LanguageSheet"
     };
 
     static List<string> _notes;
@@ -128,6 +132,19 @@ const float ReferenceWidth = 1080f;
         {
             _interactive = true;
         }
+    }
+
+    /// <summary>
+    /// Opens Main, builds, and saves it - the same three steps BuildApk runs,
+    /// for the command line when only the scene is wanted:
+    ///   Unity -batchmode -nographics -projectPath &lt;project&gt;
+    ///         -executeMethod AppUIBuilder.BuildAndSaveScene -quit
+    /// </summary>
+    public static void BuildAndSaveScene()
+    {
+        EditorSceneManager.OpenScene("Assets/Scenes/Main.unity", OpenSceneMode.Single);
+        BuildForPreview();
+        EditorSceneManager.SaveOpenScenes();
     }
 
     [MenuItem("Tools/UI/Build App UI")]
@@ -3800,6 +3817,10 @@ const float ReferenceWidth = 1080f;
                                                    FontStyles.Bold);
         UIFactory.Size(workLabel.gameObject, 76f);
         view.workChoice = WorkChoices(outGroup);
+        view.workError = UIFactory.Text("WorkError", outGroup, Secondary, ThemeRole.StatusPoor,
+                                        TextAlignmentOptions.Left, "err.work");
+        UIFactory.FitsItsText(view.workError);
+        view.workError.gameObject.SetActive(false);
 
         view.signUpButton = FullWidthButton(outGroup, "Create", "account.create",
                                             ThemeRole.Accent, ThemeRole.OnAccent);

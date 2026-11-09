@@ -32,6 +32,10 @@ public class AccountSectionView : MonoBehaviour
              "nothing chosen to begin with; sign-in ignores it.")]
     public WorkChoiceView workChoice;
 
+    [Tooltip("\"Choose your line of work.\", right under the choices, so it is " +
+             "read where the answer is missing rather than at the foot of the card.")]
+    public TextMeshProUGUI workError;
+
     public Button signUpButton;
     public Button signInButton;
 
@@ -77,6 +81,9 @@ public class AccountSectionView : MonoBehaviour
         SupabaseAuth.OnSessionChanged += Refresh;
         AppStrings.OnLanguageChanged += Refresh;
 
+        if (workChoice != null)
+            workChoice.OnChosen += HideWorkError;
+
         // On the way in as well as on the event: this card lives on the Settings
         // panel, which is switched off for most of the app's life, so it is
         // reliably absent when the session actually changes.
@@ -87,6 +94,15 @@ public class AccountSectionView : MonoBehaviour
     {
         SupabaseAuth.OnSessionChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
+
+        if (workChoice != null)
+            workChoice.OnChosen -= HideWorkError;
+    }
+
+    void HideWorkError()
+    {
+        if (workError != null)
+            workError.gameObject.SetActive(false);
     }
 
     /// <summary>Shows whichever half matches the session.</summary>
@@ -211,10 +227,21 @@ public class AccountSectionView : MonoBehaviour
 
         if (!LineOfWork.IsValid(work))
         {
-            Say("err.work");
-            statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+            if (workError != null)
+            {
+                Say(null);
+                workError.text = AppStrings.Get("err.work");
+                workError.gameObject.SetActive(true);
+            }
+            else
+            {
+                Say("err.work");
+                statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+            }
             return;
         }
+
+        HideWorkError();
 
         SupabaseAuth auth = SupabaseAuth.Instance;
         if (auth == null)
@@ -400,6 +427,8 @@ public class AccountSectionView : MonoBehaviour
 
         if (workChoice != null)
             workChoice.Select(null);
+
+        HideWorkError();
 
         // Always, and not only on success. A password left sitting in a field on
         // a phone that is about to be handed to somebody is the reason.

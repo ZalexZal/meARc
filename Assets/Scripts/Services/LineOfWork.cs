@@ -58,6 +58,19 @@ public static class LineOfWork
         return true;
     }
 
+    /// <summary>
+    /// Whether a PATCH sent with return=representation changed a row. "[]" is
+    /// the server saying yes to a request that matched nothing.
+    /// </summary>
+    public static bool PatchLanded(string reply)
+    {
+        if (string.IsNullOrWhiteSpace(reply))
+            return false;
+
+        string compact = reply.Replace(" ", "").Replace("\n", "").Replace("\r", "").Replace("\t", "");
+        return compact.StartsWith("[{");
+    }
+
     [Serializable]
     class Rows
     {

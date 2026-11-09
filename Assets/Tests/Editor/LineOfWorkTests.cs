@@ -84,6 +84,20 @@ public class LineOfWorkTests
     }
 
     [Test]
+    public void PatchLanded_OnlyWhenARowCameBack()
+    {
+        Assert.IsTrue(LineOfWork.PatchLanded("[{\"id\":\"u1\",\"work\":\"guide\"}]"));
+        Assert.IsTrue(LineOfWork.PatchLanded(" [ {\"work\":\"guide\"} ]\n"));
+
+        // RLS filtered it to nothing: the server says 200 and changed nothing.
+        Assert.IsFalse(LineOfWork.PatchLanded("[]"));
+        Assert.IsFalse(LineOfWork.PatchLanded(" [ ] "));
+        Assert.IsFalse(LineOfWork.PatchLanded(""));
+        Assert.IsFalse(LineOfWork.PatchLanded(null));
+        Assert.IsFalse(LineOfWork.PatchLanded("{\"message\":\"denied\"}"));
+    }
+
+    [Test]
     public void ReadReply_SetWorkNullWorkAndFailures()
     {
         string work;

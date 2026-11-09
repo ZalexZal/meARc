@@ -63,6 +63,12 @@ public class TabNavigationController : MonoBehaviour
 
     Tab _tab = Tab.Map;
 
+    /// <summary>True while the Camera tab is the one on screen.</summary>
+    public static bool CameraOpen { get; private set; }
+
+    /// <summary>Raised after any tab or the list is shown.</summary>
+    public static event System.Action OnTabShown;
+
     void Start()
     {
         ShowMap();
@@ -127,6 +133,10 @@ public class TabNavigationController : MonoBehaviour
         SetActive(browsePanel, panelToShow);
 
         ApplyTabColours();
+
+        CameraOpen = _tab == Tab.Camera;
+        if (OnTabShown != null)
+            OnTabShown();
     }
 
     static void SetActive(GameObject panel, GameObject wanted)

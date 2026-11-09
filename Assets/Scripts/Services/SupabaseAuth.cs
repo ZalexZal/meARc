@@ -498,9 +498,13 @@ public class SupabaseAuth : MonoBehaviour
 
         using (UnityWebRequest request = Patch(url, WorkPatchBody(work)))
         {
+            // The row back, not 204: a PATCH that RLS filtered down to nothing
+            // also answers 204, and Settings said "Saved." over it.
+            request.SetRequestHeader("Prefer", "return=representation");
             yield return request.SendWebRequest();
 
-            if (request.result != UnityWebRequest.Result.Success)
+            if (request.result != UnityWebRequest.Result.Success ||
+                !LineOfWork.PatchLanded(request.downloadHandler.text))
             {
                 Fail(done, "work.saveFailed", request);
                 yield break;
