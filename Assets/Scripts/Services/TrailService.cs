@@ -936,6 +936,239 @@ public class TrailService : MonoBehaviour
         if (done != null) done(true);
     }
 
+    // ----------------------------------------------------------- the preview
+
+    /// <summary>
+    /// What the trail preview shows before a reader joins: trail_summary, and
+    /// the stops as markers_near hands them to anybody (published stops of an
+    /// open trail; a one-at-a-time trail gives a stranger stop one only).
+    /// </summary>
+    public class TrailPreview
+    {
+        public string id;
+        public string name;
+        public string mode;
+        public string category;
+        public CityJson city;
+        public int stopCount;
+
+        /// <summary>The stops that came back, in no particular order.</summary>
+        public List<PreviewStop> stops = new List<PreviewStop>();
+
+        /// <summary>
+        /// True when every stop the summary counts came back, so a route length
+        /// means something. False leaves the stops tile and hides the rest.
+        /// </summary>
+        public bool stopsKnown;
+
+        /// <summary>How many of the stops ask a question.</summary>
+        public int questions;
+
+        /// <summary>False when trail_summary itself failed.</summary>
+        public bool ok;
+    }
+
+    public class PreviewStop
+    {
+        public string id;
+        public double lat;
+        public double lng;
+        public int step;
+        public string titleBg;
+        public string titleEn;
+
+        /// <summary>Its title in the app language, the other one, or "Stop N".</summary>
+        public string Title
+        {
+            get
+            {
+                bool bulgarian = AppStrings.CurrentLanguage == AppLanguage.Bulgarian;
+                string first = bulgarian ? titleBg : titleEn;
+                string second = bulgarian ? titleEn : titleBg;
+
+                if (!string.IsNullOrWhiteSpace(first)) return first.Trim();
+                if (!string.IsNullOrWhiteSpace(second)) return second.Trim();
+
+                return step > 0 ? string.Format(AppStrings.Get("stop.untitledN"), step)
+                                : AppStrings.Get("stop.untitled");
+            }
+        }
+    }
+
+    [Serializable] class PreviewSummary { public string id; public string name; public string mode; public int stop_count; public string category; public CityJson city; }
+    [Serializable] class PreviewSummaryList { public PreviewSummary[] items; }
+    [Serializable] class PreviewText { public string title; public string question; }
+    [Serializable] class PreviewContent { public PreviewText bg; public PreviewText en; }
+    [Serializable] class PreviewMarker { public string id; public double lat; public double lng; public int step; public PreviewContent content; public string status; }
+    [Serializable] class PreviewMarkerList { public PreviewMarker[] items; }
+
+    /// <summary>
+    /// Asks for one trail's preview. The stops are asked for around the trail's
+    /// own start (from the lists already loaded), else its city, else the
+    /// reader - markers_near answers within 5 km of the point it is given.
+    /// </summary>
+    public IEnumerator Preview(string worldId, Action<TrailPreview> done)
+    {
+        TrailPreview result = new TrailPreview { id = worldId };
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null || string.IsNullOrEmpty(worldId))
+        {
+            if (done != null) done(result);
+            yield break;
+        }
+
+        yield return SupabaseAuth.Ready();
+
+        string world = worldId.Replace("\"", "");
+
+        using (UnityWebRequest request = SupabaseAuth.Post(
+                   config.Endpoint("/rest/v1/rpc/trail_summary"), "{\"p_world\":\"" + world + "\"}", null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    PreviewSummary[] rows = JsonUtility.FromJson<PreviewSummaryList>(
+                        "{\"items\":" + request.downloadHandler.text + "}").items;
+
+                    if (rows != null && rows.Length > 0)
+                    {
+                        result.name = rows[0].name;
+                        result.mode = rows[0].mode;
+                        result.category = rows[0].category;
+                        result.city = rows[0].city;
+                        result.stopCount = rows[0].stop_count;
+                        result.ok = true;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Trails] Unreadable preview summary: " + exception.Message);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[Trails] preview trail_summary failed (" + request.responseCode + ")");
+            }
+        }
+
+        if (!result.ok)
+        {
+            if (done != null) done(result);
+            yield break;
+        }
+
+        double lat, lng;
+        if (!PreviewCentre(worldId, result.city, out lat, out lng))
+        {
+            if (done != null) done(result);
+            yield break;
+        }
+
+        string body = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "{{\"p_world_id\":\"{0}\",\"p_lat\":{1},\"p_lng\":{2},\"p_radius_m\":5000}}",
+            world, lat, lng);
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/markers_near"), body, null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    PreviewMarker[] rows = JsonUtility.FromJson<PreviewMarkerList>(
+                        "{\"items\":" + request.downloadHandler.text + "}").items;
+
+                    for (int i = 0; rows != null && i < rows.Length; i++)
+                    {
+                        // A creator previewing their own trail is sent its drafts too.
+                        if (!string.IsNullOrEmpty(rows[i].status) && rows[i].status != "published")
+                            continue;
+
+                        PreviewContent content = rows[i].content;
+                        bool asks = content != null &&
+                                    ((content.bg != null && !string.IsNullOrWhiteSpace(content.bg.question)) ||
+                                     (content.en != null && !string.IsNullOrWhiteSpace(content.en.question)));
+                        if (asks)
+                            result.questions++;
+
+                        result.stops.Add(new PreviewStop
+                        {
+                            id = rows[i].id,
+                            lat = rows[i].lat,
+                            lng = rows[i].lng,
+                            step = rows[i].step,
+                            titleBg = content != null && content.bg != null ? content.bg.title : null,
+                            titleEn = content != null && content.en != null ? content.en.title : null
+                        });
+                    }
+
+                    result.stopsKnown = result.stops.Count > 0 && result.stops.Count >= result.stopCount;
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Trails] Unreadable preview stops: " + exception.Message);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[Trails] preview markers_near failed (" + request.responseCode + ")");
+            }
+        }
+
+        if (done != null) done(result);
+    }
+
+    bool PreviewCentre(string worldId, CityJson city, out double lat, out double lng)
+    {
+        lat = lng = 0d;
+
+        foreach (List<Listed> list in new[] { All, Near })
+        {
+            for (int i = 0; list != null && i < list.Count; i++)
+            {
+                if (list[i].id != worldId)
+                    continue;
+
+                if (list[i].start_lat != 0d || list[i].start_lng != 0d)
+                {
+                    lat = list[i].start_lat;
+                    lng = list[i].start_lng;
+                    return true;
+                }
+
+                if (list[i].lat != 0d || list[i].lng != 0d)
+                {
+                    lat = list[i].lat;
+                    lng = list[i].lng;
+                    return true;
+                }
+            }
+        }
+
+        if (city != null && (city.lat != 0d || city.lng != 0d))
+        {
+            lat = city.lat;
+            lng = city.lng;
+            return true;
+        }
+
+        UserLocationService location = UserLocationService.Instance;
+        if (location != null && location.HasValidPose)
+        {
+            lat = location.Latitude;
+            lng = location.Longitude;
+            return true;
+        }
+
+        return false;
+    }
+
     [Serializable] class MembershipList { public MembershipRow[] items; }
     [Serializable] class MembershipRow { public string role; public WorldRow worlds; }
     [Serializable] class WorldRow { public string id; public string name; public string mode; public string category; public CityJson city; }

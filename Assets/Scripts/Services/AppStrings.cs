@@ -413,6 +413,22 @@ public static class AppStrings
         { "find.noCity", "No city" },
         { "find.count", "{0} trails" },
         { "find.countOne", "1 trail" },
+
+        { "preview.back", "Back" },
+        { "preview.stops", "stops" },
+        { "preview.stopsOne", "stop" },
+        { "preview.minutes", "~{0} min" },
+        { "preview.walk", "on foot" },
+        { "preview.total", "in all" },
+        { "preview.questions", "questions with hints" },
+        { "preview.questionsAll", "questions with hints at every stop" },
+        { "preview.teams", "With teams and points." },
+        { "preview.noTeams", "No teams or points." },
+        { "preview.start", "It starts at {0}, {1} from you." },
+        { "preview.go", "Start the trail" },
+        { "preview.lead", "Take me to the start" },
+        { "preview.loading", "Loading the trail…" },
+        { "preview.failed", "Couldn’t load this trail. Try again." },
         { "menu.searchAll", "Search all trails" },
         { "menu.nearby", "Nearby" },
         { "trails.subtitle", "Yours" },
@@ -1141,6 +1157,22 @@ public static class AppStrings
         { "find.noCity", "Без град" },
         { "find.count", "{0} маршрута" },
         { "find.countOne", "1 маршрут" },
+
+        { "preview.back", "Назад" },
+        { "preview.stops", "спирки" },
+        { "preview.stopsOne", "спирка" },
+        { "preview.minutes", "~{0} мин" },
+        { "preview.walk", "пеша" },
+        { "preview.total", "общо" },
+        { "preview.questions", "въпроси с подсказки" },
+        { "preview.questionsAll", "въпроси с подсказки на всяка спирка" },
+        { "preview.teams", "С отбори и точки." },
+        { "preview.noTeams", "Без отбори и точки." },
+        { "preview.start", "Началото е при {0}, на {1} от теб." },
+        { "preview.go", "Започни маршрута" },
+        { "preview.lead", "Заведи ме до началото" },
+        { "preview.loading", "Маршрутът се зарежда…" },
+        { "preview.failed", "Маршрутът не се зареди. Опитай пак." },
         { "menu.searchAll", "Търси сред всички маршрути" },
         { "menu.nearby", "Наблизо" },
         { "trails.subtitle", "Твоите" },
@@ -1554,11 +1586,20 @@ public static class AppStrings
             if (bulgarian)
                 value = value.Replace('.', ',');
 
-            return Hedge(string.Format(Get("unit.kilometres"), value), approximate);
+            return Hedge(KeepTogether(string.Format(Get("unit.kilometres"), value)), approximate);
         }
 
-        return Hedge(string.Format(Get("unit.metres"), Mathf.RoundToInt((float)metres)),
+        return Hedge(KeepTogether(string.Format(Get("unit.metres"), Mathf.RoundToInt((float)metres))),
                      approximate);
+    }
+
+    /// <summary>
+    /// The number and its unit on one line: "20 м" wrapped as "20" and a lone
+    /// "м." on the next line in the proximity toast.
+    /// </summary>
+    static string KeepTogether(string distance)
+    {
+        return distance.Replace(' ', '\u00A0');
     }
 
     /// <summary>

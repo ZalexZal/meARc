@@ -47,7 +47,14 @@ public class DoorFlow : MonoBehaviour
         Ready,
 
         /// <summary>Under 14 and no parent has agreed yet.</summary>
-        Consent
+        Consent,
+
+        /// <summary>
+        /// A trail not joined yet, looked at before starting: its stops on a
+        /// small map, how long it is and how it works. Opened from the menu's
+        /// Nearby rows and the trails screen; Back returns to whichever it was.
+        /// </summary>
+        Preview
     }
 
     [Header("Screens")]
@@ -103,6 +110,8 @@ public class DoorFlow : MonoBehaviour
 
     [Header("Screens that fill themselves in")]
     public TrailsDoor trails;
+    public GameObject previewPanel;
+    public TrailPreviewView preview;
     public CodeDoor code;
 
     [Tooltip("The team card. Without this the Team door hides the interface " +
@@ -386,6 +395,31 @@ public class DoorFlow : MonoBehaviour
         Show(NeedsParent ? Door.Consent : Door.Trails);
     }
 
+    Door _previewBack = Door.None;
+
+    /// <summary>A trail that is not the reader's yet: the preview, over whatever opened it.</summary>
+    public void OpenPreview(string worldId)
+    {
+        _previewBack = Current == Door.Trails ? Door.Trails : Door.None;
+        // Opened on purpose: a membership refresh underneath must not close it.
+        _reopened = true;
+        _dismissed = false;
+
+        if (preview != null)
+            preview.Begin(worldId);
+
+        Show(NeedsParent ? Door.Consent : Door.Preview);
+    }
+
+    /// <summary>The preview's back button: to the trails screen if it came from there.</summary>
+    public void ClosePreview()
+    {
+        if (_previewBack == Door.Trails)
+            OpenTrails();
+        else
+            Close();
+    }
+
     /// <summary>
     /// Leaves whichever door is up.
     ///
@@ -568,6 +602,7 @@ public class DoorFlow : MonoBehaviour
         Hide(accountPanel);
         Hide(readyPanel);
         Hide(consentPanel);
+        Hide(previewPanel);
 
         // The app itself is up, which is the moment to ask where it is - not
         // cold over the welcome screen.
@@ -671,6 +706,11 @@ public class DoorFlow : MonoBehaviour
                 Reveal(consentPanel);
                 if (consent != null)
                     consent.Refresh();
+                break;
+
+            // Opaque, with its own map: no blur behind it.
+            case Door.Preview:
+                Reveal(previewPanel);
                 break;
         }
     }

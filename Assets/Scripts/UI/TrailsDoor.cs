@@ -24,8 +24,9 @@ using UnityEngine.UI;
 /// website's (TrailFilter), so a name found there is found here. Line of work
 /// plays no part: everyone sees and walks every public trail.
 ///
-/// Tapping a trail already joined opens it; tapping any other joins it, as the
-/// library always did. A joined trail can be left from its row (two taps).
+/// Tapping a trail already joined opens it; tapping any other opens its
+/// preview (TrailPreviewView), where it is joined. A joined trail can be left
+/// from its row (two taps).
 /// </summary>
 public class TrailsDoor : MonoBehaviour
 {
@@ -107,7 +108,6 @@ public class TrailsDoor : MonoBehaviour
     List<Entry> _entries = new List<Entry>();
     List<Entry> _sample;     // the preview's stand-in data
     string _armedId;
-    bool _joining;
     bool _wired;
 
     void Awake()
@@ -603,7 +603,7 @@ public class TrailsDoor : MonoBehaviour
                 if (mine)
                     Open(id);
                 else
-                    JoinListed(id);
+                    Preview(id);
             });
         }
     }
@@ -730,29 +730,13 @@ public class TrailsDoor : MonoBehaviour
 
     // ----------------------------------------------------------------- actions
 
-    void JoinListed(string worldId)
+    /// <summary>A trail not joined yet opens its preview, where it is joined.</summary>
+    void Preview(string worldId)
     {
-        TrailService service = TrailService.Instance;
+        Haptics.Tick();
 
-        if (service == null || _joining)
-            return;
-
-        _joining = true;
-
-        StartCoroutine(service.JoinListed(worldId, ok =>
-        {
-            _joining = false;
-
-            if (ok)
-            {
-                if (DoorFlow.Instance != null)
-                    DoorFlow.Instance.Entered();
-                return;
-            }
-
-            // A toast, not the filter's empty state: the list is still right.
-            ProximityToast.Say(AppStrings.Get("near.failed"));
-        }));
+        if (DoorFlow.Instance != null)
+            DoorFlow.Instance.OpenPreview(worldId);
     }
 
     /// <summary>

@@ -486,6 +486,10 @@ public static class UIPreview
         Shoot(canvas, rig, "12b-trails-filtered" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
         Pieces.TrailsState(canvas.transform, "Rows");
 
+        // A trail not joined yet, before starting it (Task 13b).
+        if (Pieces.PreviewState(canvas.transform))
+            Shoot(canvas, rig, "23-trail-preview" + t, "Doors/Preview");
+
         Pieces.CodeState(canvas.transform, "", null);
         Shoot(canvas, rig, "13-code" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
 
@@ -1221,7 +1225,7 @@ public static class UIPreview
             }
 
             if (card.compactMeta != null)
-                card.compactMeta.text = "180 m";
+                card.compactMeta.text = AppStrings.FormatDistance(180d);
 
             if (card.compactDot != null)
                 card.compactDot.gameObject.SetActive(false);
@@ -1517,7 +1521,8 @@ public static class UIPreview
                   "Version/Label", "Version 0.2.0");
 
         Set(root, "ProximityToast/Safe/CardHolder/Card/Message",
-            string.Format(AppStrings.Get("alert.near"), "Театър „Невена Коканова“", "20 m"));
+            string.Format(AppStrings.Get("alert.near"), "Театър „Невена Коканова“",
+                          AppStrings.FormatDistance(20d)));
         Set(root, "ProximityToast/Safe/CardHolder/Card/Action/Label", AppStrings.Get("alert.open"));
 
     }
@@ -2279,6 +2284,64 @@ public static class UIPreview
                                   0, null, true);
             else
                 trails.SetFilters(string.Empty, 0, null, true);
+        }
+
+        /// <summary>
+        /// The trail preview with stand-in data: the Yambol walk's five stops as
+        /// the server holds them, questions at each, and the reader about 350 m
+        /// from the first. Raised before drawing, so the sheet has its height
+        /// when the map is fitted above it.
+        /// </summary>
+        public static bool PreviewState(Transform root)
+        {
+            Transform door = root.Find("Doors/Preview");
+            TrailPreviewView view = door != null ? door.GetComponent<TrailPreviewView>() : null;
+            if (view == null)
+            {
+                Debug.LogWarning("[Preview] No trail preview to fill.");
+                return false;
+            }
+
+            TrailService.TrailPreview data = new TrailService.TrailPreview
+            {
+                id = "ad94367f-6f11-42f7-8d58-ce341302ab5c",
+                name = AppStrings.CurrentLanguage == AppLanguage.Bulgarian
+                    ? "Ямбол: сърцето на града" : "Yambol: the heart of town",
+                mode = "guide",
+                category = "tourism",
+                city = new TrailService.CityJson { key = "yambol", bg = "Ямбол", en = "Yambol" },
+                stopCount = 5,
+                stopsKnown = true,
+                questions = 5,
+                ok = true
+            };
+
+            string[][] stops =
+            {
+                new[] { "1", "42.48375", "26.50554", "Безистена", "the Bezisten" },
+                new[] { "2", "42.48447", "26.50585", "Ески джамия", "Eski Mosque" },
+                new[] { "3", "42.48376", "26.50890", "Театър „Невена Коканова“", "Nevena Kokanova Theatre" },
+                new[] { "4", "42.48333", "26.50790", "Исторически музей", "History Museum" },
+                new[] { "5", "42.48261", "26.50605", "Жорж Папазов", "Georges Papazov" },
+            };
+
+            System.Globalization.CultureInfo inv = System.Globalization.CultureInfo.InvariantCulture;
+            for (int i = 0; i < stops.Length; i++)
+            {
+                data.stops.Add(new TrailService.PreviewStop
+                {
+                    id = "stop-" + stops[i][0],
+                    step = int.Parse(stops[i][0], inv),
+                    lat = double.Parse(stops[i][1], inv),
+                    lng = double.Parse(stops[i][2], inv),
+                    titleBg = stops[i][3],
+                    titleEn = stops[i][4]
+                });
+            }
+
+            door.gameObject.SetActive(true);
+            view.UseSample(data, true, 42.48100, 26.50300);
+            return true;
         }
 
         /// <summary>

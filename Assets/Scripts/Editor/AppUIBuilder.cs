@@ -6537,6 +6537,8 @@ const float ReferenceWidth = 1080f;
         flow.accountPanel = BuildAccountDoor(holder, flow);
         flow.readyPanel = BuildReadyDoor(holder, flow);
         flow.consentPanel = BuildConsentDoor(holder, flow, out ConsentDoorView consentView);
+        flow.previewPanel = BuildTrailPreview(holder, flow, out TrailPreviewView previewView);
+        flow.preview = previewView;
         flow.consent = consentView;
         flow.coach = BuildCoach(holder, mapChrome, mapView);
         holder.gameObject.AddComponent<JoinLinks>();
@@ -7688,6 +7690,230 @@ const float ReferenceWidth = 1080f;
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
+    }
+
+    /// <summary>
+    /// A trail not joined yet, before starting it: a schematic map of its stops
+    /// over the top of the screen, and a sheet with what it is, how long, how it
+    /// works and where it starts.
+    ///
+    ///   (‹)       ①- - -②
+    ///                   ③- - -④   ●
+    ///   ╭───────────────────────────────╮
+    ///   │ ▣ Туризъм · Ямбол              │
+    ///   │ Ямбол: сърцето на града        │
+    ///   │ [5 спирки][~20 мин][1,4 км]    │
+    ///   │ По ред · … Без отбори и точки. │
+    ///   │ Началото е при …, на 350 м.    │
+    ///   │ (      Започни маршрута      ) │
+    ///   │ (   Заведи ме до началото    ) │
+    ///   ╰───────────────────────────────╯
+    /// </summary>
+    static GameObject BuildTrailPreview(Transform parent, DoorFlow flow, out TrailPreviewView view)
+    {
+        RectTransform panel = UIFactory.Rect("Preview", parent);
+        UIFactory.Stretch(panel);
+
+        // The map's ground, edge to edge, and a raycast target: nothing behind
+        // this screen is pressable while it is up.
+        UIFactory.Fill(panel, ThemeRole.SurfaceAlt).raycastTarget = true;
+        AddFade(panel.gameObject, 22f);
+
+        view = panel.gameObject.AddComponent<TrailPreviewView>();
+        view.categoryIcons = CategoryIcons();
+
+        // --- the schematic map
+        RectTransform map = UIFactory.Rect("Map", panel);
+        UIFactory.Stretch(map);
+        view.mapArea = map;
+
+        // A few streets, so the ground reads as a map and not as an empty page.
+        // Not the real streets - the stops are placed in proportion, and that is
+        // all this picture claims.
+        RectTransform streets = UIFactory.Rect("Streets", map);
+        UIFactory.Stretch(streets);
+        float[][] roads =
+        {
+            //          x,      y,     length, width, angle
+            new[] { 540f,  1500f, 2400f, 26f,  -8f },
+            new[] { 300f,  1100f, 2400f, 18f,  62f },
+            new[] { 760f,  1250f, 2400f, 18f,  98f },
+            new[] { 540f,   880f, 2400f, 22f,   4f },
+            new[] { 180f,  1650f, 1400f, 12f,  35f },
+            new[] { 900f,  1700f, 1400f, 12f, -40f },
+        };
+        for (int i = 0; i < roads.Length; i++)
+        {
+            RectTransform road = UIFactory.Rect("Street" + i, streets);
+            road.anchorMin = road.anchorMax = new Vector2(0f, 0f);
+            road.pivot = new Vector2(0.5f, 0.5f);
+            road.anchoredPosition = new Vector2(roads[i][0], roads[i][1]);
+            road.sizeDelta = new Vector2(roads[i][2], roads[i][3]);
+            road.localRotation = Quaternion.Euler(0f, 0f, roads[i][4]);
+            UIFactory.Fill(road, ThemeRole.Surface).raycastTarget = false;
+        }
+
+        RectTransform legs = UIFactory.Rect("Legs", map);
+        UIFactory.Stretch(legs);
+        view.legsParent = legs;
+
+        RectTransform pins = UIFactory.Rect("Pins", map);
+        UIFactory.Stretch(pins);
+        view.pinsParent = pins;
+
+        // One leg of the route: the guidance line's dashes, in the accent.
+        RectTransform leg = UIFactory.Rect("Leg", legs);
+        UIFactory.Corner(leg, new Vector2(0.5f, 0.5f), new Vector2(0f, 17f), Vector2.zero);
+        Image dash = UIFactory.Fill(leg, ThemeRole.Accent);
+        dash.sprite = UISprites.Dash;
+        dash.type = Image.Type.Tiled;
+        dash.pixelsPerUnitMultiplier = 2f;
+        dash.raycastTarget = false;
+        leg.gameObject.SetActive(false);
+        view.legTemplate = leg;
+
+        // One stop: a dark numbered circle in a ring of the surface colour.
+        RectTransform pin = UIFactory.Rect("Pin", pins);
+        UIFactory.Corner(pin, new Vector2(0.5f, 0.5f), new Vector2(86f, 86f), Vector2.zero);
+        UIFactory.Fill(pin, ThemeRole.Surface, 1f, UIShape.Circle).raycastTarget = false;
+        RectTransform pinFace = UIFactory.Rect("Face", pin);
+        UIFactory.Corner(pinFace, new Vector2(0.5f, 0.5f), new Vector2(72f, 72f), Vector2.zero);
+        UIFactory.Fill(pinFace, ThemeRole.TextPrimary, 1f, UIShape.Circle).raycastTarget = false;
+        TextMeshProUGUI pinNumber = UIFactory.Text("Number", pinFace, Secondary, ThemeRole.Surface,
+                                                   TextAlignmentOptions.Center, null, FontStyles.Bold);
+        UIFactory.Stretch(pinNumber.rectTransform);
+        pinNumber.textWrappingMode = TextWrappingModes.NoWrap;
+        pinNumber.text = "1";
+        pin.gameObject.SetActive(false);
+        view.pinTemplate = pin;
+
+        // The reader: the map's blue dot, with its faint halo.
+        RectTransform you = UIFactory.Rect("You", pins);
+        UIFactory.Corner(you, new Vector2(0.5f, 0.5f), new Vector2(60f, 60f), Vector2.zero);
+        RectTransform halo = UIFactory.Rect("Halo", you);
+        UIFactory.Corner(halo, new Vector2(0.5f, 0.5f), new Vector2(160f, 160f), Vector2.zero);
+        UIFactory.Fill(halo, ThemeRole.Accent, 0.16f, UIShape.Circle).raycastTarget = false;
+        RectTransform ring = UIFactory.Rect("Ring", you);
+        UIFactory.Stretch(ring);
+        UIFactory.Fill(ring, ThemeRole.Surface, 1f, UIShape.Circle).raycastTarget = false;
+        RectTransform core = UIFactory.Rect("Core", you);
+        UIFactory.Corner(core, new Vector2(0.5f, 0.5f), new Vector2(44f, 44f), Vector2.zero);
+        UIFactory.Fill(core, ThemeRole.Accent, 1f, UIShape.Circle).raycastTarget = false;
+        you.gameObject.SetActive(false);
+        view.userDot = you;
+
+        RectTransform safe = SafeContent(panel, padBottom: true);
+
+        // --- back, round, top left
+        RectTransform back = UIFactory.Rect("Back", safe);
+        UIFactory.Corner(back, new Vector2(0f, 1f), new Vector2(122f, 122f), new Vector2(Margin, -Margin));
+        Button backButton = UIFactory.Button(back, ThemeRole.Surface, 1f, UIShape.Circle);
+        Wire(backButton.onClick, view.Back, "Leave the trail preview");
+        PillEdge(back, ThemeRole.Line);
+        Icon(back, AppIcon.ChevronLeft, 48f, ThemeRole.TextPrimary);
+        back.gameObject.AddComponent<WayOut>();
+
+        // --- the sheet
+        RectTransform card = Card(safe, "Sheet", 28f);
+        view.sheet = card;
+
+        RectTransform meta = UIFactory.Rect("Meta", card);
+        UIFactory.Size(meta.gameObject, 52f).flexibleHeight = 0f;
+        HorizontalLayoutGroup metaRow = UIFactory.HorizontalStack(meta, 14f);
+        metaRow.childForceExpandHeight = true;
+        view.categoryIcon = Icon(meta, AppIcon.Dot, 40f, ThemeRole.TextMuted);
+        view.metaLabel = UIFactory.Text("Label", meta, Secondary, ThemeRole.TextMuted,
+                                        TextAlignmentOptions.Left, null);
+        view.metaLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        view.metaLabel.overflowMode = TextOverflowModes.Ellipsis;
+        view.metaLabel.richText = false;   // the city comes from the database
+        UIFactory.Flexible(view.metaLabel.gameObject);
+
+        view.nameLabel = UIFactory.Text("Name", card, Display, ThemeRole.TextPrimary,
+                                        TextAlignmentOptions.TopLeft, null, FontStyles.Bold);
+        UIFactory.FitsItsText(view.nameLabel);
+        view.nameLabel.richText = false;   // whatever the trail's author typed
+        view.nameLabel.text = string.Empty;
+
+        // Three grey tiles: stops, minutes on foot, length.
+        RectTransform tiles = UIFactory.Rect("Tiles", card);
+        UIFactory.Size(tiles.gameObject, 180f).flexibleHeight = 0f;
+        HorizontalLayoutGroup tileRow = UIFactory.HorizontalStack(tiles, 22f, true);
+        tileRow.childForceExpandHeight = true;
+        view.tilesRow = tiles.gameObject;
+
+        PreviewTile(tiles, "Stops", "preview.stops", out view.stopsValue, out view.stopsLabel);
+        view.minutesTile = PreviewTile(tiles, "Minutes", "preview.walk",
+                                       out view.minutesValue, out TextMeshProUGUI _);
+        view.lengthTile = PreviewTile(tiles, "Length", "preview.total",
+                                      out view.lengthValue, out TextMeshProUGUI _);
+
+        view.howLabel = UIFactory.Text("How", card, Body, ThemeRole.TextSecondary,
+                                       TextAlignmentOptions.TopLeft, null);
+        UIFactory.FitsItsText(view.howLabel);
+        view.howLabel.text = string.Empty;
+
+        view.startLabel = UIFactory.Text("Start", card, Body, ThemeRole.TextPrimary,
+                                         TextAlignmentOptions.TopLeft, null);
+        UIFactory.FitsItsText(view.startLabel);
+        view.startLabel.richText = false;   // carries a stop's title
+        view.startLabel.text = string.Empty;
+
+        // Set by the view (loading, or failed), so no LocalizedLabel to fight it.
+        view.statusLabel = UIFactory.Text("Status", card, Body, ThemeRole.TextSecondary,
+                                          TextAlignmentOptions.TopLeft, null);
+        UIFactory.FitsItsText(view.statusLabel);
+        view.statusLabel.text = string.Empty;
+
+        view.goButton = PrimaryAction(card, "Go", "preview.go", view.StartTrail, "Start the trail");
+
+        // The second way in: the same pill, outlined.
+        RectTransform lead = UIFactory.Rect("Lead", card);
+        UIFactory.Size(lead.gameObject, Btn);
+        view.leadButton = UIFactory.Button(lead, ThemeRole.Surface, 1f, UIShape.Pill);
+        Wire(view.leadButton.onClick, view.LeadToStart, "Take me to the start");
+        PillEdge(lead, ThemeRole.AccentText);
+        TextMeshProUGUI leadLabel = UIFactory.Text("Label", lead, Body, ThemeRole.AccentText,
+                                                   TextAlignmentOptions.Center, "preview.lead");
+        UIFactory.Stretch(leadLabel.rectTransform);
+
+        panel.gameObject.SetActive(false);
+        return panel.gameObject;
+    }
+
+    /// <summary>One grey tile: the number large, what it counts under it.</summary>
+    static GameObject PreviewTile(RectTransform row, string name, string key,
+                                  out TextMeshProUGUI value, out TextMeshProUGUI label)
+    {
+        RectTransform tile = UIFactory.Rect(name, row);
+        UIFactory.Fill(tile, ThemeRole.Fill, 1f, UIShape.Small).raycastTarget = false;
+
+        // Equal thirds whatever the numbers say.
+        LayoutElement size = tile.gameObject.AddComponent<LayoutElement>();
+        size.minWidth = 0f;
+        size.preferredWidth = 1f;
+        size.flexibleWidth = 1f;
+
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(tile, 2f, false);
+        stack.padding = new RectOffset(36, 24, 0, 0);
+        stack.childAlignment = TextAnchor.MiddleLeft;
+
+        value = UIFactory.Text("Value", tile, Title, ThemeRole.TextPrimary,
+                               TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(value.gameObject, 70f);
+        value.textWrappingMode = TextWrappingModes.NoWrap;
+        value.enableAutoSizing = true;
+        value.fontSizeMin = Secondary;
+        value.fontSizeMax = Title;
+        value.text = string.Empty;
+
+        label = UIFactory.Text("Label", tile, Secondary, ThemeRole.TextSecondary,
+                               TextAlignmentOptions.Left, key);
+        UIFactory.Size(label.gameObject, 48f);
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+
+        return tile.gameObject;
     }
 
     const float ListSide = 39f;

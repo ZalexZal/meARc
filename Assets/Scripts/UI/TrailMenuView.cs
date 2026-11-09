@@ -20,7 +20,7 @@ using UnityEngine.UI;
 ///   +  Влез с код
 ///
 /// Switching between trails already joined is one tap; the three closest public
-/// trails not joined yet are one more. Nearby is left out while the position is
+/// trails not joined yet open their preview, where they are joined. Nearby is left out while the position is
 /// unknown. With nothing joined and no position there is nothing to list, so
 /// the chip opens the trails screen directly.
 ///
@@ -71,7 +71,6 @@ public class TrailMenuView : MonoBehaviour
     readonly List<RectTransform> _nearRows = new List<RectTransform>();
     Coroutine _move;
     bool _open;
-    bool _joining;
     string _progress;   // the preview's stand-in for the open trail's progress
 
     public bool IsOpen { get { return _open; } }
@@ -199,33 +198,17 @@ public class TrailMenuView : MonoBehaviour
         Close();
     }
 
-    /// <summary>A nearby trail: joined on the spot, as the trails screen does.</summary>
-    void JoinNear(string worldId)
+    /// <summary>
+    /// A nearby trail is not the reader's yet: it opens the preview, where it is
+    /// joined (TrailPreviewView), rather than being joined on the spot.
+    /// </summary>
+    void PreviewNear(string worldId)
     {
-        TrailService service = TrailService.Instance;
-
-        if (service == null || _joining)
-            return;
-
-        _joining = true;
         Haptics.Tick();
+        CloseNow();
 
-        service.StartCoroutine(service.JoinListed(worldId, ok =>
-        {
-            _joining = false;
-
-            if (!ok)
-            {
-                // Said where the reader is looking, over whatever is on top.
-                ProximityToast.Say(AppStrings.Get("near.failed"));
-                return;
-            }
-
-            if (DoorFlow.Instance != null)
-                DoorFlow.Instance.Entered();
-
-            Close();
-        }));
+        if (DoorFlow.Instance != null)
+            DoorFlow.Instance.OpenPreview(worldId);
     }
 
     // ------------------------------------------------------------------ rows
@@ -359,7 +342,7 @@ public class TrailMenuView : MonoBehaviour
         {
             button.onClick.RemoveAllListeners();
             string id = trail.id;
-            button.onClick.AddListener(() => JoinNear(id));
+            button.onClick.AddListener(() => PreviewNear(id));
         }
     }
 
