@@ -164,7 +164,14 @@ public class TrailRowView : MonoBehaviour
         if (listed == null)
             return;
 
-        Bind(new TrailService.Trail { id = listed.id, name = listed.name, mode = listed.mode }, false);
+        Bind(new TrailService.Trail
+        {
+            id = listed.id,
+            name = listed.name,
+            mode = listed.mode,
+            category = listed.category,
+            city = listed.city
+        }, false);
 
         if (leaveButton != null)
             leaveButton.gameObject.SetActive(false);

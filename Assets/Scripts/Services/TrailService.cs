@@ -67,6 +67,71 @@ public class TrailService : MonoBehaviour
         [Tooltip("guide | freefall | ctf | educational. Blank when the row predates " +
                  "the column, which the UI treats as guide.")]
         public string mode;
+
+        [Tooltip("education | tourism | estate | other. Blank when unknown.")]
+        public string category;
+
+        [Tooltip("Never null in practice; key is empty when the trail has no city.")]
+        public CityJson city;
+
+        /// <summary>The city in the app language, or "" when there is none.</summary>
+        public string CityName() { return CityJson.NameOf(city); }
+    }
+
+    /// <summary>
+    /// The city a trail is in, as the database stores it: {key, bg, en, lat, lng}.
+    /// JsonUtility cannot tell a missing or null object from an empty one, so
+    /// callers test for an empty key (or just use CityName()).
+    /// </summary>
+    [Serializable]
+    public class CityJson
+    {
+        public string key;
+        public string bg;
+        public string en;
+        public double lat;
+        public double lng;
+
+        public static string NameOf(CityJson city)
+        {
+            if (city == null || string.IsNullOrEmpty(city.key))
+                return string.Empty;
+
+            bool bulgarian = AppStrings.CurrentLanguage == AppLanguage.Bulgarian;
+            string first = bulgarian ? city.bg : city.en;
+            string second = bulgarian ? city.en : city.bg;
+
+            return !string.IsNullOrEmpty(first) ? first
+                 : !string.IsNullOrEmpty(second) ? second
+                 : string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// The label for a category key, in the app language. Blank for an unknown
+    /// or empty key, so an old row shows nothing rather than "cat.".
+    /// </summary>
+    public static string CategoryLabel(string category)
+    {
+        if (string.IsNullOrEmpty(category))
+            return string.Empty;
+
+        string key = "cat." + category;
+        string label = AppStrings.Get(key);
+        return label == key ? string.Empty : label;
+    }
+
+    /// <summary>
+    /// "Tourism · Yambol", "Tourism" or "" - whichever parts exist. The line
+    /// under a trail's name in the pickers.
+    /// </summary>
+    public static string CategoryAndCity(string category, CityJson city)
+    {
+        string label = CategoryLabel(category);
+        string name = CityJson.NameOf(city);
+
+        if (label.Length == 0) return name;
+        return name.Length == 0 ? label : label + " · " + name;
     }
 
     /// <summary>
@@ -493,7 +558,7 @@ public class TrailService : MonoBehaviour
             : string.Empty;
 
         string url = config.Endpoint(
-            "/rest/v1/world_members?select=role,worlds(id,name,mode)" + mine);
+            "/rest/v1/world_members?select=role,worlds(id,name,mode,category,city)" + mine);
 
         using (UnityWebRequest request = SupabaseAuth.Get(url))
         {
@@ -573,7 +638,9 @@ public class TrailService : MonoBehaviour
                 id = rows[i].worlds.id,
                 name = rows[i].worlds.name,
                 role = rows[i].role,
-                mode = rows[i].worlds.mode
+                mode = rows[i].worlds.mode,
+                category = rows[i].worlds.category,
+                city = rows[i].worlds.city
             });
         }
     }
@@ -683,6 +750,11 @@ public class TrailService : MonoBehaviour
         public string mode;
         public int stop_count;
         public double distance_m;
+        public string category;
+        public CityJson city;
+
+        /// <summary>The city in the app language, or "" when there is none.</summary>
+        public string CityName() { return CityJson.NameOf(city); }
     }
 
     [Serializable] class ListedList { public Listed[] items; }
@@ -800,5 +872,5 @@ public class TrailService : MonoBehaviour
 
     [Serializable] class MembershipList { public MembershipRow[] items; }
     [Serializable] class MembershipRow { public string role; public WorldRow worlds; }
-    [Serializable] class WorldRow { public string id; public string name; public string mode; }
+    [Serializable] class WorldRow { public string id; public string name; public string mode; public string category; public CityJson city; }
 }

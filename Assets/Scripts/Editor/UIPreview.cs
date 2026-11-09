@@ -2232,7 +2232,12 @@ public static class UIPreview
                     name = "Ямбол: тестов маршрут",
                     mode = "guide",
                     stop_count = 3,
-                    distance_m = 670
+                    distance_m = 670,
+                    category = "tourism",
+                    city = new TrailService.CityJson
+                    {
+                        key = "yambol", bg = "Ямбол", en = "Yambol", lat = 42.48, lng = 26.50
+                    }
                 });
             }
 
@@ -2266,7 +2271,12 @@ public static class UIPreview
                         id = "preview-" + i,
                         name = names[i],
                         role = roles[i],
-                        mode = modes[i]
+                        mode = modes[i],
+                        category = i == 0 ? "tourism" : "education",
+                        city = new TrailService.CityJson
+                        {
+                            key = "yambol", bg = "Ямбол", en = "Yambol", lat = 42.48, lng = 26.50
+                        }
                     }, i == 0);
                 }
 
