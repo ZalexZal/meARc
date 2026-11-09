@@ -22,6 +22,18 @@ public static class TrailFilter
         { 'ш', "sh" }, { 'щ', "sht" }, { 'ъ', "a" }, { 'ь', "" }, { 'ю', "yu" }, { 'я', "ya" },
     };
 
+    /// <summary>The categories in the order the pickers show them. Category
+    /// icons are kept in this order too.</summary>
+    public static readonly string[] Categories = { "tourism", "education", "estate", "other" };
+
+    /// <summary>Where a category sits in <see cref="Categories"/>. Blank or
+    /// unknown counts as "other", as the database treats it.</summary>
+    public static int CategoryIndex(string category)
+    {
+        int i = System.Array.IndexOf(Categories, category);
+        return i >= 0 ? i : Categories.Length - 1;
+    }
+
     static readonly Regex Spaces = new Regex(@"\s+");
 
     public static string Fold(string text)

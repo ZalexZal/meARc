@@ -53,7 +53,11 @@ public enum AppIcon
     Bulb,
     Walk,
     Spark,
-    Plus
+    Plus,
+
+    // Trail categories (tourism and other; education is Book, estate is Home).
+    Landmark,
+    Dot
 }
 
 /// <summary>
@@ -651,6 +655,23 @@ public static class UIIcons
             case AppIcon.Plus:
                 return p => Union(Segment(p, 12f, 5f, 12f, 19f, Stroke * 1.1f),
                                   Segment(p, 5f, 12f, 19f, 12f, Stroke * 1.1f));
+
+            case AppIcon.Landmark:
+                return p =>
+                {
+                    // A pediment over three columns on a step: the museum sign.
+                    float roof = Union(Union(Segment(p, 3f, 15.5f, 12f, 20.5f, Stroke),
+                                             Segment(p, 12f, 20.5f, 21f, 15.5f, Stroke)),
+                                       Segment(p, 3f, 15.5f, 21f, 15.5f, Stroke));
+                    float columns = Union(Union(Segment(p, 6.5f, 7.5f, 6.5f, 13f, Stroke),
+                                                Segment(p, 12f, 7.5f, 12f, 13f, Stroke)),
+                                          Segment(p, 17.5f, 7.5f, 17.5f, 13f, Stroke));
+                    float step = Segment(p, 3f, 4.5f, 21f, 4.5f, Stroke);
+                    return Union(Union(roof, columns), step);
+                };
+
+            case AppIcon.Dot:
+                return p => Circle(p, 12f, 12f, 4.5f);
 
             default: // Check
                 return p => Union(

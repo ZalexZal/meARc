@@ -753,11 +753,75 @@ public class TrailService : MonoBehaviour
         public string category;
         public CityJson city;
 
+        [Tooltip("Where it starts: lat/lng from trails_near, start_lat/start_lng from public_trails.")]
+        public double lat;
+        public double lng;
+        public double start_lat;
+        public double start_lng;
+
         /// <summary>The city in the app language, or "" when there is none.</summary>
         public string CityName() { return CityJson.NameOf(city); }
     }
 
     [Serializable] class ListedList { public Listed[] items; }
+
+    /// <summary>Every public trail (public_trails, newest first, up to 100), for the
+    /// search. Distance is not filled in here: it depends on where the reader is
+    /// when they look, so the screen measures it from start_lat/start_lng.</summary>
+    public List<Listed> All { get; private set; } = new List<Listed>();
+
+    /// <summary>False until public_trails has answered once.</summary>
+    public bool AllLoaded { get; private set; }
+
+    /// <summary>True when the last public_trails call failed.</summary>
+    public bool AllFailed { get; private set; }
+
+    public IEnumerator LoadAll(Action done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (config == null)
+        {
+            if (done != null) done();
+            yield break;
+        }
+
+        yield return SupabaseAuth.Ready();
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/public_trails"), "{}", null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    Listed[] rows = JsonUtility.FromJson<ListedList>(
+                        "{\"items\":" + request.downloadHandler.text + "}").items;
+
+                    All.Clear();
+                    if (rows != null)
+                        All.AddRange(rows);
+
+                    AllLoaded = true;
+                    AllFailed = false;
+                }
+                catch (Exception exception)
+                {
+                    AllFailed = true;
+                    Debug.LogWarning("[Trails] Unreadable public trails: " + exception.Message);
+                }
+            }
+            else
+            {
+                AllFailed = true;
+                Debug.LogWarning("[Trails] public_trails failed (" + request.responseCode + ")");
+            }
+        }
+
+        if (done != null) done();
+    }
 
     /// <summary>Public trails near the last position asked about, nearest first,
     /// minus the ones already joined.</summary>
