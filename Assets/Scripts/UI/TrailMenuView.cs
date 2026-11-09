@@ -8,17 +8,21 @@ using UnityEngine.UI;
 /// The trail chip's pull-down: the chevron promises a menu, so it opens one,
 /// hung from the chip, rather than taking over the screen.
 ///
-///   ✓  Кой знае повече?
-///      По ред · Отбори и класиране
-///      Разходка из стария град
-///      Свободен ред
+///   Твоите
+///   (◎)  Кой знае повече?                 ✓
+///        Образование · Ямбол · 2 от 5
 ///   ─────────────────────────────
-///   +  Join with a code
-///   ≡  All trails                 ›
+///   Наблизо
+///   (◎)  Ески джамия                  350 м
+///        Туризъм · Ямбол
+///   ─────────────────────────────
+///   ⌕  Търси сред всички маршрути
+///   +  Влез с код
 ///
-/// Switching between trails already joined is one tap; the full trail screen
-/// (trails near you, leaving one) is still a row away. With nothing joined
-/// there is nothing to list, so the chip opens that screen directly.
+/// Switching between trails already joined is one tap; the three closest public
+/// trails not joined yet are one more. Nearby is left out while the position is
+/// unknown. With nothing joined and no position there is nothing to list, so
+/// the chip opens the trails screen directly.
 ///
 /// It grows out of the chip on a spring, the chevron turns over while it is
 /// open, and a tap anywhere else (or Back) folds it away again.
@@ -35,23 +39,39 @@ public class TrailMenuView : MonoBehaviour
     public Image scrim;
     public Button scrimButton;
 
+    [Header("Yours")]
+    public GameObject mineLabel;
     public RectTransform rowsParent;
     [Tooltip("One trail's row, built once and switched off; copies of it are the list.")]
     public RectTransform rowTemplate;
 
+    [Header("Nearby")]
+    public GameObject nearDivider;
+    public GameObject nearLabel;
+    public RectTransform nearParent;
+
+    [Header("The way to the rest")]
+    public GameObject actionsDivider;
     public Button joinButton;
+    [Tooltip("Search all trails: opens the trails screen.")]
     public Button allButton;
 
-    public int maxRows = 6;
-    public float maxWidth = 820f;
+    [Tooltip("tourism, education, estate, other - TrailFilter.Categories order.")]
+    public Sprite[] categoryIcons;
+
+    public int maxRows = 3;
+    public int maxNear = 3;
+    public float maxWidth = 1100f;
     public float scrimAlpha = 0.12f;
 
     const float Stiffness = 380f;
     const float Damping = 30f;
 
     readonly List<RectTransform> _rows = new List<RectTransform>();
+    readonly List<RectTransform> _nearRows = new List<RectTransform>();
     Coroutine _move;
     bool _open;
+    bool _joining;
 
     public bool IsOpen { get { return _open; } }
 
@@ -100,17 +120,20 @@ public class TrailMenuView : MonoBehaviour
     public void Open()
     {
         TrailService service = TrailService.Instance;
+        UserLocationService location = UserLocationService.Instance;
+        bool located = location != null && location.HasValidPose;
+        bool anyMine = service != null && service.Mine != null && service.Mine.Count > 0;
 
-        // Nothing joined: the menu would hold two rows that both lead to the
-        // trail screen, so go there.
-        if (service == null || service.Mine == null || service.Mine.Count == 0 || DemoTrail.Active)
+        // Nothing joined and nothing to measure "nearby" from: the menu would hold
+        // two rows that both lead to the trail screen, so go there.
+        if (service == null || DemoTrail.Active || (!anyMine && !located))
         {
             OpenAll();
             return;
         }
 
         gameObject.SetActive(true);
-        Draw(service);
+        Redraw();
         Place();
 
         _open = true;
@@ -120,6 +143,15 @@ public class TrailMenuView : MonoBehaviour
             StopCoroutine(_move);
 
         _move = StartCoroutine(Grow());
+
+        // Asked on the service, so a menu folded away mid-request does not
+        // strand the answer; drawn when it comes back if the menu is still up.
+        if (located)
+            service.StartCoroutine(service.LoadNear(location.Latitude, location.Longitude, () =>
+            {
+                if (_open && isActiveAndEnabled)
+                    Redraw();
+            }));
     }
 
     public void Close()
@@ -166,59 +198,135 @@ public class TrailMenuView : MonoBehaviour
         Close();
     }
 
+    /// <summary>A nearby trail: joined on the spot, as the trails screen does.</summary>
+    void JoinNear(string worldId)
+    {
+        TrailService service = TrailService.Instance;
+
+        if (service == null || _joining)
+            return;
+
+        _joining = true;
+        Haptics.Tick();
+
+        service.StartCoroutine(service.JoinListed(worldId, ok =>
+        {
+            _joining = false;
+
+            if (ok && DoorFlow.Instance != null)
+                DoorFlow.Instance.Entered();
+
+            Close();
+        }));
+    }
+
     // ------------------------------------------------------------------ rows
 
-    void Draw(TrailService service)
+    void Redraw()
+    {
+        TrailService service = TrailService.Instance;
+        UserLocationService location = UserLocationService.Instance;
+        bool located = location != null && location.HasValidPose;
+
+        Draw(service != null ? service.Mine : null,
+             service != null ? service.SelectedId : null,
+             located && service != null ? service.Near : null);
+    }
+
+    /// <summary>
+    /// Fills the menu from these lists. Public so the preview harness draws it
+    /// with the same code the app does. A null or empty near list hides Nearby.
+    /// </summary>
+    public void Draw(List<TrailService.Trail> mine, string selectedId, List<TrailService.Listed> near)
     {
         if (rowsParent == null || rowTemplate == null)
             return;
 
-        int count = Mathf.Min(service.Mine.Count, maxRows);
+        List<TrailService.Trail> shown = Pick(mine, selectedId);
+        int nearCount = near == null ? 0 : Mathf.Min(near.Count, maxNear);
 
-        while (_rows.Count < count)
+        Fill(_rows, rowsParent, shown.Count);
+        for (int i = 0; i < shown.Count; i++)
+            DrawMine(_rows[i], shown[i], shown[i].id == selectedId, i == 0);
+
+        if (nearParent != null)
         {
-            RectTransform row = Instantiate(rowTemplate, rowsParent);
-            row.name = "Trail";
-            _rows.Add(row);
+            Fill(_nearRows, nearParent, nearCount);
+            for (int i = 0; i < nearCount; i++)
+                DrawNear(_nearRows[i], near[i], i == 0);
         }
 
-        for (int i = 0; i < _rows.Count; i++)
+        bool anyMine = shown.Count > 0;
+        bool anyNear = nearCount > 0;
+
+        Set(mineLabel, anyMine);
+        Set(rowsParent.gameObject, anyMine);
+        Set(nearLabel, anyNear);
+        if (nearParent != null)
+            Set(nearParent.gameObject, anyNear);
+        Set(nearDivider, anyMine && anyNear);
+        Set(actionsDivider, anyMine || anyNear);
+    }
+
+    /// <summary>Up to maxRows of the joined trails, and always the open one.</summary>
+    List<TrailService.Trail> Pick(List<TrailService.Trail> mine, string selectedId)
+    {
+        List<TrailService.Trail> shown = new List<TrailService.Trail>();
+
+        if (mine == null)
+            return shown;
+
+        for (int i = 0; i < mine.Count && shown.Count < maxRows; i++)
+            shown.Add(mine[i]);
+
+        bool hasCurrent = false;
+        for (int i = 0; i < shown.Count; i++)
+            hasCurrent |= shown[i].id == selectedId;
+
+        if (!hasCurrent && shown.Count > 0)
+        {
+            for (int i = maxRows; i < mine.Count; i++)
+            {
+                if (mine[i].id == selectedId)
+                {
+                    shown[shown.Count - 1] = mine[i];
+                    break;
+                }
+            }
+        }
+
+        return shown;
+    }
+
+    void Fill(List<RectTransform> rows, RectTransform parent, int count)
+    {
+        while (rows.Count < count)
+        {
+            RectTransform row = Instantiate(rowTemplate, parent);
+            row.name = "Trail";
+            rows.Add(row);
+        }
+
+        for (int i = 0; i < rows.Count; i++)
         {
             bool used = i < count;
-            if (_rows[i].gameObject.activeSelf != used)
-                _rows[i].gameObject.SetActive(used);
-
-            if (used)
-                DrawRow(_rows[i], service.Mine[i], service.Mine[i].id == service.SelectedId, i == 0);
+            if (rows[i].gameObject.activeSelf != used)
+                rows[i].gameObject.SetActive(used);
         }
     }
 
-    void DrawRow(RectTransform row, TrailService.Trail trail, bool current, bool first)
+    void DrawMine(RectTransform row, TrailService.Trail trail, bool current, bool first)
     {
-        TextMeshProUGUI name = Find<TextMeshProUGUI>(row, "Text/Name");
-        TextMeshProUGUI sub = Find<TextMeshProUGUI>(row, "Text/Sub");
-        Image check = Find<Image>(row, "Check/Icon");
-        Transform rule = row.Find("Rule");
+        string sub = TrailService.CategoryAndCity(trail.category, trail.city);
 
-        if (name != null)
+        if (current)
         {
-            name.text = trail.name;
-            name.fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
+            string progress = Progress();
+            if (progress.Length > 0)
+                sub = sub.Length == 0 ? progress : sub + " · " + progress;
         }
 
-        if (sub != null)
-        {
-            string order = AppStrings.Get(TrailService.IsOrdered(trail.mode) ? "chip.inOrder" : "chip.anyOrder");
-            sub.text = TrailService.IsGame(trail.mode)
-                ? order + " · " + AppStrings.Get("menu.teams")
-                : order;
-        }
-
-        if (check != null)
-            check.enabled = current;
-
-        if (rule != null)
-            rule.gameObject.SetActive(!first);
+        DrawRow(row, trail.name, trail.category, sub, current, null, first);
 
         Button button = row.GetComponent<Button>();
         if (button != null)
@@ -227,6 +335,82 @@ public class TrailMenuView : MonoBehaviour
             string id = trail.id;
             button.onClick.AddListener(() => Choose(id));
         }
+    }
+
+    void DrawNear(RectTransform row, TrailService.Listed trail, bool first)
+    {
+        DrawRow(row, trail.name, trail.category,
+                TrailService.CategoryAndCity(trail.category, trail.city), false,
+                AppStrings.FormatDistance(trail.distance_m), first);
+
+        Button button = row.GetComponent<Button>();
+        if (button != null)
+        {
+            button.onClick.RemoveAllListeners();
+            string id = trail.id;
+            button.onClick.AddListener(() => JoinNear(id));
+        }
+    }
+
+    void DrawRow(RectTransform row, string title, string category, string subText,
+                 bool current, string distanceText, bool first)
+    {
+        TextMeshProUGUI name = Find<TextMeshProUGUI>(row, "Text/Name");
+        TextMeshProUGUI sub = Find<TextMeshProUGUI>(row, "Text/Sub");
+        TextMeshProUGUI distance = Find<TextMeshProUGUI>(row, "Distance");
+        Image icon = Find<Image>(row, "Chip/Icon");
+        Image check = Find<Image>(row, "Check/Icon");
+        Transform rule = row.Find("Rule");
+
+        if (name != null)
+            name.text = title;
+
+        if (sub != null)
+        {
+            sub.text = subText;
+            sub.gameObject.SetActive(subText.Length > 0);
+        }
+
+        if (icon != null && categoryIcons != null && categoryIcons.Length == TrailFilter.Categories.Length)
+            icon.sprite = categoryIcons[TrailFilter.CategoryIndex(category)];
+
+        if (check != null)
+            check.enabled = current;
+
+        if (distance != null)
+        {
+            distance.gameObject.SetActive(!string.IsNullOrEmpty(distanceText));
+            distance.text = distanceText ?? string.Empty;
+        }
+
+        if (rule != null)
+            rule.gameObject.SetActive(!first);
+    }
+
+    /// <summary>"2 от 5" for the open trail; its stops are the ones on the phone.</summary>
+    static string Progress()
+    {
+        if (DemoTrail.Active)
+            return string.Empty;
+
+        var all = BuildingDatabase.AllBuildings;
+        if (all == null || all.Count == 0)
+            return string.Empty;
+
+        int done = 0;
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (NextStopCard.Done(all[i]))
+                done++;
+        }
+
+        return string.Format(AppStrings.Get("chip.progress"), done, all.Count);
+    }
+
+    static void Set(GameObject go, bool on)
+    {
+        if (go != null && go.activeSelf != on)
+            go.SetActive(on);
     }
 
     static T Find<T>(Transform root, string path) where T : Component

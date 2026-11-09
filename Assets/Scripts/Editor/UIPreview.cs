@@ -157,28 +157,15 @@ public static class UIPreview
 
         Shoot(canvas, rig, "01-map" + t, "MapPanel");
 
-        // The chip's pull-down, with three trails and the first one open.
+        // The chip's pull-down: three of yours with the first one open, and the
+        // three closest public trails.
         TrailMenuView menu = canvas.GetComponentInChildren<TrailMenuView>(true);
         if (menu != null && menu.rowTemplate != null)
         {
             menu.gameObject.SetActive(true);
-            string[] names = { "Кой знае повече?", "Разходка из стария град", "Ямбол през вековете" };
-            string[] subs = { "По ред · Отбори и класиране", "Свободен ред", "По ред" };
-            var made = new System.Collections.Generic.List<GameObject>();
-            for (int i = 0; i < names.Length; i++)
-            {
-                RectTransform row = Object.Instantiate(menu.rowTemplate, menu.rowsParent);
-                row.gameObject.SetActive(true);
-                row.Find("Text/Name").GetComponent<TMPro.TextMeshProUGUI>().text = names[i];
-                row.Find("Text/Sub").GetComponent<TMPro.TextMeshProUGUI>().text = subs[i];
-                row.Find("Check/Icon").GetComponent<UnityEngine.UI.Image>().enabled = i == 0;
-                row.Find("Rule").gameObject.SetActive(i > 0);
-                made.Add(row.gameObject);
-            }
+            menu.Draw(Pieces.SampleMine(), "preview-0", Pieces.SampleNear());
             menu.ShowStill();
             Shoot(canvas, rig, "01c-trail-menu" + t, "MapPanel");
-            foreach (GameObject go in made)
-                Object.DestroyImmediate(go);
             menu.gameObject.SetActive(false);
             if (menu.chevron != null)
                 menu.chevron.localRotation = Quaternion.identity;
@@ -483,6 +470,9 @@ public static class UIPreview
             age.Draw();
         Shoot(canvas, rig, "11-terms" + t, "Doors/Terms");
         Shoot(canvas, rig, "12-trails" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
+        Pieces.TrailsState(canvas.transform, "Filtered");
+        Shoot(canvas, rig, "12b-trails-filtered" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
+        Pieces.TrailsState(canvas.transform, "Rows");
 
         Pieces.CodeState(canvas.transform, "", null);
         Shoot(canvas, rig, "13-code" + t, "MapPanel", "Doors/Backdrop", "Doors/Code");
@@ -1367,13 +1357,6 @@ public static class UIPreview
         // nothing - so doing this any earlier measures an empty screen and gives
         // the card a list of no height at all. DoorFlow reveals the panel before
         // it calls Refresh for the same reason.
-        TrailsDoor sizing = canvas.GetComponentInChildren<TrailsDoor>(false);
-        if (sizing != null)
-        {
-            sizing.SizeList();
-            LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)canvas.transform);
-            Canvas.ForceUpdateCanvases();
-        }
 
         rig.camera.backgroundColor = ThemeManager.Get(ThemeRole.Background);
         rig.camera.Render();
@@ -2190,8 +2173,77 @@ public static class UIPreview
             });
         }
 
+        /// <summary>Three trails joined, the first open, as the menu and list show them.</summary>
+        public static List<TrailService.Trail> SampleMine()
+        {
+            TrailService.CityJson yambol = Yambol();
+            return new List<TrailService.Trail>
+            {
+                new TrailService.Trail { id = "preview-0", name = "Кой знае повече?", mode = "ctf",
+                                         category = "education", city = yambol },
+                new TrailService.Trail { id = "preview-1", name = "Разходка из стария град", mode = "freefall",
+                                         category = "tourism", city = yambol },
+                new TrailService.Trail { id = "preview-2", name = "Апартаменти „Тунджа“", mode = "guide",
+                                         category = "estate", city = yambol },
+            };
+        }
+
+        /// <summary>The three closest public trails not joined yet.</summary>
+        public static List<TrailService.Listed> SampleNear()
+        {
+            return new List<TrailService.Listed>
+            {
+                new TrailService.Listed { id = "preview-near-0", name = "Ески джамия", stop_count = 5,
+                                          distance_m = 350, category = "tourism", city = Yambol() },
+                new TrailService.Listed { id = "preview-near-1", name = "Безистенът и тепетата", stop_count = 4,
+                                          distance_m = 820, category = "tourism", city = Yambol() },
+                new TrailService.Listed { id = "preview-near-2", name = "ПМГ — училищен маршрут", stop_count = 8,
+                                          distance_m = 1600, category = "education", city = Yambol() },
+            };
+        }
+
+        static TrailService.CityJson Yambol()
+        {
+            return new TrailService.CityJson { key = "yambol", bg = "Ямбол", en = "Yambol", lat = 42.48, lng = 26.50 };
+        }
+
+        static TrailService.CityJson City(string key, string bg, string en)
+        {
+            return new TrailService.CityJson { key = key, bg = bg, en = en };
+        }
+
+        /// <summary>The whole library: public trails in several cities, two of them yours.</summary>
+        static List<TrailsDoor.Entry> SampleAll()
+        {
+            TrailsDoor.Entry E(string id, string name, string cat, TrailService.CityJson city,
+                               int stops, double distance, bool mine)
+            {
+                return new TrailsDoor.Entry { id = id, name = name, category = cat, city = city,
+                                              stops = stops, distance = distance, mine = mine };
+            }
+
+            TrailService.CityJson yambol = Yambol();
+            TrailService.CityJson sofia = City("sofia", "София", "Sofia");
+            TrailService.CityJson plovdiv = City("plovdiv", "Пловдив", "Plovdiv");
+
+            return new List<TrailsDoor.Entry>
+            {
+                E("preview-near-0", "Ески джамия", "tourism", yambol, 5, 350, false),
+                E("preview-0", "Кой знае повече?", "education", yambol, 6, 540, true),
+                E("preview-near-1", "Безистенът и тепетата", "tourism", yambol, 4, 820, false),
+                E("preview-near-2", "ПМГ — училищен маршрут", "education", yambol, 8, 1600, false),
+                E("preview-3", "Апартаменти „Тунджа“", "estate", yambol, 3, 2300, false),
+                E("preview-4", "Старият Пловдив", "tourism", plovdiv, 9, 152000, false),
+                E("preview-5", "София за един ден", "tourism", sofia, 12, 268000, false),
+                E("preview-6", "Ново строителство в Лозенец", "estate", sofia, 6, 271000, false),
+                E("preview-7", "Разходка без град", "other", null, 2, -1, false),
+            };
+        }
+
         /// <summary>
-        /// Two trails in the list, or the screen a first run actually sees.
+        /// The trails screen in one of its states: "Rows" (everything, nearest
+        /// first), "Filtered" (Tourism in Yambol, typed "ям"), "Empty" (a search
+        /// that finds nothing).
         /// </summary>
         public static void TrailsState(Transform root, string state)
         {
@@ -2200,94 +2252,21 @@ public static class UIPreview
                 return;
 
             TrailsDoor trails = door.GetComponent<TrailsDoor>();
-            Transform content = Dig(door, "Card/Body/Scroll/Viewport/Content");
-
-            if (trails == null || content == null)
+            if (trails == null)
             {
-                Debug.LogWarning("[Preview] No trails list to fill.");
+                Debug.LogWarning("[Preview] No trails screen to fill.");
                 return;
             }
 
-            bool rows = state == "Rows";
+            trails.UseSample(SampleAll());
 
-            // The card says something different with nothing in it, and the door
-            // sets that from the service - which is not running here.
-            if (trails.subtitle != null)
-            {
-                trails.subtitle.text = AppStrings.Get("trails.subtitle");
-                trails.subtitle.gameObject.SetActive(rows);
-            }
-
-            Show(trails.emptyState, !rows);
-            Show(trails.waitingState, false);
-            Show(trails.failedState, false);
-
-            // The library, with the one public trail the database holds today.
-            if (trails.nearParent != null && trails.nearParent.childCount == 0)
-            {
-                TrailRowView near = Object.Instantiate(trails.rowPrefab, trails.nearParent);
-                near.BindListed(new TrailService.Listed
-                {
-                    id = "preview-near",
-                    name = "Ямбол: тестов маршрут",
-                    mode = "guide",
-                    stop_count = 3,
-                    distance_m = 670,
-                    category = "tourism",
-                    city = new TrailService.CityJson
-                    {
-                        key = "yambol", bg = "Ямбол", en = "Yambol", lat = 42.48, lng = 26.50
-                    }
-                });
-            }
-
-            if (trails.nearNote != null)
-                trails.nearNote.gameObject.SetActive(false);
-
-            Transform mine = trails.listParent != null ? (Transform)trails.listParent : content;
-
-            if (trails.mineGroup != null)
-                trails.mineGroup.SetActive(rows);
-
-            List<TrailRowView> existing = new List<TrailRowView>();
-            foreach (TrailRowView found in mine.GetComponentsInChildren<TrailRowView>(true))
-            {
-                if (found.transform.parent == mine)
-                    existing.Add(found);
-            }
-
-            if (existing.Count == 0 && rows)
-            {
-                string[] names = { "Ямбол — център", "ПМГ — училищен маршрут" };
-                string[] roles = { "viewer", "editor" };
-                string[] modes = { "freefall", "ctf" };
-
-                for (int i = 0; i < names.Length; i++)
-                {
-                    TrailRowView row = Object.Instantiate(trails.rowPrefab, mine);
-                    row.SetFirst(i == 0);
-                    row.Bind(new TrailService.Trail
-                    {
-                        id = "preview-" + i,
-                        name = names[i],
-                        role = roles[i],
-                        mode = modes[i],
-                        category = i == 0 ? "tourism" : "education",
-                        city = new TrailService.CityJson
-                        {
-                            key = "yambol", bg = "Ямбол", en = "Yambol", lat = 42.48, lng = 26.50
-                        }
-                    }, i == 0);
-                }
-
-                if (trails.nearGroup != null)
-                    trails.nearGroup.transform.SetAsLastSibling();
-
-                return;
-            }
-
-            for (int i = 0; i < existing.Count; i++)
-                existing[i].gameObject.SetActive(rows);
+            if (state == "Filtered")
+                trails.SetFilters("ям", 1, "yambol", true);
+            else if (state == "Empty")
+                trails.SetFilters(AppStrings.CurrentLanguage == AppLanguage.Bulgarian ? "Варна" : "Varna",
+                                  0, null, true);
+            else
+                trails.SetFilters(string.Empty, 0, null, true);
         }
 
         /// <summary>

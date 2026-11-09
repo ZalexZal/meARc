@@ -1631,8 +1631,9 @@ const float ReferenceWidth = 1080f;
     }
 
     /// <summary>
-    /// The trail chip's menu: the trails joined, a tick on the open one, then
-    /// "Join with a code" and "All trails". Hung under the chip by the view.
+    /// The trail chip's menu: Yours (a tick on the open one), Nearby (the three
+    /// closest public trails, distance on the right), then "Search all trails"
+    /// and "Join with a code" in blue. Hung under the chip by the view.
     /// </summary>
     static TrailMenuView BuildTrailMenu(RectTransform panel, RectTransform chip, RectTransform chevron)
     {
@@ -1641,6 +1642,7 @@ const float ReferenceWidth = 1080f;
         TrailMenuView view = root.gameObject.AddComponent<TrailMenuView>();
         view.anchor = chip;
         view.chevron = chevron;
+        view.categoryIcons = CategoryIcons();
 
         // A tap anywhere off the menu folds it; so does Back.
         RectTransform scrimRect = UIFactory.Rect("Scrim", root);
@@ -1655,7 +1657,7 @@ const float ReferenceWidth = 1080f;
         RectTransform card = UIFactory.Rect("Card", root);
         card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
         card.pivot = new Vector2(1f, 1f);
-        card.sizeDelta = new Vector2(820f, 400f);
+        card.sizeDelta = new Vector2(900f, 400f);
         view.card = card;
         view.cardGroup = card.gameObject.AddComponent<CanvasGroup>();
 
@@ -1674,30 +1676,47 @@ const float ReferenceWidth = 1080f;
         VerticalLayoutGroup stack = UIFactory.VerticalStack(card, 0f);
         stack.padding = new RectOffset(0, 0, 14, 14);
 
+        // --- Yours
+        view.mineLabel = MenuSection(card, "MineLabel", "trails.subtitle");
+
         RectTransform rows = UIFactory.Rect("Trails", card);
         UIFactory.VerticalStack(rows, 0f);
         view.rowsParent = rows;
 
-        // --- one trail:  [✓]  Name
-        //                      In order · Teams & standings
+        // --- one trail:  (◎)  Name                         ✓ / 350 m
+        //                      Category · City · 2 of 5
         RectTransform row = UIFactory.Rect("Row", rows);
-        UIFactory.Size(row.gameObject, 150f);
+        UIFactory.Size(row.gameObject, MenuRowHeight);
         UIFactory.Button(row, ThemeRole.Fill, 0f);
         RectTransform rule = UIFactory.Rect("Rule", row);
         UIFactory.TopStretch(rule, 3f);
-        rule.offsetMin = new Vector2(122f, rule.offsetMin.y);
+        rule.offsetMin = new Vector2(MenuText, rule.offsetMin.y);
         UIFactory.Fill(rule, ThemeRole.Line).raycastTarget = false;
         Ignore(rule);
 
+        RectTransform chipRect = UIFactory.Rect("Chip", row);
+        UIFactory.Corner(chipRect, new Vector2(0f, 0.5f), new Vector2(99f, 99f),
+                         new Vector2(MenuSide, 0f));
+        UIFactory.Fill(chipRect, ThemeRole.Fill, 1f, UIShape.Circle).raycastTarget = false;
+        Icon(chipRect, AppIcon.Dot, 52f, ThemeRole.TextSecondary).gameObject.name = "Icon";
+
         RectTransform checkBox = UIFactory.Rect("Check", row);
-        UIFactory.Corner(checkBox, new Vector2(0f, 0.5f), new Vector2(122f, 150f), Vector2.zero);
+        UIFactory.Corner(checkBox, new Vector2(1f, 0.5f), new Vector2(80f, MenuRowHeight),
+                         new Vector2(-MenuSide + 10f, 0f));
         Image tick = Icon(checkBox, AppIcon.Check, 46f, ThemeRole.AccentText);
         tick.gameObject.name = "Icon";
 
+        TextMeshProUGUI distance = UIFactory.Text("Distance", row, Secondary, ThemeRole.TextMuted,
+                                                  TextAlignmentOptions.Right);
+        UIFactory.Corner(distance.rectTransform, new Vector2(1f, 0.5f), new Vector2(200f, 60f),
+                         new Vector2(-MenuSide, 0f));
+        distance.textWrappingMode = TextWrappingModes.NoWrap;
+        distance.gameObject.SetActive(false);
+
         RectTransform text = UIFactory.Rect("Text", row);
         UIFactory.Stretch(text);
-        text.offsetMin = new Vector2(122f, 0f);
-        text.offsetMax = new Vector2(-44f, 0f);
+        text.offsetMin = new Vector2(MenuText, 0f);
+        text.offsetMax = new Vector2(-MenuSide - 200f, 0f);
         UIFactory.VerticalStack(text, 2f, false).childAlignment = TextAnchor.MiddleLeft;
 
         TextMeshProUGUI name = UIFactory.Text("Name", text, Body, ThemeRole.TextPrimary,
@@ -1706,29 +1725,77 @@ const float ReferenceWidth = 1080f;
         name.textWrappingMode = TextWrappingModes.NoWrap;
         name.overflowMode = TextOverflowModes.Ellipsis;
 
-        TextMeshProUGUI sub = UIFactory.Text("Sub", text, Caption, ThemeRole.TextSecondary,
+        TextMeshProUGUI sub = UIFactory.Text("Sub", text, Caption + 3f, ThemeRole.TextSecondary,
                                              TextAlignmentOptions.Left);
-        UIFactory.Size(sub.gameObject, 40f);
+        UIFactory.Size(sub.gameObject, 44f);
         sub.textWrappingMode = TextWrappingModes.NoWrap;
         sub.overflowMode = TextOverflowModes.Ellipsis;
 
         view.rowTemplate = row;
         row.gameObject.SetActive(false);
 
-        // --- the way to the rest
-        RectTransform gap = UIFactory.Rect("Gap", card);
-        UIFactory.Size(gap.gameObject, 17f);
-        UIFactory.Fill(gap, ThemeRole.SurfaceAlt).raycastTarget = false;
+        // --- Nearby
+        view.nearDivider = MenuDivider(card, "NearDivider");
+        view.nearLabel = MenuSection(card, "NearLabel", "menu.nearby");
 
-        view.joinButton = MenuRow(card, "Join", AppIcon.Plus, "trails.join", false);
-        view.allButton = MenuRow(card, "All", AppIcon.List, "menu.allTrails", true);
+        RectTransform near = UIFactory.Rect("Near", card);
+        UIFactory.VerticalStack(near, 0f);
+        view.nearParent = near;
+
+        // --- the way to the rest, in the accent: they are actions, not trails
+        view.actionsDivider = MenuDivider(card, "ActionsDivider");
+        view.allButton = MenuRow(card, "All", AppIcon.Search, "menu.searchAll", false,
+                                 ThemeRole.AccentText);
+        view.joinButton = MenuRow(card, "Join", AppIcon.Plus, "trails.join", false,
+                                  ThemeRole.AccentText);
 
         root.gameObject.SetActive(false);
         EditorUtility.SetDirty(view);
         return view;
     }
 
-    static Button MenuRow(RectTransform card, string name, AppIcon icon, string key, bool rule)
+    const float MenuSide = 44f;
+    const float MenuText = MenuSide + 99f + 33f;
+    const float MenuRowHeight = 150f;
+
+    /// <summary>tourism, education, estate, other: TrailFilter.Categories order.</summary>
+    static Sprite[] CategoryIcons()
+    {
+        return new[]
+        {
+            UIIcons.Get(AppIcon.Landmark),
+            UIIcons.Get(AppIcon.Book),
+            UIIcons.Get(AppIcon.Home),
+            UIIcons.Get(AppIcon.Dot)
+        };
+    }
+
+    /// <summary>"Твоите", "Наблизо": 13px semibold grey over a group of rows.</summary>
+    static GameObject MenuSection(RectTransform card, string name, string key)
+    {
+        TextMeshProUGUI label = UIFactory.Text(name, card, Caption + 3f, ThemeRole.TextMuted,
+                                               TextAlignmentOptions.BottomLeft, key, FontStyles.Bold);
+        UIFactory.Size(label.gameObject, 72f);
+        label.margin = new Vector4(MenuSide, 0f, MenuSide, 8f);
+        return label.gameObject;
+    }
+
+    /// <summary>A hairline between two groups, with a little air either side.</summary>
+    static GameObject MenuDivider(RectTransform card, string name)
+    {
+        RectTransform holder = UIFactory.Rect(name, card);
+        UIFactory.Size(holder.gameObject, 31f);
+
+        RectTransform hairline = UIFactory.Rect("Line", holder);
+        hairline.anchorMin = new Vector2(0f, 0.5f);
+        hairline.anchorMax = new Vector2(1f, 0.5f);
+        hairline.sizeDelta = new Vector2(0f, 3f);
+        UIFactory.Fill(hairline, ThemeRole.Line).raycastTarget = false;
+        return holder.gameObject;
+    }
+
+    static Button MenuRow(RectTransform card, string name, AppIcon icon, string key, bool rule,
+                          ThemeRole role = ThemeRole.TextPrimary)
     {
         RectTransform row = UIFactory.Rect(name, card);
         UIFactory.Size(row.gameObject, 140f);
@@ -1738,20 +1805,22 @@ const float ReferenceWidth = 1080f;
         {
             RectTransform line = UIFactory.Rect("Rule", row);
             UIFactory.TopStretch(line, 3f);
-            line.offsetMin = new Vector2(122f, line.offsetMin.y);
+            line.offsetMin = new Vector2(MenuText, line.offsetMin.y);
             UIFactory.Fill(line, ThemeRole.Line).raycastTarget = false;
             Ignore(line);
         }
 
+        // In the same column as the trails' icon chips.
         RectTransform glyph = UIFactory.Rect("Glyph", row);
-        UIFactory.Corner(glyph, new Vector2(0f, 0.5f), new Vector2(122f, 140f), Vector2.zero);
-        Icon(glyph, icon, 50f, ThemeRole.TextPrimary);
+        UIFactory.Corner(glyph, new Vector2(0f, 0.5f), new Vector2(99f, 140f),
+                         new Vector2(MenuSide, 0f));
+        Icon(glyph, icon, 50f, role);
 
-        TextMeshProUGUI label = UIFactory.Text("Label", row, Body, ThemeRole.TextPrimary,
+        TextMeshProUGUI label = UIFactory.Text("Label", row, Body, role,
                                                TextAlignmentOptions.Left, key);
         UIFactory.Stretch(label.rectTransform);
-        label.rectTransform.offsetMin = new Vector2(122f, 0f);
-        label.rectTransform.offsetMax = new Vector2(-44f, 0f);
+        label.rectTransform.offsetMin = new Vector2(MenuText, 0f);
+        label.rectTransform.offsetMax = new Vector2(-MenuSide, 0f);
         label.textWrappingMode = TextWrappingModes.NoWrap;
 
         return button;
@@ -7435,59 +7504,175 @@ const float ReferenceWidth = 1080f;
         return panel.gameObject;
     }
 
+    /// <summary>
+    /// "Маршрути": a full-height sheet on the parchment, with the search, the
+    /// category chips, the city and Nearest pills, a count, the white list card
+    /// and "Join with a code" at the bottom. TrailsDoor fills and filters it.
+    /// </summary>
     static GameObject BuildTrailsDoor(Transform parent, DoorFlow flow,
                                       TrailRowView rowPrefab, out TrailsDoor door)
     {
         RectTransform panel = Door(parent, "Trails", plain: false, inner: out RectTransform inner);
 
         door = panel.gameObject.AddComponent<TrailsDoor>();
-        door.rowPrefab = rowPrefab;
+        door.categoryIcons = CategoryIcons();
         TapOutside(panel, flow.Close, "Trails outside");
 
-        RectTransform card = Card(inner, "Card", 33f);
-        SheetTitle(card, "trails.title");
+        RectTransform card = Card(inner, "Card", 28f);
 
-        // --- the list: your trails, then the ones near you ---
+        // Full height, not hugging its list: the sheet must not jump while the
+        // reader types and the list shrinks under their finger.
+        ContentSizeFitter hug = card.GetComponent<ContentSizeFitter>();
+        if (hug != null)
+            Object.DestroyImmediate(hug);
+        card.anchorMax = new Vector2(1f, 1f);
+        card.offsetMin = Vector2.zero;
+        card.offsetMax = Vector2.zero;
+
+        // Parchment under white cards, as the grouped lists elsewhere.
+        Transform faceT = card.Find("Face");
+        ThemedElement faceTheme = faceT != null ? faceT.GetComponent<ThemedElement>() : null;
+        if (faceTheme != null)
+        {
+            faceTheme.role = ThemeRole.Background;
+            faceTheme.Apply();
+        }
+
+        // --- the title, large and to the left, as Daylight's large titles
+        RectTransform bar = UIFactory.Rect("TitleBar", card);
+        UIFactory.Size(bar.gameObject, 133f);
+        TextMeshProUGUI title = UIFactory.Text("Title", bar, Display, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, "trails.title",
+                                               FontStyles.Bold);
+        UIFactory.Stretch(title.rectTransform);
+        title.margin = new Vector4(0f, 0f, 150f, 0f);
+        title.textWrappingMode = TextWrappingModes.NoWrap;
+
+        // --- the search: a white pill with a hairline and a magnifier
+        RectTransform fieldRect = UIFactory.Rect("SearchField", card);
+        UIFactory.Size(fieldRect.gameObject, 121f);
+        door.searchField = UIFactory.InputField("Field", fieldRect, "find.search",
+                                                out TextMeshProUGUI _);
+        RectTransform field = (RectTransform)door.searchField.transform;
+        UIFactory.Stretch(field);
+        UIFactory.ApplyShape(field.GetComponent<Image>(), UIShape.Pill);
+        PillEdge(field, ThemeRole.Line);
+
+        Image searchGlyph = Icon(fieldRect, AppIcon.Search, 42f, ThemeRole.TextMuted,
+                                 out RectTransform searchGlyphRect);
+        UIFactory.Corner(searchGlyphRect, new Vector2(0f, 0.5f), new Vector2(42f, 42f),
+                         new Vector2(55f, 0f));
+        searchGlyph.transform.SetAsLastSibling();
+
+        if (door.searchField.textViewport != null)
+        {
+            door.searchField.textViewport.offsetMin = new Vector2(124f, 8f);
+            door.searchField.textViewport.offsetMax = new Vector2(-44f, -8f);
+        }
+
+        // --- the categories, a row that scrolls sideways
+        RectTransform chipStrip = UIFactory.Rect("Categories", card);
+        UIFactory.Size(chipStrip.gameObject, 105f);
+        ScrollRect chipScroll = chipStrip.gameObject.AddComponent<ScrollRect>();
+        chipScroll.horizontal = true;
+        chipScroll.vertical = false;
+        chipScroll.movementType = ScrollRect.MovementType.Clamped;
+
+        RectTransform chipView = UIFactory.Rect("Viewport", chipStrip);
+        UIFactory.Stretch(chipView);
+        chipView.gameObject.AddComponent<RectMask2D>();
+        Image chipCatcher = chipView.gameObject.AddComponent<Image>();
+        chipCatcher.color = new Color(0f, 0f, 0f, 0f);
+
+        RectTransform chipRow = UIFactory.Rect("Content", chipView);
+        chipRow.anchorMin = new Vector2(0f, 0f);
+        chipRow.anchorMax = new Vector2(0f, 1f);
+        chipRow.pivot = new Vector2(0f, 0.5f);
+        chipRow.sizeDelta = Vector2.zero;
+        HorizontalLayoutGroup chipLayout = UIFactory.HorizontalStack(chipRow, 22f);
+        chipLayout.childForceExpandHeight = true;
+        ContentSizeFitter chipFit = chipRow.gameObject.AddComponent<ContentSizeFitter>();
+        chipFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        chipScroll.viewport = chipView;
+        chipScroll.content = chipRow;
+
+        string[] chipKeys = { "find.all", "cat.tourism", "cat.education", "cat.estate", "cat.other" };
+        door.chips = new TrailsDoor.Chip[chipKeys.Length];
+        for (int i = 0; i < chipKeys.Length; i++)
+            door.chips[i] = FilterChip(chipRow, "Chip" + i, chipKeys[i], i > 0);
+
+        // --- the city and Nearest
+        RectTransform filters = UIFactory.Rect("Filters", card);
+        // flexibleHeight 0: a group that force-expands its children's height
+        // reports itself flexible, and the card's stack would hand it the spare.
+        UIFactory.Size(filters.gameObject, 105f).flexibleHeight = 0f;
+        HorizontalLayoutGroup filterLayout = UIFactory.HorizontalStack(filters, 22f);
+        filterLayout.childForceExpandHeight = true;
+
+        TrailsDoor.Chip city = FilterChip(filters, "City", "find.allCities", false);
+        door.cityButton = city.button;
+        door.cityLabel = city.label;
+        Icon(city.button.transform, AppIcon.ChevronDown, 34f, ThemeRole.TextSecondary);
+
+        door.nearestChip = FilterChip(filters, "Nearest", "find.nearest", false);
+
+        // --- how many
+        door.countLabel = UIFactory.Text("Count", card, Caption + 3f, ThemeRole.TextMuted,
+                                         TextAlignmentOptions.BottomLeft, null);
+        UIFactory.Size(door.countLabel.gameObject, 44f);
+        door.countLabel.text = string.Empty;
+
+        // --- the list, taking whatever height is left
         RectTransform listHolder = UIFactory.Rect("Body", card);
-        door.listSize = UIFactory.Size(listHolder.gameObject, 320f);
+        LayoutElement bodySize = UIFactory.Size(listHolder.gameObject, 300f);
+        bodySize.preferredHeight = -1f;
+        bodySize.flexibleHeight = 1f;
 
         RectTransform content = UIFactory.ScrollList("Scroll", listHolder, 22f);
-        door.measure = content;
+        door.scroll = listHolder.GetComponentInChildren<ScrollRect>();
 
         door.waitingState = StateNote(content, "Waiting", "trails.loading", null);
-        door.emptyState = StateNote(content, "Empty", "trails.empty", "trails.emptyBody");
         door.failedState = StateNote(content, "Failed", "trails.failed", null,
                                      out door.failedLabel);
 
-        // "Yours", over an inset group of the trails already joined.
-        door.subtitle = UIFactory.Text("Subtitle", content, Secondary, ThemeRole.TextMuted,
-                                       TextAlignmentOptions.BottomLeft, "trails.subtitle");
-        UIFactory.Size(door.subtitle.gameObject, 60f);
+        // Nothing matches: the sentence, and the way back to everything.
+        RectTransform empty = UIFactory.Rect("Empty", content);
+        VerticalLayoutGroup emptyStack = UIFactory.VerticalStack(empty, 28f, false);
+        emptyStack.padding = new RectOffset(0, 0, 60, 20);
+        emptyStack.childAlignment = TextAnchor.UpperCenter;
+        door.emptyState = empty.gameObject;
 
-        RectTransform mine = Inset(content, "Mine");
-        door.listParent = mine;
-        door.mineGroup = mine.gameObject;
+        door.emptyLabel = UIFactory.Text("Label", empty, Body, ThemeRole.TextSecondary,
+                                         TextAlignmentOptions.Center, null);
+        door.emptyLabel.text = string.Empty;
+        UIFactory.FitsItsText(door.emptyLabel);
 
-        // Near you: public trails, joined with a tap and no code.
-        RectTransform near = UIFactory.Rect("Near", content);
-        UIFactory.VerticalStack(near, 17f, false);
-        door.nearGroup = near.gameObject;
+        RectTransform clearRow = UIFactory.Rect("ClearRow", empty);
+        UIFactory.Size(clearRow.gameObject, 121f).flexibleHeight = 0f;
+        HorizontalLayoutGroup clearLayout = UIFactory.HorizontalStack(clearRow, 0f);
+        clearLayout.childAlignment = TextAnchor.MiddleCenter;
+        clearLayout.childForceExpandHeight = true;
 
-        TextMeshProUGUI nearTitle = UIFactory.Text("Title", near, Secondary, ThemeRole.TextMuted,
-                                                   TextAlignmentOptions.BottomLeft, "near.title");
-        UIFactory.Size(nearTitle.gameObject, 60f);
+        RectTransform clear = UIFactory.Rect("Clear", clearRow);
+        door.clearButton = UIFactory.Button(clear, ThemeRole.Surface, 0f, UIShape.Pill);
+        PillEdge(clear, ThemeRole.AccentText);
+        HorizontalLayoutGroup clearPad = UIFactory.HorizontalStack(clear, 0f);
+        clearPad.padding = new RectOffset(60, 60, 0, 0);
+        clearPad.childAlignment = TextAnchor.MiddleCenter;
+        clearPad.childForceExpandHeight = true;
+        TextMeshProUGUI clearLabel = UIFactory.Text("Label", clear, Body, ThemeRole.AccentText,
+                                                    TextAlignmentOptions.Center, "find.clear");
+        clearLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        empty.gameObject.SetActive(false);
 
-        // Written by TrailsDoor, so no key - see the demo coach's line.
-        door.nearNote = UIFactory.Text("Note", near, Secondary, ThemeRole.TextMuted,
-                                       TextAlignmentOptions.TopLeft, null);
-        door.nearNote.text = AppStrings.Get("near.looking");
-        UIFactory.FitsItsText(door.nearNote);
-
-        door.nearParent = Inset(near, "Rows");
-
-        TextMeshProUGUI codeNote = UIFactory.Text("CodeNote", card, Caption, ThemeRole.TextMuted,
-                                                  TextAlignmentOptions.TopLeft, "trails.codeNote");
-        UIFactory.FitsItsText(codeNote);
+        // The white card the trails sit in.
+        RectTransform list = UIFactory.Rect("List", content);
+        UIFactory.Fill(list, ThemeRole.Surface, 1f, UIShape.Rounded).raycastTarget = false;
+        Outline(list);
+        UIFactory.VerticalStack(list, 0f, false);
+        door.listCard = list.gameObject;
+        door.listParent = list;
+        door.rowTemplate = TrailListRow(list);
 
         // --- what to do about it ---
         door.joinButton = PrimaryAction(card, "Join", "trails.join", flow.OpenCode,
@@ -7495,8 +7680,189 @@ const float ReferenceWidth = 1080f;
 
         CardClose(card, flow.Close, "Close trails");
 
+        BuildCityMenu(panel, door);
+
         panel.gameObject.SetActive(false);
         return panel.gameObject;
+    }
+
+    const float ListSide = 39f;
+    const float ListChip = 121f;
+    const float ListText = ListSide + ListChip + 33f;
+
+    /// <summary>
+    /// One trail in the list:
+    ///   [▣]  Name                       350 m
+    ///        City · 5 stops             Leave
+    /// </summary>
+    static RectTransform TrailListRow(RectTransform list)
+    {
+        RectTransform row = UIFactory.Rect("Row", list);
+        UIFactory.Size(row.gameObject, 190f);
+        UIFactory.Button(row, ThemeRole.Fill, 0f);
+
+        RectTransform rule = UIFactory.Rect("Rule", row);
+        UIFactory.TopStretch(rule, 3f);
+        rule.offsetMin = new Vector2(ListText, rule.offsetMin.y);
+        UIFactory.Fill(rule, ThemeRole.Line).raycastTarget = false;
+        Ignore(rule);
+
+        RectTransform chip = UIFactory.Rect("Chip", row);
+        UIFactory.Corner(chip, new Vector2(0f, 0.5f), new Vector2(ListChip, ListChip),
+                         new Vector2(ListSide, 0f));
+        UIFactory.Fill(chip, ThemeRole.Fill, 1f, UIShape.Small).raycastTarget = false;
+        Icon(chip, AppIcon.Dot, 62f, ThemeRole.TextSecondary);
+
+        RectTransform side = UIFactory.Rect("Side", row);
+        side.anchorMin = new Vector2(1f, 0f);
+        side.anchorMax = new Vector2(1f, 1f);
+        side.pivot = new Vector2(1f, 0.5f);
+        side.sizeDelta = new Vector2(230f, 0f);
+        side.anchoredPosition = new Vector2(-ListSide, 0f);
+        VerticalLayoutGroup sideStack = UIFactory.VerticalStack(side, 0f, false);
+        sideStack.childAlignment = TextAnchor.MiddleRight;
+
+        TextMeshProUGUI distance = UIFactory.Text("Distance", side, Secondary, ThemeRole.TextMuted,
+                                                  TextAlignmentOptions.Right);
+        UIFactory.Size(distance.gameObject, 52f);
+        distance.textWrappingMode = TextWrappingModes.NoWrap;
+
+        RectTransform leave = UIFactory.Rect("Leave", side);
+        UIFactory.Size(leave.gameObject, 70f);
+        UIFactory.Button(leave, ThemeRole.Surface, 0f);
+        TextMeshProUGUI leaveLabel = UIFactory.Text("Label", leave, Caption + 3f, ThemeRole.TextMuted,
+                                                    TextAlignmentOptions.Right, "trails.leave");
+        UIFactory.Stretch(leaveLabel.rectTransform);
+        leaveLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        leave.gameObject.SetActive(false);
+
+        RectTransform text = UIFactory.Rect("Text", row);
+        UIFactory.Stretch(text);
+        text.offsetMin = new Vector2(ListText, 0f);
+        text.offsetMax = new Vector2(-ListSide - 240f, 0f);
+        UIFactory.VerticalStack(text, 4f, false).childAlignment = TextAnchor.MiddleLeft;
+
+        TextMeshProUGUI name = UIFactory.Text("Name", text, Body, ThemeRole.TextPrimary,
+                                              TextAlignmentOptions.Left, null, FontStyles.Bold);
+        UIFactory.Size(name.gameObject, 58f);
+        name.textWrappingMode = TextWrappingModes.NoWrap;
+        name.overflowMode = TextOverflowModes.Ellipsis;
+
+        TextMeshProUGUI sub = UIFactory.Text("Sub", text, Secondary, ThemeRole.TextSecondary,
+                                             TextAlignmentOptions.Left);
+        UIFactory.Size(sub.gameObject, 48f);
+        sub.textWrappingMode = TextWrappingModes.NoWrap;
+        sub.overflowMode = TextOverflowModes.Ellipsis;
+
+        row.gameObject.SetActive(false);
+        return row;
+    }
+
+    /// <summary>
+    /// A pill that is a filter: white with a hairline, as wide as its words.
+    /// TrailsDoor turns the selected one ink (or the accent tint, for Nearest).
+    /// </summary>
+    static TrailsDoor.Chip FilterChip(RectTransform parent, string name, string key, bool glyph)
+    {
+        RectTransform rt = UIFactory.Rect(name, parent);
+        TrailsDoor.Chip chip = new TrailsDoor.Chip();
+
+        chip.button = UIFactory.Button(rt, ThemeRole.Surface, 1f, UIShape.Pill);
+        chip.fill = rt.GetComponent<Image>();
+        chip.outline = PillEdge(rt, ThemeRole.Line).gameObject;
+
+        HorizontalLayoutGroup pad = UIFactory.HorizontalStack(rt, 14f);
+        pad.padding = new RectOffset(44, 44, 0, 0);
+        pad.childAlignment = TextAnchor.MiddleCenter;
+
+        if (glyph)
+        {
+            chip.icon = Icon(rt, AppIcon.Dot, 40f, ThemeRole.Surface);
+            chip.icon.gameObject.SetActive(false);
+        }
+
+        chip.label = UIFactory.Text("Label", rt, Secondary, ThemeRole.TextPrimary,
+                                    TextAlignmentOptions.Center, key);
+        chip.label.textWrappingMode = TextWrappingModes.NoWrap;
+        UIFactory.Size(chip.label.gameObject, 60f);
+
+        return chip;
+    }
+
+    /// <summary>The hairline round a pill, outside its layout.</summary>
+    static Image PillEdge(RectTransform pill, ThemeRole role)
+    {
+        RectTransform rim = UIFactory.Rect("Outline", pill);
+        UIFactory.Stretch(rim);
+        Image edge = UIFactory.Fill(rim, role);
+        edge.sprite = UISprites.PillOutline;
+        edge.type = Image.Type.Sliced;
+        edge.pixelsPerUnitMultiplier = 1f;
+        edge.raycastTarget = false;
+        rim.gameObject.AddComponent<PillShape>();
+        Ignore(rim);
+        return edge;
+    }
+
+    /// <summary>
+    /// The city picker: a plain list over a dimmed sheet. "All cities" first,
+    /// then the cities present, then "No city" when a trail has none.
+    /// </summary>
+    static void BuildCityMenu(RectTransform panel, TrailsDoor door)
+    {
+        RectTransform root = UIFactory.Rect("CityMenu", panel);
+        UIFactory.Stretch(root);
+        door.cityMenu = root.gameObject;
+
+        RectTransform scrimRect = UIFactory.Rect("Scrim", root);
+        UIFactory.Stretch(scrimRect);
+        Image dim = UIFactory.Fill(scrimRect, ThemeRole.Scrim, 0.35f);
+        dim.raycastTarget = true;
+        Button scrim = scrimRect.gameObject.AddComponent<Button>();
+        scrim.targetGraphic = dim;
+        scrim.transition = Selectable.Transition.None;
+        Wire(scrim.onClick, door.CloseCities, "Close city picker");
+        scrimRect.gameObject.AddComponent<WayOut>();
+
+        RectTransform card = UIFactory.Rect("Card", root);
+        card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
+        card.pivot = new Vector2(0.5f, 0.5f);
+        card.sizeDelta = new Vector2(860f, 400f);
+        UIFactory.Fill(card, ThemeRole.Surface, 1f, UIShape.Card).raycastTarget = true;
+        Outline(card);
+        VerticalLayoutGroup stack = UIFactory.VerticalStack(card, 0f);
+        stack.padding = new RectOffset(0, 0, 14, 14);
+
+        RectTransform rows = UIFactory.Rect("Rows", card);
+        UIFactory.VerticalStack(rows, 0f);
+        door.cityRowsParent = rows;
+
+        RectTransform row = UIFactory.Rect("Row", rows);
+        UIFactory.Size(row.gameObject, 140f);
+        UIFactory.Button(row, ThemeRole.Fill, 0f);
+
+        RectTransform rule = UIFactory.Rect("Rule", row);
+        UIFactory.TopStretch(rule, 3f);
+        rule.offsetMin = new Vector2(MenuSide, rule.offsetMin.y);
+        UIFactory.Fill(rule, ThemeRole.Line).raycastTarget = false;
+        Ignore(rule);
+
+        TextMeshProUGUI label = UIFactory.Text("Label", row, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left);
+        UIFactory.Stretch(label.rectTransform);
+        label.rectTransform.offsetMin = new Vector2(MenuSide, 0f);
+        label.rectTransform.offsetMax = new Vector2(-MenuSide - 80f, 0f);
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+
+        Image tick = Icon(row, AppIcon.Check, 46f, ThemeRole.AccentText, out RectTransform tickRect);
+        UIFactory.Corner(tickRect, new Vector2(1f, 0.5f), new Vector2(46f, 46f),
+                         new Vector2(-MenuSide - 23f, 0f));
+        tick.gameObject.name = "Check";
+
+        door.cityRowTemplate = row;
+        row.gameObject.SetActive(false);
+        root.gameObject.SetActive(false);
     }
 
     /// <summary>
