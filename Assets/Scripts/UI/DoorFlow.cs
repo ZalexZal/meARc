@@ -118,6 +118,13 @@ public class DoorFlow : MonoBehaviour
              "and shows nothing, because Open has nothing to reveal.")]
     public TeamDoorView team;
 
+    [Tooltip("Asks an account that has never said what it does, once a launch. " +
+             "Held back while a door is up and put up when the app itself is.")]
+    public WorkSheetView workSheet;
+
+    /// <summary>The question is owed, and waits for the doors to close.</summary>
+    bool _workOwed;
+
     /// <summary>Raised whenever the door changes, so the app can pause what it does.</summary>
     public static event Action<Door> OnDoorChanged;
 
@@ -175,6 +182,7 @@ public class DoorFlow : MonoBehaviour
         TrailService.OnTrailsChanged += HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged += Evaluate;
         SupabaseAuth.OnSessionChanged += AccountMaybeMade;
+        SupabaseAuth.OnWorkMissing += OweWork;
     }
 
     void OnDisable()
@@ -184,6 +192,7 @@ public class DoorFlow : MonoBehaviour
         TrailService.OnTrailsChanged -= HandleTrailsChanged;
         SupabaseAuth.OnSessionChanged -= Evaluate;
         SupabaseAuth.OnSessionChanged -= AccountMaybeMade;
+        SupabaseAuth.OnWorkMissing -= OweWork;
     }
 
     void Start()
@@ -497,6 +506,39 @@ public class DoorFlow : MonoBehaviour
             accountLaterLabel.text = AppStrings.Get(_guestMode ? "guest.continue" : "trails.notNow");
     }
 
+    // ------------------------------------------------------------- line of work
+
+    /// <summary>
+    /// The profile says this account has never answered. Asked as soon as no
+    /// door is up - over the terms or a trail list it would be one modal on top
+    /// of another.
+    /// </summary>
+    void OweWork()
+    {
+        _workOwed = true;
+
+        if (Current == Door.None)
+            AskWorkIfOwed();
+    }
+
+    void AskWorkIfOwed()
+    {
+        if (!_workOwed || workSheet == null)
+            return;
+
+        SupabaseAuth auth = SupabaseAuth.Instance;
+
+        // Answered meanwhile, or somebody else now: nothing is owed.
+        if (auth == null || !auth.IsSignedIn || auth.IsAnonymous || auth.Work != null)
+        {
+            _workOwed = false;
+            return;
+        }
+
+        _workOwed = false;
+        workSheet.Ask();
+    }
+
     // ----------------------------------------------------------- account
 
     /// <summary>
@@ -608,6 +650,9 @@ public class DoorFlow : MonoBehaviour
         // cold over the welcome screen.
         if (door == Door.None && UserLocationService.Instance != null)
             UserLocationService.Instance.Begin();
+
+        if (door == Door.None)
+            AskWorkIfOwed();
 
         // The two card doors are the ones the map shows through. Welcome and Terms
         // are plain: nothing behind them, because there is nothing yet to look at.

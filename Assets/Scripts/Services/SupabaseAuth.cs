@@ -185,7 +185,7 @@ public class SupabaseAuth : MonoBehaviour
     /// would go on believing it.
     /// </summary>
     public IEnumerator SignUp(string email, string password, string displayName,
-                             Action<string> done)
+                             string work, Action<string> done)
     {
         SupabaseConfig config = SupabaseConfig.Instance;
 
@@ -195,18 +195,28 @@ public class SupabaseAuth : MonoBehaviour
             yield break;
         }
 
+        // Required, and checked before anything goes out: the form says so too,
+        // but an account made without it would be asked again at every launch.
+        if (!LineOfWork.IsValid(work))
+        {
+            Fail(done, "err.work");
+            yield break;
+        }
+
         _working = true;
 
-        // The name goes into user_metadata as well as into profiles. GoTrue keeps
-        // the metadata and the trigger that made the profile row does not run
-        // again, so profiles has to be written separately below - but keeping
-        // both means a rebuilt profile still knows what to call somebody.
-        string named = string.IsNullOrWhiteSpace(displayName)
-            ? string.Empty
-            : ",\"data\":{\"display_name\":\"" + Escape(displayName.Trim()) + "\"}";
+        // The refresh below makes this a permanent account, which would send
+        // the profile off to be read for its line of work - and it would come
+        // back empty, because the PATCH that fills it in has not run yet, and
+        // the question would pop up over the sign-up that just answered it.
+        _workFor = UserId;
 
-        string body = "{\"email\":\"" + Escape(email) + "\"," +
-                      "\"password\":\"" + Escape(password) + "\"" + named + "}";
+        // The name and the line of work go into user_metadata as well as into
+        // profiles. GoTrue keeps the metadata, but the trigger that copies it
+        // into profiles runs on INSERT only, and this is an update of the guest
+        // row - so profiles is written separately below. Keeping both means a
+        // rebuilt profile still knows what to call somebody and what they do.
+        string body = SignUpBody(email, password, displayName, work);
 
         bool held = false;
 
@@ -245,6 +255,10 @@ public class SupabaseAuth : MonoBehaviour
 
         if (!string.IsNullOrWhiteSpace(displayName))
             yield return SetDisplayName(displayName, null);
+
+        // Not allowed to fail the sign-up: the account exists either way. If it
+        // does not land, the question is asked once at the next launch instead.
+        yield return SetWork(work, null);
 
         _working = false;
 
@@ -371,6 +385,163 @@ public class SupabaseAuth : MonoBehaviour
 
         if (done != null)
             done(null);
+    }
+
+    // ------------------------------------------------------------ line of work
+
+    /// <summary>
+    /// What the account does, as profiles.work holds it: null until it has been
+    /// read, and null for an account that has never answered.
+    /// </summary>
+    public string Work { get; private set; }
+
+    /// <summary>Raised when the line of work has been read or changed.</summary>
+    public static event Action OnWorkChanged;
+
+    /// <summary>
+    /// Raised once per account per launch, when the profile was read and says
+    /// this account has never answered. Not raised when the read failed.
+    /// </summary>
+    public static event Action OnWorkMissing;
+
+    /// <summary>The account whose profile has been read (or is being), this launch.</summary>
+    string _workFor;
+
+    /// <summary>
+    /// Reads profiles.work once for each permanent account this launch. A guest
+    /// is never asked; nor is anybody whose profile could not be read.
+    /// </summary>
+    void ReadWorkIfNew()
+    {
+        if (UserId == _workFor)
+            return;
+
+        _workFor = UserId;
+        Work = null;
+
+        if (OnWorkChanged != null)
+            OnWorkChanged();
+
+        if (!IsAnonymous && !string.IsNullOrEmpty(UserId))
+            StartCoroutine(ReadWork(UserId, true));
+    }
+
+    IEnumerator ReadWork(string uid, bool mayRetry)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        if (config == null)
+            yield break;
+
+        string url = config.Endpoint("/rest/v1/profiles?id=eq." + uid + "&select=work");
+        string reply = null;
+        bool ok;
+        bool retry;
+
+        using (UnityWebRequest request = Get(url))
+        {
+            yield return request.SendWebRequest();
+
+            ok = request.result == UnityWebRequest.Result.Success;
+            retry = mayRetry && Postgrest.WorthRetrying(request);
+
+            if (ok)
+                reply = request.downloadHandler.text;
+            else if (!retry)
+                Debug.LogWarning("[Auth] profile read failed (" + request.responseCode + "): " +
+                                 Postgrest.Said(request));
+        }
+
+        // A token a moment too new, as ProfileService meets it at launch.
+        if (retry)
+        {
+            yield return new WaitForSeconds(2f);
+            yield return ReadWork(uid, false);
+            yield break;
+        }
+
+        // Somebody else by now, or a read that came back with nothing usable:
+        // either way, nobody is asked anything on the strength of it.
+        if (!ok || uid != UserId || IsAnonymous)
+            yield break;
+
+        string work;
+        if (!LineOfWork.TryRead(reply, out work))
+            yield break;
+
+        Work = work;
+
+        if (OnWorkChanged != null)
+            OnWorkChanged();
+
+        if (work == null && OnWorkMissing != null)
+            OnWorkMissing();
+    }
+
+    /// <summary>Writes the line of work onto the reader's own profile row.</summary>
+    public IEnumerator SetWork(string work, Action<string> done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (!LineOfWork.IsValid(work))
+        {
+            Fail(done, "err.work");
+            yield break;
+        }
+
+        if (config == null || !IsSignedIn || string.IsNullOrEmpty(UserId))
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        string url = config.Endpoint("/rest/v1/profiles?id=eq." + UserId);
+
+        using (UnityWebRequest request = Patch(url, WorkPatchBody(work)))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Fail(done, "work.saveFailed", request);
+                yield break;
+            }
+        }
+
+        Work = work;
+
+        if (OnWorkChanged != null)
+            OnWorkChanged();
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>
+    /// The body of the sign-up PUT. The line of work is required and has to be
+    /// one of the four: anything else is refused here rather than sent, so a
+    /// value can never carry extra JSON in with it.
+    /// </summary>
+    public static string SignUpBody(string email, string password, string displayName, string work)
+    {
+        if (!LineOfWork.IsValid(work))
+            throw new ArgumentException("Not a line of work: " + work, "work");
+
+        string data = string.IsNullOrWhiteSpace(displayName)
+            ? string.Empty
+            : "\"display_name\":\"" + Escape(displayName.Trim()) + "\",";
+
+        return "{\"email\":\"" + Escape(email) + "\"," +
+               "\"password\":\"" + Escape(password) + "\"," +
+               "\"data\":{" + data + "\"work\":\"" + work + "\"}}";
+    }
+
+    /// <summary>The body of PATCH profiles for the line of work.</summary>
+    public static string WorkPatchBody(string work)
+    {
+        if (!LineOfWork.IsValid(work))
+            throw new ArgumentException("Not a line of work: " + work, "work");
+
+        return "{\"work\":\"" + work + "\"}";
     }
 
     /// <summary>A PATCH carrying the reader's own token, for their own row.</summary>
@@ -724,12 +895,37 @@ public class SupabaseAuth : MonoBehaviour
             done(message);
     }
 
+    /// <summary>
+    /// A string made safe to sit between quotes in JSON: backslash, quote, and
+    /// every control character. A pasted password with a newline in it used to
+    /// make the body unreadable and the sign-up fail with a parse error.
+    /// </summary>
     static string Escape(string value)
     {
         if (string.IsNullOrEmpty(value))
             return string.Empty;
 
-        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        StringBuilder sb = new StringBuilder(value.Length + 8);
+
+        foreach (char c in value)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (c < ' ')
+                        sb.Append("\\u").Append(((int)c).ToString("x4"));
+                    else
+                        sb.Append(c);
+                    break;
+            }
+        }
+
+        return sb.ToString();
     }
 
     IEnumerator Refresh()
@@ -805,6 +1001,8 @@ public class SupabaseAuth : MonoBehaviour
 
         if (OnSessionChanged != null)
             OnSessionChanged();
+
+        ReadWorkIfNew();
     }
 
     /// <summary>

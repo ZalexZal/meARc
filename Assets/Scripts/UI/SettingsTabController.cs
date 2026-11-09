@@ -117,6 +117,13 @@ public class SettingsTabController : MonoBehaviour
     public LanguageChoiceView languageSheet;
     public TextMeshProUGUI languageValueLabel;
 
+    [Header("Line of work")]
+    [Tooltip("The row in the account group: what the account does, and a way to " +
+             "change it. On screen only with an account, like the rest of that group.")]
+    public Button workButton;
+    public TextMeshProUGUI workValueLabel;
+    public WorkSheetView workSheet;
+
     void Awake()
     {
         if (themeToggle != null)
@@ -167,6 +174,9 @@ public class SettingsTabController : MonoBehaviour
         for (int i = 0; i < badgeButtons.Length; i++)
             WireHelpRow(badgeButtons[i], badgesPage);
 
+        if (workButton != null && workSheet != null)
+            workButton.onClick.AddListener(workSheet.OpenToChange);
+
         if (howButton != null)
             howButton.onClick.AddListener(() => { if (tutorial != null) tutorial.Open(); });
 
@@ -193,6 +203,7 @@ public class SettingsTabController : MonoBehaviour
         AppStrings.OnLanguageChanged += ApplyLabels;
         ThemeManager.OnThemeChanged += ApplyLanguageSegment;
         HiddenMarkers.OnChanged += ApplyLabels;
+        SupabaseAuth.OnWorkChanged += ApplyWork;
 
         ApplyLabels();
 
@@ -215,6 +226,7 @@ public class SettingsTabController : MonoBehaviour
         AppStrings.OnLanguageChanged -= ApplyLabels;
         ThemeManager.OnThemeChanged -= ApplyLanguageSegment;
         HiddenMarkers.OnChanged -= ApplyLabels;
+        SupabaseAuth.OnWorkChanged -= ApplyWork;
     }
 
     void UnhideAll()
@@ -310,6 +322,15 @@ public class SettingsTabController : MonoBehaviour
         }
 
         ApplyLanguageSegment();
+        ApplyWork();
+    }
+
+    /// <summary>The value on the line-of-work row, a dash until it is known.</summary>
+    void ApplyWork()
+    {
+        if (workValueLabel != null)
+            workValueLabel.text = LineOfWork.Label(SupabaseAuth.Instance != null
+                ? SupabaseAuth.Instance.Work : null);
     }
 
     static void Set(TextMeshProUGUI label, string key)

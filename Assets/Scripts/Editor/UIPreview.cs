@@ -281,7 +281,48 @@ public static class UIPreview
         {
             you.Render(false, sample, "Alex Scan", "alex@example.com",
                        new ProfileService.LevelData { xp = 220, level = 6, floor = 190, next = 234, max = 50 });
+            SettingsTabController settingsTab = canvas.GetComponentInChildren<SettingsTabController>(true);
+            if (settingsTab != null && settingsTab.workValueLabel != null)
+                settingsTab.workValueLabel.text = LineOfWork.Label("teacher");
+
             Shoot(canvas, rig, "35-you" + t, "SettingsPanel");
+
+            // Line of work, opened from its Settings row (Task 14): the sheet
+            // with the account's answer already chosen. Written by hand, since
+            // the sheet fills itself from SupabaseAuth only while the app runs.
+            WorkSheetView workSheet = settingsTab != null ? settingsTab.workSheet : null;
+            if (workSheet != null)
+            {
+                if (workSheet.title != null) workSheet.title.text = AppStrings.Get("work.change");
+                if (workSheet.askLine != null) workSheet.askLine.text = AppStrings.Get("work.ask");
+                if (workSheet.choice != null) workSheet.choice.Select("teacher");
+                if (workSheet.statusLabel != null) workSheet.statusLabel.gameObject.SetActive(false);
+                Shoot(canvas, rig, "25-settings-work" + t, "SettingsPanel", "WorkSheet");
+                if (workSheet.choice != null) workSheet.choice.Select(null);
+
+                // And the row that opens it, scrolled into view in the account
+                // group, which only an account sees.
+                ScrollRect list = settingsTab.scroll;
+                RectTransform row = settingsTab.workButton != null
+                    ? (RectTransform)settingsTab.workButton.transform : null;
+                if (list != null && row != null)
+                {
+                    Canvas.ForceUpdateCanvases();
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(list.content);
+                    float travel = list.content.rect.height - list.viewport.rect.height;
+                    Vector3 local = list.content.InverseTransformPoint(row.position);
+                    float fromTop = -local.y - list.viewport.rect.height * 0.5f;
+                    list.verticalNormalizedPosition = travel > 0f
+                        ? Mathf.Clamp01(1f - fromTop / travel) : 1f;
+                    Shoot(canvas, rig, "25b-settings-work-row" + t, "SettingsPanel");
+                    list.verticalNormalizedPosition = 1f;
+                    Canvas.ForceUpdateCanvases();
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[Preview] No work sheet to draw.");
+            }
         }
 
         SubPanelNavigator pages = canvas.GetComponentInChildren<SubPanelNavigator>(true);
@@ -560,6 +601,44 @@ public static class UIPreview
             guestFlow.accountTitle.text = AppStrings.Get("accountDoor.title");
             if (guestFlow.guestNote != null) guestFlow.guestNote.SetActive(false);
             if (guestFlow.accountLaterLabel != null) guestFlow.accountLaterLabel.text = AppStrings.Get("trails.notNow");
+
+            // Sign-up with the line of work (Task 14): the account door scrolled
+            // down to the four choices, Create tapped with none of them chosen.
+            if (guestCard != null && guestCard.workChoice != null)
+            {
+                guestCard.signedInGroup.SetActive(false);
+                guestCard.anonymousGroup.SetActive(true);
+                guestCard.workChoice.Select(null);
+                if (guestCard.statusLabel != null)
+                {
+                    guestCard.statusLabel.text = AppStrings.Get("err.work");
+                    guestCard.statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+                    guestCard.statusLabel.gameObject.SetActive(true);
+                }
+
+                ScrollRect form = guestCard.GetComponentInParent<ScrollRect>(true);
+                Canvas.ForceUpdateCanvases();
+                if (form != null)
+                {
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(form.content);
+                    form.verticalNormalizedPosition = 0f;
+                }
+
+                Shoot(canvas, rig, "24-signup-work" + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
+
+                if (form != null) form.verticalNormalizedPosition = 1f;
+
+                if (guestCard.statusLabel != null)
+                {
+                    guestCard.statusLabel.text = string.Empty;
+                    guestCard.statusLabel.gameObject.SetActive(false);
+                }
+                guestCard.signedInGroup.SetActive(signedWas);
+            }
+            else
+            {
+                Debug.LogWarning("[Preview] No work choice on the account door to draw.");
+            }
         }
 
         // And the state a walker meets on a trail that will not take an
@@ -1482,6 +1561,14 @@ public static class UIPreview
 
         for (int i = 0; i < themed.Length; i++)
             themed[i].Apply();
+
+        // The line-of-work radios are painted by their view, which repaints on
+        // the theme event - and nothing is subscribed while nothing plays.
+        WorkChoiceView[] work = Object.FindObjectsByType<WorkChoiceView>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < work.Length; i++)
+            work[i].Paint();
     }
 
     // -------------------------------------------------------------- stand-ins

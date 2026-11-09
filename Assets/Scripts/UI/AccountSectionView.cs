@@ -27,6 +27,11 @@ public class AccountSectionView : MonoBehaviour
 
     public TMP_InputField emailField;
     public TMP_InputField passwordField;
+
+    [Tooltip("Broker, teacher, guide or other. Required to make an account, with " +
+             "nothing chosen to begin with; sign-in ignores it.")]
+    public WorkChoiceView workChoice;
+
     public Button signUpButton;
     public Button signInButton;
 
@@ -202,6 +207,15 @@ public class AccountSectionView : MonoBehaviour
             return;
         }
 
+        string work = workChoice != null ? workChoice.Selected : null;
+
+        if (!LineOfWork.IsValid(work))
+        {
+            Say("err.work");
+            statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+            return;
+        }
+
         SupabaseAuth auth = SupabaseAuth.Instance;
         if (auth == null)
             return;
@@ -216,7 +230,7 @@ public class AccountSectionView : MonoBehaviour
         // an object that is switched off - so the last step, writing the name to
         // the profile, never ran. The leaderboard read the profile and called the
         // new walker "Player". The auth service is never switched off.
-        auth.StartCoroutine(auth.SignUp(email, password, Value(nameField), Done));
+        auth.StartCoroutine(auth.SignUp(email, password, Value(nameField), work, Done));
     }
 
     void SignIn()
@@ -317,7 +331,8 @@ public class AccountSectionView : MonoBehaviour
 
         // A key if it is one of ours; the server's commonest English sentences
         // in the reader's language; anything rarer as the server wrote it.
-        string key = error.StartsWith("auth.") || error.StartsWith("account.") ? error
+        string key = error.StartsWith("auth.") || error.StartsWith("account.") ||
+                     error.StartsWith("err.") ? error
                    : error.IndexOf("Invalid login", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.badLogin"
                    : error.IndexOf("already", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.taken"
                    : error.IndexOf("at least", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.shortPassword"
@@ -382,6 +397,9 @@ public class AccountSectionView : MonoBehaviour
 
         if (nameField != null)
             nameField.text = string.Empty;
+
+        if (workChoice != null)
+            workChoice.Select(null);
 
         // Always, and not only on success. A password left sitting in a field on
         // a phone that is about to be handed to somebody is the reason.

@@ -100,7 +100,7 @@ const float ReferenceWidth = 1080f;
         "MapPanel", "CameraPanel", "BrowsePanel", "SearchPanel", "SettingsPanel",
         "InfoPanel", "InfoSheet", "BottomNav", "ProximityToast", "Tutorial",
         "NearbyButton", "VpsIndicator", "NearbyPanel", "LiveARView", "ReadyStateView",
-        "SearchContent", "SettingsContent", "Doors"
+        "SearchContent", "SettingsContent", "Doors", "WorkSheet"
     };
 
     static List<string> _notes;
@@ -284,6 +284,7 @@ const float ReferenceWidth = 1080f;
         // No badge sheet: AR Trails is a tool, not a game (6 Nov 2026).
 
         settingsTab.languageSheet = BuildLanguageSheet(root, settingsTab.languageValueLabel);
+        settingsTab.workSheet = BuildWorkSheet(root);
 
         // Last of all, so the way in draws over every screen it stands in front of -
         // the nav bar included, which it also switches off. A modal with a live tab
@@ -294,9 +295,11 @@ const float ReferenceWidth = 1080f;
         // itself is a sibling of it and stays.
         Transform mapChrome = mapPanel.Find("Safe");
 
-        BuildDoors(root, tabs.bottomNav, trailRowPrefab,
-                   mapChrome != null ? mapChrome.gameObject : null,
-                   mapPanel.GetComponentInChildren<MapView>(true));
+        DoorFlow doors = BuildDoors(root, tabs.bottomNav, trailRowPrefab,
+                                    mapChrome != null ? mapChrome.gameObject : null,
+                                    mapPanel.GetComponentInChildren<MapView>(true));
+        doors.workSheet = settingsTab.workSheet;
+        EditorUtility.SetDirty(doors);
 
         AddFade(mapPanel.gameObject);
         AddFade(browsePanel.gameObject);
@@ -3790,6 +3793,14 @@ const float ReferenceWidth = 1080f;
         view.passwordField = Field(outGroup, "Password", "account.password");
         view.passwordField.contentType = TMP_InputField.ContentType.Password;
 
+        // Required for a new account, nothing chosen: the website asks the same
+        // question at its sign-up, in the same words.
+        TextMeshProUGUI workLabel = UIFactory.Text("WorkLabel", outGroup, Body, ThemeRole.TextPrimary,
+                                                   TextAlignmentOptions.BottomLeft, "work.title",
+                                                   FontStyles.Bold);
+        UIFactory.Size(workLabel.gameObject, 76f);
+        view.workChoice = WorkChoices(outGroup);
+
         view.signUpButton = FullWidthButton(outGroup, "Create", "account.create",
                                             ThemeRole.Accent, ThemeRole.OnAccent);
         view.signInButton = FullWidthButton(outGroup, "SignIn", "account.signIn",
@@ -4059,6 +4070,18 @@ const float ReferenceWidth = 1080f;
         RectTransform account = Group(content, "AccountGroup");
         controller.accountButton = HelpRow(account, "settings.nameEmail", out TextMeshProUGUI _);
         controller.securityButton = HelpRow(account, "settings.security", out TextMeshProUGUI _);
+
+        // What the account does, and a way to change it. The value runs long in
+        // Bulgarian ("Брокер на недвижими имоти"), so it gets more room than a
+        // language name and an ellipsis rather than a second line.
+        controller.workButton = ValueRow(account, "work.row", out controller.workValueLabel);
+        LayoutElement workValueSize = controller.workValueLabel.GetComponent<LayoutElement>();
+        workValueSize.minWidth = 0f;
+        workValueSize.preferredWidth = 500f;
+        controller.workValueLabel.overflowMode = TextOverflowModes.Ellipsis;
+        Transform workRowLabel = controller.workValueLabel.transform.parent.Find("Label");
+        if (workRowLabel != null)
+            workRowLabel.GetComponent<TextMeshProUGUI>().textWrappingMode = TextWrappingModes.NoWrap;
 
         // --- help
         GroupLabel(content, "settings.help", out TextMeshProUGUI _);
@@ -4528,6 +4551,131 @@ const float ReferenceWidth = 1080f;
                                               TextAlignmentOptions.TopLeft, "settings.languageNote");
         UIFactory.FitsItsText(note);
         return view;
+    }
+
+    /// <summary>
+    /// The line of work as a sheet: the four choices, why they are asked, and
+    /// Save. Settings opens it to change the answer; DoorFlow puts it up once
+    /// a launch for an account that has never given one. Taller than the
+    /// medium sheet, because four rows and a Save do not fit in one.
+    /// </summary>
+    static WorkSheetView BuildWorkSheet(Transform root)
+    {
+        RectTransform panel = MediumSheet(root, "WorkSheet", null,
+                                          out RectTransform body, out Button close, out Button outside);
+        WorkSheetView view = panel.gameObject.AddComponent<WorkSheetView>();
+        Wire(close.onClick, view.Close, "Work sheet close");
+        Wire(outside.onClick, view.Close, "Work sheet outside");
+
+        RectTransform sheet = (RectTransform)panel.Find("Sheet");
+        if (sheet != null)
+            sheet.anchorMax = new Vector2(1f, 0.76f);
+
+        // The header's title, written by the view: it is a question when asked
+        // and a setting when opened from Settings.
+        Transform titleObject = panel.Find("Sheet/Head/Bar/Title");
+        view.title = titleObject != null ? titleObject.GetComponent<TextMeshProUGUI>() : null;
+        if (view.title != null)
+            view.title.text = AppStrings.Get("work.title");
+
+        view.askLine = UIFactory.Text("Ask", body, Secondary, ThemeRole.TextSecondary,
+                                      TextAlignmentOptions.TopLeft, "work.ask");
+        UIFactory.FitsItsText(view.askLine);
+
+        view.choice = WorkChoices(body);
+
+        view.statusLabel = UIFactory.Text("Status", body, Secondary, ThemeRole.StatusPoor,
+                                          TextAlignmentOptions.Left);
+        UIFactory.FitsItsText(view.statusLabel);
+        view.statusLabel.text = string.Empty;
+        view.statusLabel.gameObject.SetActive(false);
+
+        view.saveButton = FullWidthButton(body, "Save", "work.save", ThemeRole.Accent, ThemeRole.OnAccent);
+        return view;
+    }
+
+    /// <summary>
+    /// The four lines of work as radio rows, in LineOfWork.Keys order, with
+    /// nothing chosen. "Other" carries its hint under its name, as the website
+    /// has it.
+    /// </summary>
+    static WorkChoiceView WorkChoices(Transform parent)
+    {
+        RectTransform list = UIFactory.Rect("WorkChoice", parent);
+        UIFactory.VerticalStack(list, 22f, false);
+        WorkChoiceView view = list.gameObject.AddComponent<WorkChoiceView>();
+
+        int n = LineOfWork.Keys.Length;
+        view.options = new Button[n];
+        view.radios = new Image[n];
+        view.holes = new RectTransform[n];
+        view.edges = new Image[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            string work = LineOfWork.Keys[i];
+            WorkRow(list, work, work == "other" ? "work.otherHint" : null,
+                    out view.options[i], out view.radios[i], out view.holes[i], out view.edges[i]);
+        }
+
+        return view;
+    }
+
+    /// <summary>
+    /// One line of work: RadioRow's 56px row with its hairline and 22px radio,
+    /// but growing past 56px when there is a hint under the name, or when a
+    /// Bulgarian name wraps.
+    /// </summary>
+    static void WorkRow(Transform parent, string work, string hintKey, out Button button,
+                        out Image radio, out RectTransform hole, out Image edge)
+    {
+        RectTransform rt = UIFactory.Rect(char.ToUpperInvariant(work[0]) + work.Substring(1), parent);
+        button = UIFactory.Button(rt, ThemeRole.Surface, 1f, UIShape.Rounded);
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = 155f;
+
+        HorizontalLayoutGroup layout = UIFactory.HorizontalStack(rt, 39f);
+        layout.padding = new RectOffset(44, 44, 34, 34);
+        layout.childAlignment = TextAnchor.MiddleLeft;
+
+        RectTransform edgeRect = UIFactory.Rect("Edge", rt);
+        UIFactory.Stretch(edgeRect);
+        edge = UIFactory.Plain(edgeRect, ThemeManager.Get(ThemeRole.Line));
+        edge.sprite = UISprites.RoundedOutline;
+        edge.type = Image.Type.Sliced;
+        edge.pixelsPerUnitMultiplier = 1f;
+        edge.raycastTarget = false;
+        Ignore(edgeRect);
+
+        RectTransform disc = UIFactory.Rect("Radio", rt);
+        UIFactory.Size(disc.gameObject, 61f, 61f).flexibleWidth = 0f;
+        radio = UIFactory.Plain(disc, ThemeManager.Get(ThemeRole.FillStrong), UIShape.Circle);
+        radio.raycastTarget = false;
+
+        hole = UIFactory.Rect("Hole", disc);
+        UIFactory.Corner(hole, new Vector2(0.5f, 0.5f), new Vector2(50f, 50f), Vector2.zero);
+        UIFactory.Fill(hole, ThemeRole.Surface, 1f, UIShape.Circle).raycastTarget = false;
+
+        // Takes what is left of the row, and no more: without a preferred width
+        // of its own it would ask for the hint's unwrapped length.
+        RectTransform words = UIFactory.Rect("Words", rt);
+        LayoutElement wordsSize = words.gameObject.AddComponent<LayoutElement>();
+        wordsSize.minWidth = 0f;
+        wordsSize.preferredWidth = 1f;
+        wordsSize.flexibleWidth = 1f;
+        UIFactory.VerticalStack(words, 6f, false).childAlignment = TextAnchor.MiddleLeft;
+
+        TextMeshProUGUI label = UIFactory.Text("Label", words, Body, ThemeRole.TextPrimary,
+                                               TextAlignmentOptions.Left, "work." + work);
+        UIFactory.FitsItsText(label);
+        label.raycastTarget = false;
+
+        if (hintKey != null)
+        {
+            TextMeshProUGUI hint = UIFactory.Text("Hint", words, Caption, ThemeRole.TextMuted,
+                                                  TextAlignmentOptions.Left, hintKey);
+            UIFactory.FitsItsText(hint);
+            hint.raycastTarget = false;
+        }
     }
 
     /// <summary>Name, email, and changing them: the account card, as a page.</summary>
@@ -7022,25 +7170,41 @@ const float ReferenceWidth = 1080f;
 
         // Top, not bottom. Every other card rests on the bottom of the screen
         // because nothing on it is typed into.
-        card.anchorMin = new Vector2(0f, 1f);
+        //
+        // And the whole height, with the form scrolling under the title. The
+        // line-of-work choices (Task 14) made the form taller than a phone; the
+        // guest warning was already cutting its own "Continue as guest" off at
+        // the bottom of the screen before they were added.
+        card.anchorMin = new Vector2(0f, 0f);
         card.anchorMax = new Vector2(1f, 1f);
         card.pivot = new Vector2(0.5f, 1f);
+        card.offsetMin = Vector2.zero;
+        card.offsetMax = Vector2.zero;
+        ContentSizeFitter cardFit = card.GetComponent<ContentSizeFitter>();
+        if (cardFit != null)
+            Object.DestroyImmediate(cardFit);
 
         // The same door is the guest warning, so DoorFlow writes its title, its
         // guest line and Later's words itself.
         flow.accountTitle = SheetTitle(card, "accountDoor.title");
         DropLocalizer(flow.accountTitle);
 
-        TextMeshProUGUI guestLine = UIFactory.Text("GuestNote", card, Secondary, ThemeRole.TextSecondary,
+        RectTransform form = UIFactory.ScrollList("Scroll", card, 22f);
+        LayoutElement formSize = form.parent.parent.gameObject.AddComponent<LayoutElement>();
+        formSize.minHeight = 0f;
+        formSize.flexibleHeight = 1f;
+        form.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 0, 66);
+
+        TextMeshProUGUI guestLine = UIFactory.Text("GuestNote", form, Secondary, ThemeRole.TextSecondary,
                                                    TextAlignmentOptions.TopLeft, "guest.body");
         UIFactory.FitsItsText(guestLine);
         guestLine.raycastTarget = false;
         flow.guestNote = guestLine.gameObject;
         guestLine.gameObject.SetActive(false);
 
-        BuildAccountCard(card, label: false);
+        BuildAccountCard(form, label: false);
 
-        Button later = QuietAction(card, "Later", "trails.notNow", flow.AccountDone,
+        Button later = QuietAction(form, "Later", "trails.notNow", flow.AccountDone,
                                    "account later");
         later.gameObject.AddComponent<WayOut>();
         flow.accountLaterLabel = later.GetComponentInChildren<TextMeshProUGUI>();
