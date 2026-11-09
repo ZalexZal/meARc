@@ -22,9 +22,9 @@ public static class TrailFilter
         { 'ш', "sh" }, { 'щ', "sht" }, { 'ъ', "a" }, { 'ь', "" }, { 'ю', "yu" }, { 'я', "ya" },
     };
 
-    /// <summary>The categories in the order the pickers show them. Category
+    /// <summary>The categories in the order the pickers and the website show them. Category
     /// icons are kept in this order too.</summary>
-    public static readonly string[] Categories = { "tourism", "education", "estate", "other" };
+    public static readonly string[] Categories = { "education", "tourism", "estate", "other" };
 
     /// <summary>Where a category sits in <see cref="Categories"/>. Blank or
     /// unknown counts as "other", as the database treats it.</summary>
@@ -59,7 +59,7 @@ public static class TrailFilter
 
         foreach (char ch in decomposed)
         {
-            if (ch < '̀' || ch > 'ͯ')
+            if (ch < '\u0300' || ch > '\u036f')
                 bare.Append(ch);
         }
 

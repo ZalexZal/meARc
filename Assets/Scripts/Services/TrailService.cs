@@ -782,6 +782,8 @@ public class TrailService : MonoBehaviour
 
         if (config == null)
         {
+            // No server to ask: say so rather than wait forever.
+            AllFailed = true;
             if (done != null) done();
             yield break;
         }

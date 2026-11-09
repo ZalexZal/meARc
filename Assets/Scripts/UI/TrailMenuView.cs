@@ -56,7 +56,7 @@ public class TrailMenuView : MonoBehaviour
     [Tooltip("Search all trails: opens the trails screen.")]
     public Button allButton;
 
-    [Tooltip("tourism, education, estate, other - TrailFilter.Categories order.")]
+    [Tooltip("education, tourism, estate, other - TrailFilter.Categories order.")]
     public Sprite[] categoryIcons;
 
     public int maxRows = 3;
@@ -72,6 +72,7 @@ public class TrailMenuView : MonoBehaviour
     Coroutine _move;
     bool _open;
     bool _joining;
+    string _progress;   // the preview's stand-in for the open trail's progress
 
     public bool IsOpen { get { return _open; } }
 
@@ -213,7 +214,14 @@ public class TrailMenuView : MonoBehaviour
         {
             _joining = false;
 
-            if (ok && DoorFlow.Instance != null)
+            if (!ok)
+            {
+                // Said where the reader is looking, over whatever is on top.
+                ProximityToast.Say(AppStrings.Get("near.failed"));
+                return;
+            }
+
+            if (DoorFlow.Instance != null)
                 DoorFlow.Instance.Entered();
 
             Close();
@@ -237,8 +245,11 @@ public class TrailMenuView : MonoBehaviour
     /// Fills the menu from these lists. Public so the preview harness draws it
     /// with the same code the app does. A null or empty near list hides Nearby.
     /// </summary>
-    public void Draw(List<TrailService.Trail> mine, string selectedId, List<TrailService.Listed> near)
+    public void Draw(List<TrailService.Trail> mine, string selectedId, List<TrailService.Listed> near,
+                     string progress = null)
     {
+        _progress = progress;
+
         if (rowsParent == null || rowTemplate == null)
             return;
 
@@ -321,7 +332,7 @@ public class TrailMenuView : MonoBehaviour
 
         if (current)
         {
-            string progress = Progress();
+            string progress = _progress ?? Progress();
             if (progress.Length > 0)
                 sub = sub.Length == 0 ? progress : sub + " · " + progress;
         }

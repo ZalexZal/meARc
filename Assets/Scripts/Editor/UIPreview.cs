@@ -157,15 +157,20 @@ public static class UIPreview
 
         Shoot(canvas, rig, "01-map" + t, "MapPanel");
 
-        // The chip's pull-down: three of yours with the first one open, and the
-        // three closest public trails.
+        // The chip's pull-down: two of yours with the first one open, and the
+        // three closest public trails. The stop card is at its one line, so
+        // what shows under the menu is a whole card rather than a sliver of one,
+        // and the open trail's progress is the chip's own stand-in (2 of 5).
         TrailMenuView menu = canvas.GetComponentInChildren<TrailMenuView>(true);
         if (menu != null && menu.rowTemplate != null)
         {
             menu.gameObject.SetActive(true);
-            menu.Draw(Pieces.SampleMine(), "preview-0", Pieces.SampleNear());
+            menu.Draw(Pieces.SampleMine().GetRange(0, 2), "preview-0", Pieces.SampleNear(),
+                      string.Format(AppStrings.Get("chip.progress"), 2, 5));
             menu.ShowStill();
+            Compact(canvas, true);
             Shoot(canvas, rig, "01c-trail-menu" + t, "MapPanel");
+            Compact(canvas, false);
             menu.gameObject.SetActive(false);
             if (menu.chevron != null)
                 menu.chevron.localRotation = Quaternion.identity;
@@ -470,6 +475,13 @@ public static class UIPreview
             age.Draw();
         Shoot(canvas, rig, "11-terms" + t, "Doors/Terms");
         Shoot(canvas, rig, "12-trails" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
+        TrailsDoor picker = canvas.GetComponentInChildren<TrailsDoor>(true);
+        if (picker != null && picker.cityMenu != null)
+        {
+            picker.OpenCities();
+            Shoot(canvas, rig, "12c-trails-cities" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
+            picker.CloseCities();
+        }
         Pieces.TrailsState(canvas.transform, "Filtered");
         Shoot(canvas, rig, "12b-trails-filtered" + t, "MapPanel", "Doors/Backdrop", "Doors/Trails");
         Pieces.TrailsState(canvas.transform, "Rows");
@@ -2261,7 +2273,7 @@ public static class UIPreview
             trails.UseSample(SampleAll());
 
             if (state == "Filtered")
-                trails.SetFilters("ям", 1, "yambol", true);
+                trails.SetFilters("ям", 2, "yambol", true);
             else if (state == "Empty")
                 trails.SetFilters(AppStrings.CurrentLanguage == AppLanguage.Bulgarian ? "Варна" : "Varna",
                                   0, null, true);

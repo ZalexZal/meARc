@@ -10,7 +10,7 @@ using UnityEngine.UI;
 ///
 ///   Маршрути                                   (×)
 ///   ( ⌕ Име или град                             )
-///   [Всички] (Туризъм) (Образование) (Недвижими…) →
+///   [Всички] (Образование) (Туризъм) (Недвижими…) →
 ///   (Всички градове ▾)  (Най-близо)
 ///   3 маршрута
 ///   ┌──────────────────────────────────────────┐
@@ -64,6 +64,10 @@ public class TrailsDoor : MonoBehaviour
 
     [Header("City picker")]
     public GameObject cityMenu;
+    [Tooltip("The picker's scrolling list; sized to its rows up to 60% of the screen.")]
+    public LayoutElement cityListSize;
+    public ScrollRect cityScroll;
+    public float cityRowHeight = 140f;
     public RectTransform cityRowsParent;
     public RectTransform cityRowTemplate;
 
@@ -75,7 +79,7 @@ public class TrailsDoor : MonoBehaviour
     public RectTransform rowTemplate;
     public ScrollRect scroll;
 
-    [Tooltip("tourism, education, estate, other - TrailFilter.Categories order.")]
+    [Tooltip("education, tourism, estate, other - TrailFilter.Categories order.")]
     public Sprite[] categoryIcons;
 
     [Header("States")]
@@ -183,7 +187,13 @@ public class TrailsDoor : MonoBehaviour
             return;
 
         service.RetryIfFailed();
-        StartCoroutine(service.LoadAll(Refresh));
+        // On the service, so closing the screen mid-request does not strand it;
+        // drawn when it comes back if the screen is still up.
+        service.StartCoroutine(service.LoadAll(() =>
+        {
+            if (this != null && isActiveAndEnabled)
+                Refresh();
+        }));
     }
 
     /// <summary>Gathers the trails again from the service and draws them.</summary>
@@ -681,6 +691,22 @@ public class TrailsDoor : MonoBehaviour
         }
 
         cityMenu.SetActive(true);
+
+        // As tall as its rows, up to 60% of the screen; past that it scrolls,
+        // with "All cities" first at the top.
+        if (cityListSize != null)
+        {
+            float cap = ((RectTransform)cityMenu.transform).rect.height * 0.6f;
+            float wanted = cities.Count * cityRowHeight;
+            cityListSize.minHeight = cityListSize.preferredHeight =
+                cap > 1f ? Mathf.Min(wanted, cap) : wanted;
+        }
+
+        if (cityScroll != null)
+        {
+            Canvas.ForceUpdateCanvases();
+            cityScroll.verticalNormalizedPosition = 1f;
+        }
     }
 
     public void CloseCities()
@@ -724,13 +750,8 @@ public class TrailsDoor : MonoBehaviour
                 return;
             }
 
-            if (emptyLabel != null)
-            {
-                Set(emptyState, true);
-                if (clearButton != null)
-                    Set(clearButton.gameObject, false);
-                emptyLabel.text = AppStrings.Get("near.failed");
-            }
+            // A toast, not the filter's empty state: the list is still right.
+            ProximityToast.Say(AppStrings.Get("near.failed"));
         }));
     }
 

@@ -1724,6 +1724,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(name.gameObject, 58f);
         name.textWrappingMode = TextWrappingModes.NoWrap;
         name.overflowMode = TextOverflowModes.Ellipsis;
+        name.richText = false;   // a trail's name is whatever its author typed
 
         TextMeshProUGUI sub = UIFactory.Text("Sub", text, Caption + 3f, ThemeRole.TextSecondary,
                                              TextAlignmentOptions.Left);
@@ -1758,13 +1759,13 @@ const float ReferenceWidth = 1080f;
     const float MenuText = MenuSide + 99f + 33f;
     const float MenuRowHeight = 150f;
 
-    /// <summary>tourism, education, estate, other: TrailFilter.Categories order.</summary>
+    /// <summary>education, tourism, estate, other: TrailFilter.Categories order.</summary>
     static Sprite[] CategoryIcons()
     {
         return new[]
         {
-            UIIcons.Get(AppIcon.Landmark),
             UIIcons.Get(AppIcon.Book),
+            UIIcons.Get(AppIcon.Landmark),
             UIIcons.Get(AppIcon.Home),
             UIIcons.Get(AppIcon.Dot)
         };
@@ -7553,6 +7554,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(fieldRect.gameObject, 121f);
         door.searchField = UIFactory.InputField("Field", fieldRect, "find.search",
                                                 out TextMeshProUGUI _);
+        door.searchField.richText = false;
         RectTransform field = (RectTransform)door.searchField.transform;
         UIFactory.Stretch(field);
         UIFactory.ApplyShape(field.GetComponent<Image>(), UIShape.Pill);
@@ -7596,7 +7598,7 @@ const float ReferenceWidth = 1080f;
         chipScroll.viewport = chipView;
         chipScroll.content = chipRow;
 
-        string[] chipKeys = { "find.all", "cat.tourism", "cat.education", "cat.estate", "cat.other" };
+        string[] chipKeys = { "find.all", "cat.education", "cat.tourism", "cat.estate", "cat.other" };
         door.chips = new TrailsDoor.Chip[chipKeys.Length];
         for (int i = 0; i < chipKeys.Length; i++)
             door.chips[i] = FilterChip(chipRow, "Chip" + i, chipKeys[i], i > 0);
@@ -7645,6 +7647,8 @@ const float ReferenceWidth = 1080f;
         door.emptyLabel = UIFactory.Text("Label", empty, Body, ThemeRole.TextSecondary,
                                          TextAlignmentOptions.Center, null);
         door.emptyLabel.text = string.Empty;
+        // It repeats what the reader typed; a "<b>" typed there is text, not markup.
+        door.emptyLabel.richText = false;
         UIFactory.FitsItsText(door.emptyLabel);
 
         RectTransform clearRow = UIFactory.Rect("ClearRow", empty);
@@ -7747,6 +7751,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.Size(name.gameObject, 58f);
         name.textWrappingMode = TextWrappingModes.NoWrap;
         name.overflowMode = TextOverflowModes.Ellipsis;
+        name.richText = false;   // a trail's name is whatever its author typed
 
         TextMeshProUGUI sub = UIFactory.Text("Sub", text, Secondary, ThemeRole.TextSecondary,
                                              TextAlignmentOptions.Left);
@@ -7829,12 +7834,26 @@ const float ReferenceWidth = 1080f;
         card.pivot = new Vector2(0.5f, 0.5f);
         card.sizeDelta = new Vector2(860f, 400f);
         UIFactory.Fill(card, ThemeRole.Surface, 1f, UIShape.Card).raycastTarget = true;
-        Outline(card);
+
+        // The card's own outline, at the card's radius (Outline() is the
+        // smaller rounded one and showed as a second edge in the corners).
+        RectTransform edge = UIFactory.Rect("Outline", card);
+        UIFactory.Stretch(edge);
+        Image line = UIFactory.Fill(edge, ThemeRole.Line);
+        line.sprite = UISprites.CardOutline;
+        line.type = Image.Type.Sliced;
+        line.pixelsPerUnitMultiplier = 1f;
+        line.raycastTarget = false;
+        Ignore(edge);
         VerticalLayoutGroup stack = UIFactory.VerticalStack(card, 0f);
         stack.padding = new RectOffset(0, 0, 14, 14);
 
-        RectTransform rows = UIFactory.Rect("Rows", card);
-        UIFactory.VerticalStack(rows, 0f);
+        // Rows in a scroll whose height TrailsDoor sets: its rows, up to 60% of
+        // the screen. Twenty cities must not run the card off the top and bottom.
+        RectTransform listHolder = UIFactory.Rect("List", card);
+        door.cityListSize = UIFactory.Size(listHolder.gameObject, 140f);
+        RectTransform rows = UIFactory.ScrollList("Scroll", listHolder, 0f);
+        door.cityScroll = listHolder.GetComponentInChildren<ScrollRect>();
         door.cityRowsParent = rows;
 
         RectTransform row = UIFactory.Rect("Row", rows);
