@@ -414,7 +414,7 @@ public static class AppStrings
         { "find.count", "{0} trails" },
         { "find.countOne", "1 trail" },
 
-        { "preview.back", "Back" },
+        { "preview.leadFailed", "The start hasn’t loaded yet. Open the map and head towards it." },
         { "preview.stops", "stops" },
         { "preview.stopsOne", "stop" },
         { "preview.minutes", "~{0} min" },
@@ -1158,7 +1158,7 @@ public static class AppStrings
         { "find.count", "{0} маршрута" },
         { "find.countOne", "1 маршрут" },
 
-        { "preview.back", "Назад" },
+        { "preview.leadFailed", "Началото още не е заредено. Отвори картата и тръгни натам." },
         { "preview.stops", "спирки" },
         { "preview.stopsOne", "спирка" },
         { "preview.minutes", "~{0} мин" },

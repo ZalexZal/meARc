@@ -899,7 +899,7 @@ public class TrailService : MonoBehaviour
     /// Joins a public trail without a code. join_listed refuses anything that is
     /// not listed and approved, so this cannot open a private trail by its id.
     /// </summary>
-    public IEnumerator JoinListed(string worldId, Action<bool> done)
+    public IEnumerator JoinListed(string worldId, Action<bool> done, bool select = true)
     {
         SupabaseConfig config = SupabaseConfig.Instance;
 
@@ -925,7 +925,10 @@ public class TrailService : MonoBehaviour
         }
 
         yield return RefreshMine();
-        Select(worldId);
+
+        // The trail preview selects for itself, and only if the reader is still there.
+        if (select)
+            Select(worldId);
 
         for (int i = Near.Count - 1; i >= 0; i--)
         {

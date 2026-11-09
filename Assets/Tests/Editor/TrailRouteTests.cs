@@ -32,8 +32,10 @@ public class TrailRouteTests
         Assert.AreEqual(40, TrailRoute.WalkingMinutes(3000d));
         // 1.5 km is exactly 20 min, despite floating point.
         Assert.AreEqual(20, TrailRoute.WalkingMinutes(1500d));
-        // A metre past it is the next five.
+        // Ten metres past it is the next five.
         Assert.AreEqual(25, TrailRoute.WalkingMinutes(1510d));
+        // 375 m is exactly 5 min, and stays 5.
+        Assert.AreEqual(5, TrailRoute.WalkingMinutes(375d));
     }
 
     // ------------------------------------------------------------------ length
@@ -129,6 +131,29 @@ public class TrailRouteTests
         Assert.AreEqual(2, TrailRoute.StartIndex(stops, false, 42.0, 26.19));
         // Not located: the lowest step.
         Assert.AreEqual(0, TrailRoute.StartIndex(stops, false));
+    }
+
+    [Test]
+    public void OneStopIsItsOwnOrder()
+    {
+        var one = new List<TrailRoute.Stop> { S(42.0, 26.0, 1) };
+
+        CollectionAssert.AreEqual(new[] { 0 }, TrailRoute.Order(one, true, 0));
+        CollectionAssert.AreEqual(new[] { 0 }, TrailRoute.Order(one, false, 0));
+    }
+
+    [Test]
+    public void NoStepsStartsAtTheFirstStop()
+    {
+        var stops = new List<TrailRoute.Stop>
+        {
+            S(42.0, 26.0, 0), S(42.0, 26.1, 0), S(42.0, 26.2, 0)
+        };
+
+        Assert.AreEqual(0, TrailRoute.StartIndex(stops, true));
+        Assert.AreEqual(0, TrailRoute.StartIndex(stops, false));
+        // Ordered with no steps: the order given.
+        CollectionAssert.AreEqual(new[] { 0, 1, 2 }, TrailRoute.Order(stops, true, 0));
     }
 
     [Test]

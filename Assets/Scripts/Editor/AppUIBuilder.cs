@@ -7817,6 +7817,11 @@ const float ReferenceWidth = 1080f;
         RectTransform card = Card(safe, "Sheet", 28f);
         view.sheet = card;
 
+        // No grabber: this sheet does not drag, and a handle promises it does.
+        Transform grabber = card.Find("Grabber");
+        if (grabber != null)
+            Object.DestroyImmediate(grabber.gameObject);
+
         RectTransform meta = UIFactory.Rect("Meta", card);
         UIFactory.Size(meta.gameObject, 52f).flexibleHeight = 0f;
         HorizontalLayoutGroup metaRow = UIFactory.HorizontalStack(meta, 14f);

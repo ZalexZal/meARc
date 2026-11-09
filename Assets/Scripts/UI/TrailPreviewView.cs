@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -72,14 +74,25 @@ public class TrailPreviewView : MonoBehaviour
     bool _sample;            // the preview harness's stand-in, with its own position
     bool _hasSamplePosition;
     double _sampleLat, _sampleLng;
+    // True from the tap until the server answers, whatever happens to the panel
+    // meanwhile: reopening it must not start a second join while one is out.
     bool _joining;
     int _request;
+
+    // Bumped by Begin and Back. A join answer from an earlier session is ignored,
+    // so Back during a join does not pull the reader into the trail.
+    int _session;
 
     readonly List<RectTransform> _pins = new List<RectTransform>();
     readonly List<RectTransform> _legs = new List<RectTransform>();
 
     // Worked out in Draw, used by the buttons.
     string _startId;
+    double _startLat, _startLng;
+
+    /// <summary>Past this, "lead me" hands over to the phone's maps: the walk only
+    /// loads stops within about a kilometre, and guidance needs a loaded stop.</summary>
+    const double LeadInAppMetres = 900d;
 
     public string WorldId { get { return _worldId; } }
 
@@ -100,7 +113,6 @@ public class TrailPreviewView : MonoBehaviour
     void OnDisable()
     {
         AppStrings.OnLanguageChanged -= Draw;
-        _joining = false;
     }
 
     /// <summary>Which trail to show. Called before the panel is revealed.</summary>
@@ -109,7 +121,7 @@ public class TrailPreviewView : MonoBehaviour
         _worldId = worldId;
         _data = null;
         _sample = false;
-        _joining = false;
+        _session++;
 
         if (isActiveAndEnabled)
             Load();
@@ -261,9 +273,15 @@ public class TrailPreviewView : MonoBehaviour
         Set(howLabel != null ? howLabel.gameObject : null, how.Length > 0);
 
         // --- where it starts, and how far that is
-        bool knowsStart = start >= 0 && (data.stopsKnown || ordered);
+        // Every stop came back, or at least stop one did (a one-at-a-time trail
+        // shows a stranger only that).
+        bool knowsStart = start >= 0 && (data.stopsKnown || points[start].step == 1);
         if (knowsStart)
+        {
             _startId = data.stops[start].id;
+            _startLat = data.stops[start].lat;
+            _startLng = data.stops[start].lng;
+        }
 
         bool startLine = knowsStart && located;
         if (startLabel != null && startLine)
@@ -278,7 +296,15 @@ public class TrailPreviewView : MonoBehaviour
         // "Take me to the start" needs a start to take them to.
         Set(leadButton != null ? leadButton.gameObject : null, knowsStart);
 
-        PlaceMap(data.stopsKnown ? points : null, order, ordered, located, lat, lng);
+        // All the stops; else only the start, when that is known; else none,
+        // and then no dot either - a lone blue dot on an empty map says nothing.
+        if (data.stopsKnown)
+            PlaceMap(points, order, ordered, located, lat, lng);
+        else if (knowsStart)
+            PlaceMap(new List<TrailRoute.Stop> { points[start] }, new List<int> { 0 }, ordered,
+                     located, lat, lng);
+        else
+            PlaceMap(null, null, ordered, false, lat, lng);
     }
 
     /// <summary>
@@ -462,6 +488,7 @@ public class TrailPreviewView : MonoBehaviour
     public void Back()
     {
         Haptics.Tick();
+        _session++;   // a join still out is now nobody's
         if (DoorFlow.Instance != null)
             DoorFlow.Instance.ClosePreview();
     }
@@ -478,11 +505,22 @@ public class TrailPreviewView : MonoBehaviour
         Draw();
 
         string id = _worldId;
+        int session = _session;
         string target = lead ? _startId : null;
+        double targetLat = _startLat, targetLng = _startLng;
 
+        // Not selected by the join itself: if the reader has gone Back meanwhile,
+        // the trail they left must not become the open one behind their back.
         service.StartCoroutine(service.JoinListed(id, ok =>
         {
             _joining = false;
+
+            if (session != _session)
+            {
+                if (isActiveAndEnabled)
+                    Draw();
+                return;
+            }
 
             if (!ok)
             {
@@ -493,12 +531,14 @@ public class TrailPreviewView : MonoBehaviour
                 return;
             }
 
+            service.Select(id);
+
             if (!string.IsNullOrEmpty(target))
-                LeadWhenLoaded(target);
+                Lead(target, targetLat, targetLng);
 
             if (DoorFlow.Instance != null)
                 DoorFlow.Instance.Entered();
-        }));
+        }, select: false));
     }
 
     // ------------------------------------------------------- guiding, once loaded
@@ -506,7 +546,27 @@ public class TrailPreviewView : MonoBehaviour
     // Static: the preview is closed by the time the new trail's stops arrive, and
     // the same "Заведи ме" the next-stop card uses needs the stop to be loaded.
     static string _leadId;
-    static float _leadUntil;
+    static int _leadToken;
+
+    /// <summary>
+    /// Near enough, guided in the app; far, or not located, the phone's maps
+    /// with walking directions to the start.
+    /// </summary>
+    void Lead(string stopId, double lat, double lng)
+    {
+        bool located = Located(out double here, out double hereLng);
+        bool near = located && GeoMath.DistanceMetres(here, hereLng, lat, lng) <= LeadInAppMetres;
+
+        if (near)
+        {
+            LeadWhenLoaded(stopId);
+            return;
+        }
+
+        Application.OpenURL(string.Format(CultureInfo.InvariantCulture,
+            "https://www.google.com/maps/dir/?api=1&destination={0},{1}&travelmode=walking",
+            lat, lng));
+    }
 
     /// <summary>
     /// Starts guidance to a stop as soon as the joined trail's stops are loaded,
@@ -516,18 +576,34 @@ public class TrailPreviewView : MonoBehaviour
     static void LeadWhenLoaded(string stopId)
     {
         _leadId = stopId;
-        _leadUntil = Time.realtimeSinceStartup + 60f;
+        int token = ++_leadToken;
 
         BuildingDatabase.OnBuildingsChanged -= TryLead;
         BuildingDatabase.OnBuildingsChanged += TryLead;
         TryLead();
+
+        // The timeout runs on its own, not on the next database change, which
+        // may never come. Hosted on the trail service: this panel is closed by now.
+        if (!string.IsNullOrEmpty(_leadId) && TrailService.Instance != null)
+            TrailService.Instance.StartCoroutine(LeadTimeout(token));
+    }
+
+    static IEnumerator LeadTimeout(int token)
+    {
+        yield return new WaitForSecondsRealtime(60f);
+
+        if (token != _leadToken || string.IsNullOrEmpty(_leadId))
+            yield break;
+
+        _leadId = null;
+        BuildingDatabase.OnBuildingsChanged -= TryLead;
+        ProximityToast.Say(AppStrings.Get("preview.leadFailed"));
     }
 
     static void TryLead()
     {
-        if (string.IsNullOrEmpty(_leadId) || Time.realtimeSinceStartup > _leadUntil)
+        if (string.IsNullOrEmpty(_leadId))
         {
-            _leadId = null;
             BuildingDatabase.OnBuildingsChanged -= TryLead;
             return;
         }
