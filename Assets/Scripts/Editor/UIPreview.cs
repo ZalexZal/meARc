@@ -1599,7 +1599,8 @@ public static class UIPreview
         Set(root, "MapPanel/Safe/TopBar/TeamRow/TeamChip/Label", "Северняците · 3-то място");
 
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +
-                  "PrivacyCard/Row/Count", "2 hidden");
+                  "PrivacyCard/Row/Count",
+            string.Format(AppStrings.Get("settings.hiddenCount"), 2));
         Set(root, "SettingsPanel/Safe/SettingsContent/Root/Scroll/Viewport/Content/" +
                   "Version/Label", "Version 0.2.0");
 

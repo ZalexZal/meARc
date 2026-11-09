@@ -36,13 +36,22 @@ public static class TrailFilter
 
     static readonly Regex Spaces = new Regex(@"\s+");
 
+    /// <summary>Normalize can throw on some IL2CPP/Android builds (missing ICU
+    /// data, bad surrogates). Search must never break, so on failure the
+    /// text is used as it is.</summary>
+    static string SafeNormalize(string text, NormalizationForm form)
+    {
+        try { return text.Normalize(form); }
+        catch (System.Exception) { return text; }
+    }
+
     public static string Fold(string text)
     {
         if (string.IsNullOrEmpty(text))
             return string.Empty;
 
         // Cyrillic first: stripping accents first would turn й into и.
-        string lower = text.ToLowerInvariant().Normalize(NormalizationForm.FormC);
+        string lower = SafeNormalize(text.ToLowerInvariant(), NormalizationForm.FormC);
         StringBuilder latin = new StringBuilder(lower.Length + 8);
 
         foreach (char ch in lower)
@@ -54,7 +63,7 @@ public static class TrailFilter
                 latin.Append(ch);
         }
 
-        string decomposed = latin.ToString().Normalize(NormalizationForm.FormD);
+        string decomposed = SafeNormalize(latin.ToString(), NormalizationForm.FormD);
         StringBuilder bare = new StringBuilder(decomposed.Length);
 
         foreach (char ch in decomposed)
