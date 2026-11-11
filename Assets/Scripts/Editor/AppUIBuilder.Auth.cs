@@ -205,6 +205,9 @@ public static partial class AppUIBuilder
         nameSize.minWidth = 0f;
         nameSize.preferredWidth = 1f;
         nameSize.flexibleWidth = 1f;
+        // Above the field's own layout size, which is its text's width: typing
+        // an email would otherwise squeeze the name to a sliver.
+        nameSize.layoutPriority = 2;
 
         view.emailField = AuthField(pair, "Email", "account.email");
         view.emailField.contentType = TMP_InputField.ContentType.EmailAddress;
@@ -212,6 +215,7 @@ public static partial class AppUIBuilder
         emailSize.minWidth = 0f;
         emailSize.preferredWidth = 1f;
         emailSize.flexibleWidth = 1f;
+        emailSize.layoutPriority = 2;
 
         view.passwordField = AuthField(sheet, "Password", "account.password");
         view.passwordField.contentType = TMP_InputField.ContentType.Password;
@@ -719,9 +723,12 @@ public static partial class AppUIBuilder
         stage.headLabel.lineSpacing = -8f;
 
         // Three sign pills: glyph and word on the chip's frosted white.
+        // They wrap, as the website's flex-wrap does: a viewer's three are
+        // wider than the phone.
         RectTransform signs = UIFactory.Rect("Signs", words);
-        UIFactory.Size(signs.gameObject, 30f * Css);
-        UIFactory.HorizontalStack(signs, 6f * Css);
+        WrapRow signsWrap = signs.gameObject.AddComponent<WrapRow>();
+        signsWrap.spacingX = 6f * Css;
+        signsWrap.spacingY = 6f * Css;
         stage.signsRow = signs;
         stage.signPills = new GameObject[3];
         stage.signIcons = new Image[3];

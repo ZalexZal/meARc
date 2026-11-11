@@ -910,6 +910,7 @@ public class TeamDoorView : MonoBehaviour
         string e = error.ToLowerInvariant();
         string key = e.Contains("no team with that code") ? "team.err.unknown"
                    : e.Contains("team is full") ? "team.err.full"
+                   : e == "banned" || e.Contains("\"message\":\"banned\"") ? "teacher.err.banned"
                    : e.Contains("already on a team") || e.Contains("leave your team") ? "team.err.already"
                    : e.Contains("a guide, not a game") ? "team.err.guide"
                    : e.Contains("hands over or gives up") ? "team.err.captain"

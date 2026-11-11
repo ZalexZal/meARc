@@ -130,7 +130,7 @@ public static partial class AppUIBuilder
     static void BuildTabs(Transform parent, TeacherPanelView view)
     {
         RectTransform track = UIFactory.Rect("Tabs", parent);
-        UIFactory.Size(track.gameObject, 122f);
+        UIFactory.Size(track.gameObject, 122f).flexibleHeight = 0f;
         UIFactory.Fill(track, ThemeRole.Fill, 1f, UIShape.Pill).raycastTarget = false;
         HorizontalLayoutGroup row = UIFactory.HorizontalStack(track, 0f, true);
         row.padding = new RectOffset(8, 8, 8, 8);
@@ -143,7 +143,12 @@ public static partial class AppUIBuilder
     static Button TabHalf(Transform parent, string name, out Image face, out TextMeshProUGUI label)
     {
         RectTransform rt = UIFactory.Rect(name, parent);
-        UIFactory.Flexible(rt.gameObject);
+        LayoutElement half = UIFactory.Flexible(rt.gameObject);
+        // Its own height: the pill sprite would otherwise report its 160px
+        // texture as a preferred one and blow the track up.
+        half.minHeight = 106f;
+        half.preferredHeight = 106f;
+        half.flexibleHeight = 0f;
 
         // Coloured by the view (selected: the surface; the other: clear).
         face = UIFactory.Plain(rt, ThemeManager.Get(ThemeRole.Surface), UIShape.Pill);

@@ -129,6 +129,9 @@ public class AccountSectionView : MonoBehaviour
 
         if (DoorFlow.Instance != null)
             DoorFlow.Instance.OpenAccount();
+
+        // Used by now, synchronously; a door that never opened leaves no stale screen behind.
+        Next = null;
     }
 
     public static void OpenSignIn() { OpenDoor(AuthScreen.SignIn); }

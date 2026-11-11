@@ -181,6 +181,10 @@ public class TeacherPanelView : MonoBehaviour
             startButton.onClick.RemoveAllListeners();
             startButton.onClick.AddListener(AskStart);
         }
+
+        // The holder switched back on with the panel still up: poll again.
+        if (panel != null && panel.activeSelf && _poll == null && !string.IsNullOrEmpty(_world))
+            _poll = StartCoroutine(Poll());
     }
 
     void OnDisable()
@@ -226,7 +230,8 @@ public class TeacherPanelView : MonoBehaviour
         _world = worldId;
         _name = trailName;
         _toldError = false;
-        _acting = false;
+        // _acting is left alone: an action from an earlier opening may still be
+        // in flight, and Done() clears it.
         _showBoard = false;
 
         HideConfirm();

@@ -155,6 +155,7 @@ public class WaitingView : MonoBehaviour
         string world;
         bool wait = ShouldWait(out world)
                     && world != _laterFor
+                    && world != _startedFor
                     && (DoorFlow.Instance == null || DoorFlow.Instance.Current == DoorFlow.Door.None)
                     && !TeacherPanelView.IsOpen;
 
@@ -164,12 +165,20 @@ public class WaitingView : MonoBehaviour
             Hide();
     }
 
+    /// <summary>The trail this screen saw start; never waited on again.</summary>
+    string _startedFor;
+
     void Show(string world)
     {
         if (panel == null)
             return;
 
         bool was = panel.activeSelf;
+
+        // Another trail: the old poll would stop at its world check and
+        // nothing would start one for this trail.
+        if (world != _world)
+            StopPolling();
         _world = world;
 
         if (!was)
@@ -238,6 +247,9 @@ public class WaitingView : MonoBehaviour
 
     void Started(string world, bool started)
     {
+        // Until TrailService's own trail_start read lands, SelectedStart still
+        // says "waiting"; this keeps the screen from coming straight back.
+        _startedFor = world;
         _poll = null;
         Hide();
 

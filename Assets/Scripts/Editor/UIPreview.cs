@@ -165,8 +165,8 @@ public static class UIPreview
         if (menu != null && menu.rowTemplate != null)
         {
             menu.gameObject.SetActive(true);
-            menu.Draw(Pieces.SampleMine().GetRange(0, 2), "preview-0", Pieces.SampleNear(),
-                      string.Format(AppStrings.Get("chip.progress"), 2, 5));
+            menu.DrawWithOwned(AppUIBuilder.SampleOwned(), Pieces.SampleMine().GetRange(0, 2), "preview-0",
+                               Pieces.SampleNear(), string.Format(AppStrings.Get("chip.progress"), 2, 5));
             menu.ShowStill();
             Compact(canvas, true);
             Shoot(canvas, rig, "01c-trail-menu" + t, "MapPanel");
@@ -174,6 +174,28 @@ public static class UIPreview
             menu.gameObject.SetActive(false);
             if (menu.chevron != null)
                 menu.chevron.localRotation = Quaternion.identity;
+        }
+
+        // The teacher's panel, lobby then scoreboard, and the students' waiting
+        // screen - each filled with a made-up class, since there is no server.
+        TeacherPanelView teacher = canvas.GetComponentInChildren<TeacherPanelView>(true);
+        WaitingView waiting = canvas.GetComponentInChildren<WaitingView>(true);
+        if (teacher != null && waiting != null && teacher.panel != null && waiting.panel != null)
+        {
+            waiting.panel.SetActive(false);
+            teacher.PreviewSample(false);
+            Shoot(canvas, rig, "50-teacher-lobby" + t, "MapPanel", "TeacherTools/TeacherPanel");
+            teacher.PreviewSample(true);
+            Shoot(canvas, rig, "51-teacher-board" + t, "MapPanel", "TeacherTools/TeacherPanel");
+            teacher.panel.SetActive(false);
+
+            waiting.PreviewSample();
+            Shoot(canvas, rig, "52-waiting" + t, "MapPanel", "TeacherTools/WaitingScreen");
+            waiting.panel.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning("[Preview] No teacher tools to draw.");
         }
 
         // The card swiped down to its one line. Nothing runs in a batch render,
@@ -285,7 +307,13 @@ public static class UIPreview
             if (settingsTab != null && settingsTab.workValueLabel != null)
                 settingsTab.workValueLabel.text = SettingsTabController.RowValue(AccountRole.Creator, "guide");
 
+            // The seal after the name: a teacher's square, then a viewer's circle.
+            NameSeal[] seals = canvas.GetComponentsInChildren<NameSeal>(true);
+            foreach (NameSeal seal in seals) { seal.followAccount = false; seal.Show(AccountRole.Creator, "teacher"); }
             Shoot(canvas, rig, "35-you" + t, "SettingsPanel");
+            foreach (NameSeal seal in seals) seal.Show(AccountRole.Viewer, null);
+            Shoot(canvas, rig, "35b-you-viewer" + t, "SettingsPanel");
+            foreach (NameSeal seal in seals) seal.Show(AccountRole.Creator, "teacher");
 
             // How you use AR Trail, opened from its Settings row: the sheet with
             // the account's answer already chosen, a creator in tourism. Written
@@ -298,18 +326,19 @@ public static class UIPreview
                 if (workSheet.askLine != null) workSheet.askLine.text = AppStrings.Get("role.footer");
                 if (workSheet.role != null) workSheet.role.Select(AccountRole.Creator);
                 if (workSheet.choice != null) workSheet.choice.Select("guide");
-                if (workSheet.banner != null) workSheet.banner.Show(AccountRole.Creator, "guide");
+                if (workSheet.stage != null) { workSheet.stage.Show(AccountRole.Creator, "teacher"); workSheet.stage.PoseAt(5f); }
+                if (workSheet.choice != null) workSheet.choice.Select("teacher");
                 if (workSheet.statusLabel != null) workSheet.statusLabel.gameObject.SetActive(false);
                 Shoot(canvas, rig, "25-settings-role" + t, "SettingsPanel", "WorkSheet");
 
                 // And a viewer's: no lines of work, the note in their place.
                 if (workSheet.role != null) workSheet.role.Select(AccountRole.Viewer);
-                if (workSheet.banner != null) workSheet.banner.Show(AccountRole.Viewer, null);
+                if (workSheet.stage != null) { workSheet.stage.Show(AccountRole.Viewer, null); workSheet.stage.PoseAt(5f); }
                 Shoot(canvas, rig, "25-settings-role-viewer" + t, "SettingsPanel", "WorkSheet");
 
                 if (workSheet.role != null) workSheet.role.Select(null);
                 if (workSheet.choice != null) workSheet.choice.Select(null);
-                if (workSheet.banner != null) workSheet.banner.Show(null, null);
+                if (workSheet.stage != null) workSheet.stage.Show(null, null);
 
                 // And the row that opens it, scrolled into view in the account
                 // group, which only an account sees.
@@ -594,80 +623,120 @@ public static class UIPreview
             if (captainDoor.giveUpButton != null) captainDoor.giveUpButton.gameObject.SetActive(false);
         }
 
-        // The guest warning: the account door with its own title, line and way on.
+        // The account door: sign-up (A5: the stage over a sheet) and sign-in,
+        // two screens of one AccountSectionView (0.6.7).
         DoorFlow guestFlow = canvas.GetComponentInChildren<DoorFlow>(true);
-        if (guestFlow != null && guestFlow.accountTitle != null)
+        AccountSectionView guestCard = guestFlow != null && guestFlow.accountPanel != null
+            ? guestFlow.accountPanel.GetComponent<AccountSectionView>() : null;
+        if (guestFlow != null && guestCard != null && guestCard.signUpGroup != null &&
+            guestCard.signInGroup != null && guestCard.stage != null)
         {
+            RoleStage stage = guestCard.stage;
+            ScrollRect form = guestCard.signUpGroup.GetComponentInChildren<ScrollRect>(true);
+            guestCard.Show(AccountSectionView.AuthScreen.SignUp);
+            guestCard.anonymousGroup.SetActive(true);
+            guestCard.signUpGroup.SetActive(true);
+            guestCard.signInGroup.SetActive(false);
+
+            // The guest warning: the sign-up with its own title, line and way on.
             guestFlow.accountTitle.text = AppStrings.Get("guest.title");
             if (guestFlow.guestNote != null) guestFlow.guestNote.SetActive(true);
             if (guestFlow.accountLaterLabel != null) guestFlow.accountLaterLabel.text = AppStrings.Get("guest.continue");
-            // As a guest sees it: only the half for somebody with no account.
-            AccountSectionView guestCard = guestFlow.accountPanel != null
-                ? guestFlow.accountPanel.GetComponentInChildren<AccountSectionView>(true) : null;
-            bool signedWas = guestCard != null && guestCard.signedInGroup != null && guestCard.signedInGroup.activeSelf;
-            if (guestCard != null && guestCard.signedInGroup != null) guestCard.signedInGroup.SetActive(false);
-            if (guestCard != null && guestCard.anonymousGroup != null) guestCard.anonymousGroup.SetActive(true);
-            Shoot(canvas, rig, "26c-guest-warning" + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
-            if (guestCard != null && guestCard.signedInGroup != null) guestCard.signedInGroup.SetActive(signedWas);
+            stage.Show(null, null);
+            stage.PoseAt(5f);
+            Shoot(canvas, rig, "26c-guest-warning" + t, "Doors/Account");
             guestFlow.accountTitle.text = AppStrings.Get("accountDoor.title");
             if (guestFlow.guestNote != null) guestFlow.guestNote.SetActive(false);
             if (guestFlow.accountLaterLabel != null) guestFlow.accountLaterLabel.text = AppStrings.Get("trails.notNow");
 
-            // Sign-up with creator or viewer: nobody yet (Create tapped with no
-            // answer), a creator in tourism, and a viewer. Each twice: at the top,
-            // where the banner is, and scrolled to the question.
-            if (guestCard != null && guestCard.roleChoice != null)
+            // Nobody yet (Create tapped with no answer), a guide, and a viewer.
+            // Each at the top, where the stage is, and scrolled to the question.
+            string[][] states =
             {
-                guestCard.signedInGroup.SetActive(false);
-                guestCard.anonymousGroup.SetActive(true);
-                ScrollRect form = guestCard.GetComponentInParent<ScrollRect>(true);
+                new[] { "none", null, null },
+                new[] { "guide", AccountRole.Creator, "guide" },
+                new[] { "viewer", AccountRole.Viewer, null },
+            };
 
-                string[][] states =
+            foreach (string[] pick in states)
+            {
+                guestCard.roleChoice.Select(pick[1]);
+                if (guestCard.workChoice != null) guestCard.workChoice.Select(pick[2]);
+                stage.Show(pick[1], pick[2]);
+                stage.PoseAt(5f);
+                if (guestCard.roleError != null)
                 {
-                    new[] { "none", null, null },
-                    new[] { "creator", AccountRole.Creator, "guide" },
-                    new[] { "viewer", AccountRole.Viewer, null },
-                };
-
-                foreach (string[] shot in states)
-                {
-                    guestCard.roleChoice.Select(shot[1]);
-                    if (guestCard.workChoice != null) guestCard.workChoice.Select(shot[2]);
-                    if (guestCard.roleBanner != null) guestCard.roleBanner.Show(shot[1], shot[2]);
-                    if (guestCard.roleError != null)
-                    {
-                        guestCard.roleError.text = AppStrings.Get("err.role");
-                        guestCard.roleError.gameObject.SetActive(shot[1] == null);
-                    }
-
-                    string name = "24-signup-role-" + shot[0];
-                    if (form != null)
-                    {
-                        Canvas.ForceUpdateCanvases();
-                        LayoutRebuilder.ForceRebuildLayoutImmediate(form.content);
-                        form.verticalNormalizedPosition = 1f;
-                    }
-                    Shoot(canvas, rig, name + "-top" + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
-
-                    RectTransform question = (RectTransform)guestCard.roleChoice.transform.parent;
-                    if (form != null)
-                        ScrollToTop(form, question);
-                    Shoot(canvas, rig, name + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
+                    guestCard.roleError.text = AppStrings.Get("err.role");
+                    guestCard.roleError.gameObject.SetActive(pick[1] == null);
                 }
 
-                if (form != null) form.verticalNormalizedPosition = 1f;
+                string name = "24-signup-" + pick[0];
+                if (form != null)
+                {
+                    Canvas.ForceUpdateCanvases();
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(form.content);
+                    form.verticalNormalizedPosition = 1f;
+                }
+                Shoot(canvas, rig, name + "-top" + t, "Doors/Account");
 
-                guestCard.roleChoice.Select(null);
-                if (guestCard.workChoice != null) guestCard.workChoice.Select(null);
-                if (guestCard.roleBanner != null) guestCard.roleBanner.Show(null, null);
-                if (guestCard.roleError != null)
-                    guestCard.roleError.gameObject.SetActive(false);
-                guestCard.signedInGroup.SetActive(signedWas);
+                // The guide's loop at three moments: pins falling, the trail
+                // half drawn, the moment up.
+                if (pick[0] == "guide")
+                {
+                    stage.PoseAt(1.6f);
+                    Shoot(canvas, rig, name + "-t1.6" + t, "Doors/Account");
+                    stage.PoseAt(3.5f);
+                    Shoot(canvas, rig, name + "-t3.5" + t, "Doors/Account");
+                    stage.PoseAt(5f);
+                }
+
+                RectTransform question = (RectTransform)guestCard.roleChoice.transform.parent;
+                if (form != null)
+                    ScrollToTop(form, question);
+                Shoot(canvas, rig, name + t, "Doors/Account");
+            }
+
+            if (form != null) form.verticalNormalizedPosition = 1f;
+            guestCard.roleChoice.Select(null);
+            if (guestCard.workChoice != null) guestCard.workChoice.Select(null);
+            stage.Show(null, null);
+            if (guestCard.roleError != null)
+                guestCard.roleError.gameObject.SetActive(false);
+
+            // A field with the focus: its accent ring, wash and caret.
+            FieldFocus focus = guestCard.emailField != null ? guestCard.emailField.GetComponent<FieldFocus>() : null;
+            if (focus != null)
+            {
+                guestCard.emailField.text = "maria@example.com";
+                focus.Paint(true);
+                stage.PoseAt(5f);
+                Shoot(canvas, rig, "24d-field-focus" + t, "Doors/Account");
+                focus.Paint(false);
+                guestCard.emailField.text = string.Empty;
             }
             else
             {
-                Debug.LogWarning("[Preview] No work choice on the account door to draw.");
+                Debug.LogWarning("[Preview] The email field has no FieldFocus.");
             }
+
+            // Sign-in, on a screen of its own, with its email field focused.
+            guestCard.signUpGroup.SetActive(false);
+            guestCard.signInGroup.SetActive(true);
+            Shoot(canvas, rig, "24b-signin" + t, "Doors/Account");
+            FieldFocus inFocus = guestCard.signInEmailField != null
+                ? guestCard.signInEmailField.GetComponent<FieldFocus>() : null;
+            if (inFocus != null)
+            {
+                inFocus.Paint(true);
+                Shoot(canvas, rig, "24c-signin-focus" + t, "Doors/Account");
+                inFocus.Paint(false);
+            }
+            guestCard.signInGroup.SetActive(false);
+            guestCard.signUpGroup.SetActive(true);
+        }
+        else
+        {
+            Debug.LogWarning("[Preview] No sign-up / sign-in door to draw.");
         }
 
         // And the state a walker meets on a trail that will not take an
@@ -1610,6 +1679,14 @@ public static class UIPreview
 
         for (int i = 0; i < work.Length; i++)
             work[i].Paint();
+
+        // The fields' hairlines too: FieldFocus repaints in LateUpdate, which
+        // does not run here, so the light pass kept the dark pass's edges.
+        FieldFocus[] fields = Object.FindObjectsByType<FieldFocus>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < fields.Length; i++)
+            fields[i].Paint(false);
     }
 
     // -------------------------------------------------------------- stand-ins

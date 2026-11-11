@@ -5,7 +5,7 @@ using UnityEngine.UI;
 /// <summary>
 /// Creator or viewer, and a creator's line of work, as a sheet: opened from the
 /// Settings row to change it, and put up once after sign-in for an account that
-/// has never said how it uses AR Trail. The role's banner sits on top and
+/// has never said how it uses AR Trail. The role's A5 stage sits on top and
 /// follows the answer, as the website's sign-up stage does.
 ///
 /// There is no "Later". The answer is required, but the sheet can still be
@@ -21,8 +21,8 @@ public class WorkSheetView : MonoBehaviour
 
     public WorkChoiceView choice;
 
-    [Tooltip("The role's sky, chip and headline, over the choices.")]
-    public RoleBanner banner;
+    [Tooltip("The A5 stage over the choices: the role's sky, scene and words.")]
+    public RoleStage stage;
 
     [Tooltip("The sheet's title: \"How will you use AR Trail?\" when asked, \"How " +
              "you use AR Trail\" from Settings.")]
@@ -117,8 +117,8 @@ public class WorkSheetView : MonoBehaviour
 
     void ShowBanner()
     {
-        if (banner != null)
-            banner.Show(role != null ? role.Selected : null, choice != null ? choice.Selected : null);
+        if (stage != null)
+            stage.Show(role != null ? role.Selected : null, choice != null ? choice.Selected : null);
     }
 
     public void Close()

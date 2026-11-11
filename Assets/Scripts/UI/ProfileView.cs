@@ -88,17 +88,12 @@ public class ProfileView : MonoBehaviour
                 medalButtons[i].onClick.AddListener(() => OpenBadge(slot));
         }
 
+        // "Make a profile" opens sign-up, "Sign in" sign-in: two screens now.
         if (createButton != null)
-            createButton.onClick.AddListener(OpenAccount);
+            createButton.onClick.AddListener(AccountSectionView.OpenSignUp);
 
         if (signInButton != null)
-            signInButton.onClick.AddListener(OpenAccount);
-    }
-
-    static void OpenAccount()
-    {
-        if (DoorFlow.Instance != null)
-            DoorFlow.Instance.OpenAccount();
+            signInButton.onClick.AddListener(AccountSectionView.OpenSignIn);
     }
 
     void OnEnable()

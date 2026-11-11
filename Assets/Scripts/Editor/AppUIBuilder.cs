@@ -104,7 +104,10 @@ const float ReferenceWidth = 1080f;
 
         // Built at the Canvas root and missing from this list until Task 14, so
         // every build left the last one behind - the scene had seventeen.
-        "LanguageSheet"
+        "LanguageSheet",
+
+        // The teacher's panel and the students' waiting screen (0.6.7).
+        "TeacherTools"
     };
 
     static List<string> _notes;
@@ -300,6 +303,9 @@ const float ReferenceWidth = 1080f;
         // Over the tab bar, as every sheet is.
         // No badge sheet: AR Trails is a tool, not a game (6 Nov 2026).
 
+        // Over the tabs and the nav bar, under the sheets, the doors and the toast.
+        BuildTeacherTools(root);
+
         settingsTab.languageSheet = BuildLanguageSheet(root, settingsTab.languageValueLabel);
         settingsTab.workSheet = BuildWorkSheet(root);
 
@@ -325,6 +331,10 @@ const float ReferenceWidth = 1080f;
         // The toast says "done" for whatever is on top - a door, a page, the
         // stop sheet - so it is drawn over all of them.
         toast.transform.SetAsLastSibling();
+
+        // Every text field gets the same focused state: a 2px accent ring, a
+        // wash and a caret you can see (0.6.7).
+        AddFieldFocusToAll(root);
 
         // The app opens on the map, so that is what the scene shows at edit time
         // too - otherwise the Game view shows whichever panel happens to be last.
@@ -1645,6 +1655,7 @@ const float ReferenceWidth = 1080f;
         // The chip's pull-down, over everything else on the map.
         chip.menu = BuildTrailMenu(panel, chipRect, chip.chevron != null
                                                        ? (RectTransform)chip.chevron.transform : null);
+        BuildOwnedSection(chip.menu);
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -3741,109 +3752,6 @@ const float ReferenceWidth = 1080f;
     /// survive a reinstall comes looking for it. A modal in the way of the map
     /// would be asking for a form before earning the right to.
     /// </summary>
-    static AccountSectionView BuildAccountCard(Transform content, bool label = true,
-                                               System.Action<Transform> signedInExtras = null)
-    {
-        if (label)
-            SectionLabel(content, "settings.account");
-
-        RectTransform card = UIFactory.Rect("AccountCard", content);
-        UIFactory.Card(card, 34f, 20f);
-
-        AccountSectionView view = card.gameObject.AddComponent<AccountSectionView>();
-
-        // ------------------------------------------------------- signed in
-        RectTransform inGroup = UIFactory.Rect("SignedIn", card);
-        UIFactory.VerticalStack(inGroup, 16f);
-        view.signedInGroup = inGroup.gameObject;
-
-        UIFactory.Text("Caption", inGroup, Caption, ThemeRole.TextMuted,
-                       TextAlignmentOptions.Left, "account.signedInAs");
-
-        view.emailLabel = UIFactory.Text("Email", inGroup, Body, ThemeRole.TextPrimary,
-                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
-        UIFactory.Size(view.emailLabel.gameObject, 52f);
-
-        // Changeable afterwards, because a name chosen in a hurry at sign-up is
-        // the one that ends up on a screen in front of a room.
-        UIFactory.Text("NameLabel", inGroup, Caption, ThemeRole.TextMuted,
-                       TextAlignmentOptions.Left, "account.name");
-        view.signedInNameField = Field(inGroup, "Name", "account.name");
-        view.saveNameButton = FullWidthButton(inGroup, "SaveName", "account.saveName",
-                                              ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
-
-        // Whatever the caller wants among the things only an account has - the
-        // You tab puts "Email and password" here.
-        if (signedInExtras != null)
-            signedInExtras(inGroup);
-
-        view.signOutButton = FullWidthButton(inGroup, "SignOut", "account.signOut",
-                                             ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
-
-        // ------------------------------------------------------- anonymous
-        RectTransform outGroup = UIFactory.Rect("Anonymous", card);
-        UIFactory.VerticalStack(outGroup, 16f);
-        view.anonymousGroup = outGroup.gameObject;
-
-        TextMeshProUGUI none = UIFactory.Text("None", outGroup, Body, ThemeRole.TextPrimary,
-                                              TextAlignmentOptions.Left, "account.none",
-                                              FontStyles.Bold);
-        UIFactory.Size(none.gameObject, 52f);
-
-        TextMeshProUGUI body = UIFactory.Text("Body", outGroup, Secondary, ThemeRole.TextSecondary,
-                                              TextAlignmentOptions.Left, "account.noneBody");
-        UIFactory.FitsItsText(body);
-
-        // The website's stage, as a strip: what the answer below means, before
-        // anybody has typed a thing. It follows the two questions further down.
-        view.roleBanner = BuildRoleBanner(outGroup);
-
-        // First, because it is the one field that is about the person rather
-        // than about the login.
-        view.nameField = Field(outGroup, "Name", "account.name");
-
-        TextMeshProUGUI nameHint = UIFactory.Text("NameHint", outGroup, Caption,
-                                                  ThemeRole.TextMuted,
-                                                  TextAlignmentOptions.Left,
-                                                  "account.nameHint");
-        UIFactory.Size(nameHint.gameObject, 40f);
-
-        view.emailField = Field(outGroup, "Email", "account.email");
-        view.emailField.contentType = TMP_InputField.ContentType.EmailAddress;
-
-        view.passwordField = Field(outGroup, "Password", "account.password");
-        view.passwordField.contentType = TMP_InputField.ContentType.Password;
-
-        // Required for a new account, nothing chosen: the website asks the same
-        // two questions at its sign-up, in the same words. Creator or viewer
-        // first; the line of work only for a creator.
-        view.roleChoice = RoleQuestion(outGroup, out view.roleError, out view.workChoice,
-                                       out view.workError);
-
-        view.signUpButton = FullWidthButton(outGroup, "Create", "account.create",
-                                            ThemeRole.Accent, ThemeRole.OnAccent);
-        view.signInButton = FullWidthButton(outGroup, "SignIn", "account.signIn",
-                                            ThemeRole.SurfaceAlt, ThemeRole.TextPrimary);
-
-        // Said before it happens, not after. There is no correct merge - two start
-        // times, two teams, the same stop solved twice - so the only honest thing
-        // is to warn and then keep the account's own history.
-        TextMeshProUGUI warn = UIFactory.Text("Merge", outGroup, Caption, ThemeRole.TextMuted,
-                                              TextAlignmentOptions.Left,
-                                              "account.mergeWarning");
-        UIFactory.FitsItsText(warn);
-
-        // ----------------------------------------------------------- status
-        view.statusLabel = UIFactory.Text("Status", card, Secondary, ThemeRole.TextMuted,
-                                          TextAlignmentOptions.Left);
-        view.statusLabel.textWrappingMode = TextWrappingModes.Normal;
-        UIFactory.ReservesButGrows(view.statusLabel.gameObject, 60f);
-        view.statusLabel.text = string.Empty;
-        view.statusLabel.gameObject.SetActive(false);
-
-        return view;
-    }
-
     /// <summary>
     /// A text field that can be seen on a card.
     ///
@@ -4578,6 +4486,9 @@ const float ReferenceWidth = 1080f;
     /// a launch for an account that has never given one. Taller than the
     /// medium sheet, because four rows and a Save do not fit in one.
     /// </summary>
+    /// <summary>The work sheet's stage: sign-up's height, so the words, the wrapped signs and the moment keep A5's spacing.</summary>
+    const float WorkStageHeight = 1086f;
+
     static WorkSheetView BuildWorkSheet(Transform root)
     {
         RectTransform panel = MediumSheet(root, "WorkSheet", null,
@@ -4599,30 +4510,52 @@ const float ReferenceWidth = 1080f;
         if (view.title != null)
             view.title.text = AppStrings.Get("role.question");
 
-        // The choices scroll; the error and Save stay put under them.
-        // Save sits clear of the bottom edge, as a sheet's footer does.
-        body.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 11, 55);
-        RectTransform list = UIFactory.ScrollList("Scroll", body, 33f);
+        // The stage across the sheet's whole width, the choices on a sheet of
+        // their own riding up over its foot (A5Phone), all scrolling together.
+        // The error and Save stay put under them, clear of the bottom edge.
+        body.offsetMin = Vector2.zero;
+        body.offsetMax = Vector2.zero;
+        body.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 0, 55);
+        RectTransform list = UIFactory.ScrollList("Scroll", body, 0f);
         UIFactory.Size(list.parent.parent.gameObject, 0f).flexibleHeight = 1f;
         list.parent.parent.GetComponent<LayoutElement>().preferredHeight = -1f;
-        list.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 0, 33);
+        list.GetComponent<VerticalLayoutGroup>().spacing = -StageSheetOverlap;
 
-        view.banner = BuildRoleBanner(list);
+        view.stage = BuildRoleStage(list, WorkStageHeight);
 
-        view.role = RoleQuestion(list, out TextMeshProUGUI _, out view.choice, out TextMeshProUGUI _,
+        // Under the sheet's own header, not the status bar: no safe-area pad.
+        SafeAreaPad stagePad = view.stage.GetComponentInChildren<SafeAreaPad>(true);
+        if (stagePad != null)
+            Object.DestroyImmediate(stagePad);
+
+        RectTransform form = UIFactory.Rect("Form", list);
+        VerticalLayoutGroup formStack = UIFactory.VerticalStack(form, 33f, false);
+        formStack.padding = new RectOffset((int)SheetPad, (int)SheetPad, 50, 33);
+
+        RectTransform face = UIFactory.Rect("Face", form);
+        UIFactory.Stretch(face);
+        face.offsetMin = new Vector2(0f, -600f);
+        UIFactory.Fill(face, ThemeRole.Surface, 1f, UIShape.Card).raycastTarget = true;
+        Ignore(face);
+
+        view.role = RoleQuestion(form, out TextMeshProUGUI _, out view.choice, out TextMeshProUGUI _,
                                  false);
 
-        view.askLine = UIFactory.Text("Ask", list, Secondary, ThemeRole.TextMuted,
+        view.askLine = UIFactory.Text("Ask", form, Secondary, ThemeRole.TextMuted,
                                       TextAlignmentOptions.TopLeft, "role.footer");
         UIFactory.FitsItsText(view.askLine);
 
-        view.statusLabel = UIFactory.Text("Status", body, Secondary, ThemeRole.StatusPoor,
+        RectTransform foot = UIFactory.Rect("Foot", body);
+        VerticalLayoutGroup footStack = UIFactory.VerticalStack(foot, 22f, false);
+        footStack.padding = new RectOffset((int)SheetPad, (int)SheetPad, 22, 0);
+
+        view.statusLabel = UIFactory.Text("Status", foot, Secondary, ThemeRole.StatusPoor,
                                           TextAlignmentOptions.Left);
         UIFactory.FitsItsText(view.statusLabel);
         view.statusLabel.text = string.Empty;
         view.statusLabel.gameObject.SetActive(false);
 
-        view.saveButton = FullWidthButton(body, "Save", "work.save", ThemeRole.Accent, ThemeRole.OnAccent);
+        view.saveButton = FullWidthButton(foot, "Save", "work.save", ThemeRole.Accent, ThemeRole.OnAccent);
         return view;
     }
 
@@ -4733,91 +4666,6 @@ const float ReferenceWidth = 1080f;
         return view;
     }
 
-    /// <summary>
-    /// The website's sign-up stage as a strip (RoleBanner): the seal on the
-    /// left, the chip and the headline beside it, on the role's sky. Its colours
-    /// are painted by the banner, not the theme, so none of it is themed here.
-    /// </summary>
-    static RoleBanner BuildRoleBanner(Transform parent)
-    {
-        RectTransform rt = UIFactory.Rect("RoleBanner", parent);
-        RoleBanner banner = rt.gameObject.AddComponent<RoleBanner>();
-        banner.sky = UIFactory.Plain(rt, RoleBanner.Sky("none", false), UIShape.Card);
-        banner.sky.raycastTarget = false;
-
-        HorizontalLayoutGroup row = UIFactory.HorizontalStack(rt, 39f);
-        row.padding = new RectOffset(44, 44, 44, 44);
-        row.childAlignment = TextAnchor.MiddleLeft;
-
-        // The seal: a rounded square for a creator, a circle otherwise, and the
-        // role's glyph over whichever is up.
-        RectTransform seal = UIFactory.Rect("Seal", rt);
-        UIFactory.Size(seal.gameObject, 132f, 132f).flexibleWidth = 0f;
-
-        RectTransform squareRect = UIFactory.Rect("Square", seal);
-        UIFactory.Stretch(squareRect);
-        banner.sealSquare = UIFactory.Plain(squareRect, Color.white, UIShape.Rounded);
-        banner.sealSquare.raycastTarget = false;
-
-        RectTransform roundRect = UIFactory.Rect("Round", seal);
-        UIFactory.Stretch(roundRect);
-        banner.sealRound = UIFactory.Plain(roundRect, Color.white, UIShape.Circle);
-        banner.sealRound.raycastTarget = false;
-
-        RectTransform glyphRect = UIFactory.Rect("Glyph", seal);
-        UIFactory.Corner(glyphRect, new Vector2(0.5f, 0.5f), new Vector2(66f, 66f), Vector2.zero);
-        banner.glyph = UIFactory.Plain(glyphRect, Color.white);
-        banner.glyph.preserveAspect = true;
-        banner.glyph.raycastTarget = false;
-
-        // In RoleBanner.GlyphKeys order: teacher, guide, broker, other, viewer,
-        // none, and a creator who has not said what they do. The education and
-        // estate glyphs are the trail categories' own.
-        banner.glyphs = new Sprite[]
-        {
-            UIIcons.Get(AppIcon.Book),
-            UIIcons.Get(AppIcon.Landmark),
-            UIIcons.Get(AppIcon.Home),
-            UIIcons.Get(AppIcon.Spark),
-            UIIcons.Get(AppIcon.Walk),
-            UIIcons.Get(AppIcon.Question),
-            UIIcons.Get(AppIcon.Plus)
-        };
-        banner.glyph.sprite = banner.glyphs[5];
-
-        RectTransform words = UIFactory.Rect("Words", rt);
-        LayoutElement wordsSize = words.gameObject.AddComponent<LayoutElement>();
-        wordsSize.minWidth = 0f;
-        wordsSize.preferredWidth = 1f;
-        wordsSize.flexibleWidth = 1f;
-        UIFactory.VerticalStack(words, 17f, false).childAlignment = TextAnchor.MiddleLeft;
-
-        // The chip hugs its words: a row the width of the strip, with the pill
-        // inside it at its own preferred width.
-        RectTransform chipRow = UIFactory.Rect("ChipRow", words);
-        UIFactory.HorizontalStack(chipRow, 0f);
-
-        RectTransform chip = UIFactory.Rect("Chip", chipRow);
-        banner.chip = UIFactory.Plain(chip, Color.white, UIShape.Pill);
-        banner.chip.raycastTarget = false;
-        HorizontalLayoutGroup chipLayout = UIFactory.HorizontalStack(chip, 0f);
-        chipLayout.padding = new RectOffset(28, 28, 10, 10);
-        // Its own height, not the pill sprite's: an Image reports the sprite's
-        // size as a preferred one, which made the chip three lines tall.
-        UIFactory.Size(chip.gameObject, 66f);
-
-        banner.tagLabel = Unthemed(UIFactory.Text("Tag", chip, Caption, ThemeRole.TextPrimary,
-                                                  TextAlignmentOptions.Left, null, FontStyles.Bold));
-        banner.tagLabel.textWrappingMode = TextWrappingModes.NoWrap;
-
-        banner.headLabel = Unthemed(UIFactory.Text("Head", words, Body, ThemeRole.TextPrimary,
-                                                   TextAlignmentOptions.Left, null, FontStyles.Bold));
-        UIFactory.FitsItsText(banner.headLabel);
-
-        banner.Paint();
-        return banner;
-    }
-
     /// <summary>A label whose colour its owner paints, with the theme's hand taken off it.</summary>
     static TextMeshProUGUI Unthemed(TextMeshProUGUI label)
     {
@@ -4893,7 +4741,7 @@ const float ReferenceWidth = 1080f;
                                                TextAlignmentOptions.Left, "settings.nameEmail", FontStyles.Bold);
         UIFactory.Size(title.gameObject, 84f);
 
-        view = BuildAccountCard(content, false);
+        view = BuildAuthCard(content, false);
         return rt.gameObject;
     }
 
@@ -5003,11 +4851,18 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(who, 6f, false).childAlignment = TextAnchor.MiddleLeft;
         UIFactory.Flexible(who.gameObject);
 
-        view.nameLabel = UIFactory.Text("Name", who, Title, ThemeRole.TextPrimary,
+        // The name with the account's seal after it, as the website's NameSeal.
+        RectTransform nameRow = UIFactory.Rect("NameRow", who);
+        UIFactory.Size(nameRow.gameObject, 72f);
+        UIFactory.HorizontalStack(nameRow, 20f).childAlignment = TextAnchor.MiddleLeft;
+
+        view.nameLabel = UIFactory.Text("Name", nameRow, Title, ThemeRole.TextPrimary,
                                         TextAlignmentOptions.Left, null, FontStyles.Bold);
         UIFactory.Size(view.nameLabel.gameObject, 72f);
         view.nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
         view.nameLabel.overflowMode = TextOverflowModes.Ellipsis;
+
+        BuildNameSeal(nameRow, 54f);
 
         view.subLabel = UIFactory.Text("Sub", who, Secondary, ThemeRole.TextMuted,
                                        TextAlignmentOptions.Left, null);
@@ -6888,7 +6743,7 @@ const float ReferenceWidth = 1080f;
         flow.trailsPanel = BuildTrailsDoor(holder, flow, trailRowPrefab, out TrailsDoor trails);
         flow.codePanel = BuildCodeDoor(holder, flow, out CodeDoor code);
         flow.teamPanel = BuildTeamDoor(holder, flow, out TeamDoorView teamDoor);
-        flow.accountPanel = BuildAccountDoor(holder, flow);
+        flow.accountPanel = BuildAuthDoor(holder, flow);
         flow.readyPanel = BuildReadyDoor(holder, flow);
         flow.consentPanel = BuildConsentDoor(holder, flow, out ConsentDoorView consentView);
         flow.previewPanel = BuildTrailPreview(holder, flow, out TrailPreviewView previewView);
@@ -7361,65 +7216,6 @@ const float ReferenceWidth = 1080f;
     /// school board holds a dozen, so pooling is less machinery than a prefab
     /// and a spawner, and it cannot leak them.
     /// </summary>
-    /// <summary>
-    /// The offer of an account, straight after the first tutorial.
-    ///
-    /// The same account form Settings has, so there is one of it to keep right,
-    /// on a card pinned to the top of the screen - the form is the thing people
-    /// type into, and the top half is the half the keyboard leaves alone.
-    /// </summary>
-    static GameObject BuildAccountDoor(Transform parent, DoorFlow flow)
-    {
-        RectTransform panel = Door(parent, "Account", plain: false, inner: out RectTransform inner);
-
-        RectTransform card = Card(inner, "Card", 22f);
-
-        // Top, not bottom. Every other card rests on the bottom of the screen
-        // because nothing on it is typed into.
-        //
-        // And the whole height, with the form scrolling under the title. The
-        // line-of-work choices (Task 14) made the form taller than a phone; the
-        // guest warning was already cutting its own "Continue as guest" off at
-        // the bottom of the screen before they were added.
-        card.anchorMin = new Vector2(0f, 0f);
-        card.anchorMax = new Vector2(1f, 1f);
-        card.pivot = new Vector2(0.5f, 1f);
-        card.offsetMin = Vector2.zero;
-        card.offsetMax = Vector2.zero;
-        ContentSizeFitter cardFit = card.GetComponent<ContentSizeFitter>();
-        if (cardFit != null)
-            Object.DestroyImmediate(cardFit);
-
-        // The same door is the guest warning, so DoorFlow writes its title, its
-        // guest line and Later's words itself.
-        flow.accountTitle = SheetTitle(card, "accountDoor.title");
-        DropLocalizer(flow.accountTitle);
-
-        RectTransform form = UIFactory.ScrollList("Scroll", card, 22f);
-        LayoutElement formSize = form.parent.parent.gameObject.AddComponent<LayoutElement>();
-        formSize.minHeight = 0f;
-        formSize.flexibleHeight = 1f;
-        form.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 0, 66);
-
-        TextMeshProUGUI guestLine = UIFactory.Text("GuestNote", form, Secondary, ThemeRole.TextSecondary,
-                                                   TextAlignmentOptions.TopLeft, "guest.body");
-        UIFactory.FitsItsText(guestLine);
-        guestLine.raycastTarget = false;
-        flow.guestNote = guestLine.gameObject;
-        guestLine.gameObject.SetActive(false);
-
-        BuildAccountCard(form, label: false);
-
-        Button later = QuietAction(form, "Later", "trails.notNow", flow.AccountDone,
-                                   "account later");
-        later.gameObject.AddComponent<WayOut>();
-        flow.accountLaterLabel = later.GetComponentInChildren<TextMeshProUGUI>();
-        DropLocalizer(flow.accountLaterLabel);
-
-        panel.gameObject.SetActive(false);
-        return panel.gameObject;
-    }
-
     /// <summary>
     /// The end of the demo. A moment of "done", then the two ways into a real
     /// trail - the library first, because most people will not have a code.

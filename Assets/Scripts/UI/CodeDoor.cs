@@ -104,6 +104,15 @@ public class CodeDoor : MonoBehaviour
 
     void Done(bool joined, string detail)
     {
+        if (!joined && detail == "banned")
+        {
+            _busy = false;
+            SetBusyLabel(false);
+            SetMessage(AppStrings.Get("teacher.err.banned"));
+            TeacherService.SayBanned();
+            return;
+        }
+
         if (!joined && detail == "unknown" && !_triedTeam && boxes != null)
         {
             _triedTeam = true;
@@ -190,6 +199,8 @@ public class CodeDoor : MonoBehaviour
         {
             if (!string.IsNullOrEmpty(error))
                 Debug.LogWarning("[Code] Joined the trail, not the team: " + error);
+            if (TeacherService.IsBanned(error))
+                TeacherService.SayBanned();
 
             Done(true, detail);
         });

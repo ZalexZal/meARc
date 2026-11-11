@@ -34,6 +34,13 @@ public class RoleStage : MonoBehaviour
     [Tooltip("Optional: the chip's pill behind the seal and the tag.")]
     public Image chip;
     public Image chipSeal;
+
+    [Tooltip("The seal's shape follows the role, as the website's: a rounded square " +
+             "for a creator, a circle for a viewer, a ring before any answer.")]
+    public Sprite sealSquare;
+    public Sprite sealRound;
+    public Sprite sealRing;
+
     public Image chipGlyph;
     public TextMeshProUGUI chipLabel;
     public TextMeshProUGUI headLabel;
@@ -415,9 +422,15 @@ public class RoleStage : MonoBehaviour
 
         // Before an answer the seal is a bare muted sign; after it, blue with a
         // white glyph (global.css .seal[data-selected]).
-        bool chosen = _words != "none";
+        bool chosen = _role != null;
         if (chipSeal != null)
-            chipSeal.color = chosen ? Hex(0x0066cc) : Color.clear;
+        {
+            Sprite shape = _role == AccountRole.Creator ? sealSquare
+                         : _role == AccountRole.Viewer ? sealRound : sealRing;
+            if (shape != null)
+                chipSeal.sprite = shape;
+            chipSeal.color = chosen ? Hex(0x0066cc) : (sealRing != null ? muted : Color.clear);
+        }
         if (chipGlyph != null)
             chipGlyph.color = chosen ? Color.white : muted;
 
@@ -470,6 +483,21 @@ public class RoleStage : MonoBehaviour
         }
         else
             image.enabled = false;
+    }
+
+    /// <summary>
+    /// For the screenshot harness, where nothing runs: poses the loop as it is
+    /// <paramref name="seconds"/> into the current drawing, then draws one frame.
+    /// </summary>
+    public void PoseAt(float seconds)
+    {
+        Cache();
+        _painted = false;
+        Repaint();
+        _loopStart = Now - seconds;
+        _fadeStart = float.NegativeInfinity;
+        _skyStart = float.NegativeInfinity;
+        Update();
     }
 
     void Update()

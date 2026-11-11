@@ -677,6 +677,13 @@ public class TrailService : MonoBehaviour
             {
                 // The function raises when the code is unknown, which arrives as a
                 // 400. Anything else is a real fault worth showing differently.
+                // 0071: a student the teacher blocked.
+                if (TeacherService.IsBanned(Postgrest.Said(request)))
+                {
+                    if (done != null) done(false, "banned");
+                    yield break;
+                }
+
                 bool unknownCode = request.responseCode == 400 || request.responseCode == 404;
 
                 // The consent trigger refuses a 13-year-old nobody has agreed for
@@ -1035,6 +1042,8 @@ public class TrailService : MonoBehaviour
             if (request.result != UnityWebRequest.Result.Success)
             {
                 Debug.LogWarning("[Trails] join_listed failed (" + request.responseCode + ")");
+                if (TeacherService.IsBanned(Postgrest.Said(request)))
+                    TeacherService.SayBanned();
                 if (done != null) done(false);
                 yield break;
             }

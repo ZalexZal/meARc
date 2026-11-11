@@ -668,8 +668,11 @@ public class DoorFlow : MonoBehaviour
 
         // The two card doors are the ones the map shows through. Welcome and Terms
         // are plain: nothing behind them, because there is nothing yet to look at.
+        // The account door is a whole screen now (0.6.7: the stage over a sheet),
+        // so it opens at once - which AccountSectionView.OpenDoor relies on to
+        // hand it sign-in or sign-up synchronously.
         bool wantsMap = door == Door.Trails || door == Door.Code || door == Door.Team ||
-                        door == Door.Account || door == Door.Ready || door == Door.Consent;
+                        door == Door.Ready || door == Door.Consent;
 
         if (navBar != null)
             navBar.SetActive(door == Door.None);
