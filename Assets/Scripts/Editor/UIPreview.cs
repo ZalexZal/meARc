@@ -629,18 +629,18 @@ public static class UIPreview
                     new[] { "viewer", AccountRole.Viewer, null },
                 };
 
-                foreach (string[] state in states)
+                foreach (string[] shot in states)
                 {
-                    guestCard.roleChoice.Select(state[1]);
-                    if (guestCard.workChoice != null) guestCard.workChoice.Select(state[2]);
-                    if (guestCard.roleBanner != null) guestCard.roleBanner.Show(state[1], state[2]);
+                    guestCard.roleChoice.Select(shot[1]);
+                    if (guestCard.workChoice != null) guestCard.workChoice.Select(shot[2]);
+                    if (guestCard.roleBanner != null) guestCard.roleBanner.Show(shot[1], shot[2]);
                     if (guestCard.roleError != null)
                     {
                         guestCard.roleError.text = AppStrings.Get("err.role");
-                        guestCard.roleError.gameObject.SetActive(state[1] == null);
+                        guestCard.roleError.gameObject.SetActive(shot[1] == null);
                     }
 
-                    string name = "24-signup-role-" + state[0];
+                    string name = "24-signup-role-" + shot[0];
                     if (form != null)
                     {
                         Canvas.ForceUpdateCanvases();

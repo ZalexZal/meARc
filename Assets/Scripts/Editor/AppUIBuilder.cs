@@ -4600,6 +4600,8 @@ const float ReferenceWidth = 1080f;
             view.title.text = AppStrings.Get("role.question");
 
         // The choices scroll; the error and Save stay put under them.
+        // Save sits clear of the bottom edge, as a sheet's footer does.
+        body.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 11, 55);
         RectTransform list = UIFactory.ScrollList("Scroll", body, 33f);
         UIFactory.Size(list.parent.parent.gameObject, 0f).flexibleHeight = 1f;
         list.parent.parent.GetComponent<LayoutElement>().preferredHeight = -1f;
@@ -4800,6 +4802,9 @@ const float ReferenceWidth = 1080f;
         banner.chip.raycastTarget = false;
         HorizontalLayoutGroup chipLayout = UIFactory.HorizontalStack(chip, 0f);
         chipLayout.padding = new RectOffset(28, 28, 10, 10);
+        // Its own height, not the pill sprite's: an Image reports the sprite's
+        // size as a preferred one, which made the chip three lines tall.
+        UIFactory.Size(chip.gameObject, 66f);
 
         banner.tagLabel = Unthemed(UIFactory.Text("Tag", chip, Caption, ThemeRole.TextPrimary,
                                                   TextAlignmentOptions.Left, null, FontStyles.Bold));
