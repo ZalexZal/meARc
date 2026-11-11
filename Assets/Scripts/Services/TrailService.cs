@@ -739,6 +739,122 @@ public class TrailService : MonoBehaviour
             OnTrailsChanged();
     }
 
+    // ----------------------------------------------------------- trails I own
+
+    /// <summary>A trail the signed-in account owns, as my_worlds returns it.</summary>
+    [Serializable]
+    public class Owned
+    {
+        public string id;
+        public string name;
+        public string mode;
+        public string role;
+        public int team_count;
+        public string category;
+        public CityJson city;
+
+        /// <summary>
+        /// Whether the teacher panel has anything to run: a scored mode (teams
+        /// are how it is played) or teams that already exist.
+        /// </summary>
+        public bool HasTeams { get { return team_count > 0 || IsGame(mode); } }
+    }
+
+    [Serializable] class OwnedList { public Owned[] items; }
+
+    /// <summary>
+    /// The trails this account owns (my_worlds, role = 'owner'), newest first.
+    /// Editors are left out: the teacher panel is the owner's.
+    /// Empty for a guest and before the first answer.
+    /// </summary>
+    public List<Owned> OwnedTrails { get; private set; } = new List<Owned>();
+
+    /// <summary>The account OwnedTrails was read for, so another account's list is never shown.</summary>
+    string _ownedFor;
+
+    /// <summary>
+    /// OwnedTrails when they were read for the account signed in now; otherwise
+    /// empty, so a list left from a previous account is never drawn.
+    /// </summary>
+    public List<Owned> OwnedNow()
+    {
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        if (!CanOwn || auth.UserId != _ownedFor)
+            return EmptyOwned;
+        return OwnedTrails;
+    }
+
+    static readonly List<Owned> EmptyOwned = new List<Owned>();
+
+    /// <summary>True when the account may own trails: signed in and not a guest.</summary>
+    public static bool CanOwn
+    {
+        get
+        {
+            SupabaseAuth auth = SupabaseAuth.Instance;
+            return auth != null && auth.IsSignedIn && !auth.IsAnonymous &&
+                   !string.IsNullOrEmpty(auth.UserId);
+        }
+    }
+
+    /// <summary>
+    /// Asks my_worlds for the trails this account owns. A guest gets an empty
+    /// list without a request; a failed request keeps the last good list.
+    /// </summary>
+    public IEnumerator LoadOwned(Action done)
+    {
+        SupabaseConfig config = SupabaseConfig.Instance;
+        SupabaseAuth auth = SupabaseAuth.Instance;
+
+        if (config == null || !CanOwn)
+        {
+            OwnedTrails.Clear();
+            _ownedFor = null;
+            if (done != null) done();
+            yield break;
+        }
+
+        string user = auth.UserId;
+        if (_ownedFor != user)
+            OwnedTrails.Clear();
+
+        yield return SupabaseAuth.Ready();
+
+        using (UnityWebRequest request =
+               SupabaseAuth.Post(config.Endpoint("/rest/v1/rpc/my_worlds"), "{}", null))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    Owned[] rows = JsonUtility.FromJson<OwnedList>(
+                        "{\"items\":" + request.downloadHandler.text + "}").items;
+
+                    OwnedTrails.Clear();
+                    for (int i = 0; rows != null && i < rows.Length; i++)
+                    {
+                        if (rows[i] != null && rows[i].role == "owner" && !string.IsNullOrEmpty(rows[i].id))
+                            OwnedTrails.Add(rows[i]);
+                    }
+
+                    _ownedFor = user;
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Trails] Unreadable my_worlds: " + exception.Message);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[Trails] my_worlds failed (" + request.responseCode + ")");
+            }
+        }
+
+        if (done != null) done();
+    }
+
     // ----------------------------------------------------------- the library
 
     /// <summary>A public trail near the reader, as trails_near returns it.</summary>

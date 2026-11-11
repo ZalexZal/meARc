@@ -8,6 +8,11 @@ using UnityEngine.UI;
 /// The trail chip's pull-down: the chevron promises a menu, so it opens one,
 /// hung from the chip, rather than taking over the screen.
 ///
+///   Моите маршрути                       (signed in, owns trails)
+///   (◎)  Разходка из Ямбол                ✓
+///        Образование · Ямбол
+///        Учителски пулт                   (only when it has teams)
+///   ─────────────────────────────
 ///   Твоите
 ///   (◎)  Кой знае повече?                 ✓
 ///        Образование · Ямбол · 2 от 5
@@ -45,6 +50,17 @@ public class TrailMenuView : MonoBehaviour
     [Tooltip("One trail's row, built once and switched off; copies of it are the list.")]
     public RectTransform rowTemplate;
 
+    [Header("Mine as owner")]
+    [Tooltip("\"Моите маршрути\": trails this account owns (my_worlds, role = owner).")]
+    public GameObject ownedLabel;
+    public RectTransform ownedParent;
+    [Tooltip("One owned trail: a child \"Row\" shaped like rowTemplate's, and a " +
+             "child \"Teacher\" button under it. Built once and switched off.")]
+    public RectTransform ownedTemplate;
+    [Tooltip("The hairline under the owned trails.")]
+    public GameObject ownedDivider;
+    public int maxOwned = 3;
+
     [Header("Nearby")]
     public GameObject nearDivider;
     public GameObject nearLabel;
@@ -69,6 +85,7 @@ public class TrailMenuView : MonoBehaviour
 
     readonly List<RectTransform> _rows = new List<RectTransform>();
     readonly List<RectTransform> _nearRows = new List<RectTransform>();
+    readonly List<RectTransform> _ownedRows = new List<RectTransform>();
     Coroutine _move;
     bool _open;
     string _progress;   // the preview's stand-in for the open trail's progress
@@ -79,6 +96,9 @@ public class TrailMenuView : MonoBehaviour
     {
         if (rowTemplate != null)
             rowTemplate.gameObject.SetActive(false);
+
+        if (ownedTemplate != null)
+            ownedTemplate.gameObject.SetActive(false);
 
         TurnChevron(0f);
 
@@ -152,6 +172,15 @@ public class TrailMenuView : MonoBehaviour
                 if (_open && isActiveAndEnabled)
                     Redraw();
             }));
+
+        // The trails this account made. Asked every time the menu opens: one
+        // may have been made on the website a minute ago.
+        if (TrailService.CanOwn && ownedParent != null)
+            service.StartCoroutine(service.LoadOwned(() =>
+            {
+                if (_open && isActiveAndEnabled)
+                    Redraw();
+            }));
     }
 
     public void Close()
@@ -211,6 +240,17 @@ public class TrailMenuView : MonoBehaviour
             DoorFlow.Instance.OpenPreview(worldId);
     }
 
+    /// <summary>
+    /// The teacher panel for an owned trail. The menu folds first, so Back from
+    /// the panel lands on the map rather than on a menu left hanging.
+    /// </summary>
+    void OpenTeacher(string worldId, string trailName)
+    {
+        Haptics.Tick();
+        CloseNow();
+        TeacherPanelView.Open(worldId, trailName);
+    }
+
     // ------------------------------------------------------------------ rows
 
     void Redraw()
@@ -219,9 +259,10 @@ public class TrailMenuView : MonoBehaviour
         UserLocationService location = UserLocationService.Instance;
         bool located = location != null && location.HasValidPose;
 
-        Draw(service != null ? service.Mine : null,
-             service != null ? service.SelectedId : null,
-             located && service != null ? service.Near : null);
+        DrawWithOwned(service != null ? service.OwnedNow() : null,
+                      service != null ? service.Mine : null,
+                      service != null ? service.SelectedId : null,
+                      located && service != null ? service.Near : null);
     }
 
     /// <summary>
@@ -231,21 +272,43 @@ public class TrailMenuView : MonoBehaviour
     public void Draw(List<TrailService.Trail> mine, string selectedId, List<TrailService.Listed> near,
                      string progress = null)
     {
+        DrawWithOwned(null, mine, selectedId, near, progress);
+    }
+
+    /// <summary>
+    /// As Draw, with "Моите маршрути" on top: the trails this account owns. An
+    /// owned trail is not listed again under Твоите. Null or empty hides it.
+    /// </summary>
+    public void DrawWithOwned(List<TrailService.Owned> owned, List<TrailService.Trail> mine,
+                              string selectedId, List<TrailService.Listed> near,
+                              string progress = null)
+    {
         _progress = progress;
 
         if (rowsParent == null || rowTemplate == null)
             return;
 
-        List<TrailService.Trail> shown = Pick(mine, selectedId);
+        List<TrailService.Owned> ownedShown = PickOwned(owned, selectedId);
+        bool anyOwned = ownedShown.Count > 0 && ownedParent != null && ownedTemplate != null;
+
+        if (ownedParent != null && ownedTemplate != null)
+        {
+            Fill(_ownedRows, ownedParent, anyOwned ? ownedShown.Count : 0, ownedTemplate);
+            for (int i = 0; anyOwned && i < ownedShown.Count; i++)
+                DrawOwned(_ownedRows[i], ownedShown[i], ownedShown[i].id == selectedId, i == 0);
+        }
+
+        List<TrailService.Trail> shown = Pick(anyOwned ? WithoutOwned(mine, ownedShown) : mine,
+                                              selectedId);
         int nearCount = near == null ? 0 : Mathf.Min(near.Count, maxNear);
 
-        Fill(_rows, rowsParent, shown.Count);
+        Fill(_rows, rowsParent, shown.Count, rowTemplate);
         for (int i = 0; i < shown.Count; i++)
             DrawMine(_rows[i], shown[i], shown[i].id == selectedId, i == 0);
 
         if (nearParent != null)
         {
-            Fill(_nearRows, nearParent, nearCount);
+            Fill(_nearRows, nearParent, nearCount, rowTemplate);
             for (int i = 0; i < nearCount; i++)
                 DrawNear(_nearRows[i], near[i], i == 0);
         }
@@ -259,7 +322,63 @@ public class TrailMenuView : MonoBehaviour
         if (nearParent != null)
             Set(nearParent.gameObject, anyNear);
         Set(nearDivider, anyMine && anyNear);
-        Set(actionsDivider, anyMine || anyNear);
+        Set(actionsDivider, anyOwned || anyMine || anyNear);
+
+        Set(ownedLabel, anyOwned);
+        if (ownedParent != null)
+            Set(ownedParent.gameObject, anyOwned);
+        Set(ownedDivider, anyOwned && (anyMine || anyNear));
+    }
+
+    /// <summary>Up to maxOwned, and always the open one if it is owned.</summary>
+    List<TrailService.Owned> PickOwned(List<TrailService.Owned> owned, string selectedId)
+    {
+        List<TrailService.Owned> shown = new List<TrailService.Owned>();
+
+        if (owned == null)
+            return shown;
+
+        for (int i = 0; i < owned.Count && shown.Count < maxOwned; i++)
+            shown.Add(owned[i]);
+
+        bool hasCurrent = false;
+        for (int i = 0; i < shown.Count; i++)
+            hasCurrent |= shown[i].id == selectedId;
+
+        if (!hasCurrent && shown.Count > 0)
+        {
+            for (int i = maxOwned; i < owned.Count; i++)
+            {
+                if (owned[i].id == selectedId)
+                {
+                    shown[shown.Count - 1] = owned[i];
+                    break;
+                }
+            }
+        }
+
+        return shown;
+    }
+
+    /// <summary>The joined trails minus the owned ones already listed above them.</summary>
+    static List<TrailService.Trail> WithoutOwned(List<TrailService.Trail> mine,
+                                                 List<TrailService.Owned> owned)
+    {
+        List<TrailService.Trail> rest = new List<TrailService.Trail>();
+        if (mine == null)
+            return rest;
+
+        for (int i = 0; i < mine.Count; i++)
+        {
+            bool listed = false;
+            for (int j = 0; j < owned.Count && !listed; j++)
+                listed = owned[j].id == mine[i].id;
+
+            if (!listed)
+                rest.Add(mine[i]);
+        }
+
+        return rest;
     }
 
     /// <summary>Up to maxRows of the joined trails, and always the open one.</summary>
@@ -292,11 +411,11 @@ public class TrailMenuView : MonoBehaviour
         return shown;
     }
 
-    void Fill(List<RectTransform> rows, RectTransform parent, int count)
+    void Fill(List<RectTransform> rows, RectTransform parent, int count, RectTransform template)
     {
         while (rows.Count < count)
         {
-            RectTransform row = Instantiate(rowTemplate, parent);
+            RectTransform row = Instantiate(template, parent);
             row.name = "Trail";
             rows.Add(row);
         }
@@ -328,6 +447,47 @@ public class TrailMenuView : MonoBehaviour
             button.onClick.RemoveAllListeners();
             string id = trail.id;
             button.onClick.AddListener(() => Choose(id));
+        }
+    }
+
+    /// <summary>
+    /// An owned trail: tapping the row opens it, as under Твоите; "Учителски
+    /// пулт" under it opens the teacher panel, and only when there are teams to
+    /// run (a scored mode, or teams already made).
+    /// </summary>
+    void DrawOwned(RectTransform item, TrailService.Owned trail, bool current, bool first)
+    {
+        Transform rowT = item.Find("Row");
+        RectTransform row = rowT != null ? (RectTransform)rowT : item;
+
+        DrawRow(row, trail.name, trail.category,
+                TrailService.CategoryAndCity(trail.category, trail.city), current, null, first);
+
+        Button button = row.GetComponent<Button>();
+        if (button != null)
+        {
+            button.onClick.RemoveAllListeners();
+            string id = trail.id;
+            button.onClick.AddListener(() => Choose(id));
+        }
+
+        Transform teacherT = item.Find("Teacher");
+        if (teacherT == null)
+            return;
+
+        bool teams = trail.HasTeams;
+        Set(teacherT.gameObject, teams);
+
+        Button teacher = teacherT.GetComponent<Button>();
+        if (teacher != null)
+        {
+            teacher.onClick.RemoveAllListeners();
+            if (teams)
+            {
+                string id = trail.id;
+                string title = trail.name;
+                teacher.onClick.AddListener(() => OpenTeacher(id, title));
+            }
         }
     }
 
