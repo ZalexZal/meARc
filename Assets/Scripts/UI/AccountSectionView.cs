@@ -4,11 +4,14 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The account card in Settings: sign up, sign in, sign out.
+/// Signing up, signing in and signing out.
 ///
-/// Two states in one card, because they are the same subject and a reader
-/// arriving here is asking one question - "is my walking saved anywhere?" - and
-/// the answer differs only in which half is on screen.
+/// Sign-in and sign-up are two screens, not one form with two buttons. The
+/// merged form asked somebody who already had an account to scroll past a name,
+/// a role and four lines of work to find "Sign in", and asked somebody new to
+/// guess which of two buttons made an account. Each screen now asks only what
+/// it needs, and links to the other ("No account? Sign up" / "Have an account?
+/// Sign in"). Which one opens is the caller's choice: <see cref="OpenDoor"/>.
 ///
 /// Signing up converts the anonymous user in place rather than making a second
 /// one. That is <see cref="SupabaseAuth.SignUp"/>'s job; what this class owes it
@@ -17,8 +20,19 @@ using UnityEngine.UI;
 /// </summary>
 public class AccountSectionView : MonoBehaviour
 {
+    /// <summary>The two screens somebody with no account can be shown.</summary>
+    public enum AuthScreen { SignIn, SignUp }
+
     [Header("Anonymous")]
+    [Tooltip("Everything shown to somebody with no account: both screens.")]
     public GameObject anonymousGroup;
+
+    [Tooltip("The screen this view opens on when nobody asked for one.")]
+    public AuthScreen startScreen = AuthScreen.SignUp;
+
+    [Header("Sign up")]
+    [Tooltip("The whole sign-up screen: the stage and the form under it.")]
+    public GameObject signUpGroup;
 
     [Tooltip("What the leaderboard calls this person. Without it ensure_team " +
              "falls back to \"Player\" and four characters of their id, and a " +
@@ -28,11 +42,11 @@ public class AccountSectionView : MonoBehaviour
     public TMP_InputField emailField;
     public TMP_InputField passwordField;
 
-    [Tooltip("The role's sky, chip and headline, over the fields. Follows the answer.")]
-    public RoleBanner roleBanner;
+    [Tooltip("The A5 stage over the form: sky, scene and headline. Follows the answer.")]
+    public RoleStage stage;
 
     [Tooltip("Creator or viewer. Required to make an account, with nothing chosen " +
-             "to begin with; sign-in ignores it.")]
+             "to begin with.")]
     public RoleChoiceView roleChoice;
 
     [Tooltip("\"Choose how you will use AR Trail.\", right under the two cards.")]
@@ -47,7 +61,43 @@ public class AccountSectionView : MonoBehaviour
     public TextMeshProUGUI workError;
 
     public Button signUpButton;
+
+    [Tooltip("\"Send the link again\". On screen only while a confirmation link is out.")]
+    public Button resendButton;
+
+    [Tooltip("\"Have an account? Sign in\": over to the sign-in screen.")]
+    public Button toSignInButton;
+
+    [Tooltip("Says what went wrong on the sign-up screen, or that something is " +
+             "happening. Also the signed-in half's line. Empty when idle.")]
+    public TextMeshProUGUI statusLabel;
+
+    [Tooltip("The sign-up screen's way out (\"Not now\" / \"Continue as a guest\"). " +
+             "Its words are written by DoorFlow; the sign-in screen's copies them.")]
+    public TextMeshProUGUI laterLabel;
+
+    [Header("Sign in")]
+    [Tooltip("The whole sign-in screen.")]
+    public GameObject signInGroup;
+
+    public TMP_InputField signInEmailField;
+    public TMP_InputField signInPasswordField;
     public Button signInButton;
+
+    [Tooltip("\"No account? Sign up\": over to the sign-up screen.")]
+    public Button toSignUpButton;
+
+    [Tooltip("The sign-in screen's own status line. Falls back to statusLabel.")]
+    public TextMeshProUGUI signInStatusLabel;
+
+    [Tooltip("The sign-in screen's way out, worded as laterLabel is.")]
+    public TextMeshProUGUI signInLaterLabel;
+
+    [Header("No door")]
+    [Tooltip("Where there is no room for either screen (the Profile page), two " +
+             "buttons that open the account door on one of them.")]
+    public Button openSignUpButton;
+    public Button openSignInButton;
 
     [Header("Signed in")]
     public GameObject signedInGroup;
@@ -56,40 +106,57 @@ public class AccountSectionView : MonoBehaviour
     public Button saveNameButton;
     public Button signOutButton;
 
-    [Header("Both")]
-    [Tooltip("Says what went wrong, or that something is happening. Empty when idle.")]
-    public TextMeshProUGUI statusLabel;
+    /// <summary>
+    /// The screen the next account view to come on screen opens on, then
+    /// forgotten. Null opens on that view's <see cref="startScreen"/>.
+    /// </summary>
+    public static AuthScreen? Next;
+
+    static event System.Action NextRequested;
+
+    /// <summary>
+    /// Opens the account door on one of its two screens: "Create a profile"
+    /// opens sign-up, "Sign in" opens sign-in. Safe with no door in the scene.
+    /// </summary>
+    public static void OpenDoor(AuthScreen screen)
+    {
+        Next = screen;
+
+        // A view already on screen takes it now; one that is not takes it in
+        // OnEnable, which the door's opening is about to cause.
+        if (NextRequested != null)
+            NextRequested();
+
+        if (DoorFlow.Instance != null)
+            DoorFlow.Instance.OpenAccount();
+    }
+
+    public static void OpenSignIn() { OpenDoor(AuthScreen.SignIn); }
+    public static void OpenSignUp() { OpenDoor(AuthScreen.SignUp); }
+
+    AuthScreen _screen = AuthScreen.SignUp;
+
+    /// <summary>Which of the two screens is up (or would be, with no account).</summary>
+    public AuthScreen Current => _screen;
+
 
     bool _busy;
 
     void OnEnable()
     {
-        if (signUpButton != null)
-        {
-            signUpButton.onClick.RemoveAllListeners();
-            signUpButton.onClick.AddListener(SignUp);
-        }
-
-        if (signInButton != null)
-        {
-            signInButton.onClick.RemoveAllListeners();
-            signInButton.onClick.AddListener(SignIn);
-        }
-
-        if (signOutButton != null)
-        {
-            signOutButton.onClick.RemoveAllListeners();
-            signOutButton.onClick.AddListener(SignOut);
-        }
-
-        if (saveNameButton != null)
-        {
-            saveNameButton.onClick.RemoveAllListeners();
-            saveNameButton.onClick.AddListener(SaveName);
-        }
+        Listen(signUpButton, SignUp);
+        Listen(signInButton, SignIn);
+        Listen(resendButton, Resend);
+        Listen(toSignInButton, ShowSignIn);
+        Listen(toSignUpButton, ShowSignUp);
+        Listen(openSignUpButton, OpenSignUp);
+        Listen(openSignInButton, OpenSignIn);
+        Listen(signOutButton, SignOut);
+        Listen(saveNameButton, SaveName);
 
         SupabaseAuth.OnSessionChanged += Refresh;
         AppStrings.OnLanguageChanged += Refresh;
+        NextRequested += TakeNext;
 
         if (workChoice != null)
             workChoice.OnChosen += WorkChosen;
@@ -97,10 +164,19 @@ public class AccountSectionView : MonoBehaviour
         if (roleChoice != null)
             roleChoice.OnChosen += RoleChosen;
 
+        // The screen somebody asked for; else the sign-up screen while a
+        // confirmation link is out, because "I've opened the link" lives there;
+        // else this view's own default.
+        if (HasScreens)
+        {
+            _screen = Next ?? (Pending ? AuthScreen.SignUp : startScreen);
+            Next = null;
+        }
+
         ShowBanner();
 
-        // On the way in as well as on the event: this card lives on the Settings
-        // panel, which is switched off for most of the app's life, so it is
+        // On the way in as well as on the event: the account views live on
+        // panels that are switched off for most of the app's life, so they are
         // reliably absent when the session actually changes.
         Refresh();
     }
@@ -109,6 +185,7 @@ public class AccountSectionView : MonoBehaviour
     {
         SupabaseAuth.OnSessionChanged -= Refresh;
         AppStrings.OnLanguageChanged -= Refresh;
+        NextRequested -= TakeNext;
 
         if (workChoice != null)
             workChoice.OnChosen -= WorkChosen;
@@ -116,6 +193,83 @@ public class AccountSectionView : MonoBehaviour
         if (roleChoice != null)
             roleChoice.OnChosen -= RoleChosen;
     }
+
+    static void Listen(Button button, UnityEngine.Events.UnityAction call)
+    {
+        if (button == null)
+            return;
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(call);
+    }
+
+    bool HasScreens => signInGroup != null || signUpGroup != null;
+
+    static bool Named
+    {
+        get
+        {
+            SupabaseAuth auth = SupabaseAuth.Instance;
+            return auth != null && auth.IsSignedIn && !auth.IsAnonymous;
+        }
+    }
+
+    // ------------------------------------------------------------ the screens
+
+    public void ShowSignIn()
+    {
+        Show(AuthScreen.SignIn);
+    }
+
+    public void ShowSignUp()
+    {
+        Show(AuthScreen.SignUp);
+    }
+
+    /// <summary>Puts one of the two screens up, carrying the email across.</summary>
+    public void Show(AuthScreen screen)
+    {
+        if (!HasScreens)
+            return;
+
+        if (screen != _screen)
+            CarryEmail(screen);
+
+        _screen = screen;
+
+        // A message about the other screen is not about this one.
+        if (!_busy)
+            Say(null);
+
+        Refresh();
+    }
+
+    void TakeNext()
+    {
+        if (!Next.HasValue || !HasScreens)
+            return;
+
+        AuthScreen screen = Next.Value;
+        Next = null;
+        Show(screen);
+    }
+
+    /// <summary>
+    /// The email typed on one screen, on the other. Somebody told "there is
+    /// already an account with that email" taps over to sign in, and should not
+    /// have to type it twice.
+    /// </summary>
+    void CarryEmail(AuthScreen to)
+    {
+        TMP_InputField from = to == AuthScreen.SignIn ? emailField : signInEmailField;
+        TMP_InputField into = to == AuthScreen.SignIn ? signInEmailField : emailField;
+
+        if (from != null && into != null && from != into &&
+            string.IsNullOrWhiteSpace(into.text) && !string.IsNullOrWhiteSpace(from.text))
+            into.text = from.text.Trim();
+    }
+
+    // ------------------------------------------------------- role and work
 
     void WorkChosen()
     {
@@ -132,9 +286,9 @@ public class AccountSectionView : MonoBehaviour
 
     void ShowBanner()
     {
-        if (roleBanner != null)
-            roleBanner.Show(roleChoice != null ? roleChoice.Selected : null,
-                            workChoice != null ? workChoice.Selected : null);
+        if (stage != null)
+            stage.Show(roleChoice != null ? roleChoice.Selected : null,
+                       workChoice != null ? workChoice.Selected : null);
     }
 
     void HideWorkError()
@@ -160,19 +314,26 @@ public class AccountSectionView : MonoBehaviour
         }
         else
         {
-            Say(key);
-            statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+            SayPoor(key);
         }
     }
 
-    /// <summary>Shows whichever half matches the session.</summary>
+    // ------------------------------------------------------------- refresh
+
+    /// <summary>Shows whichever half matches the session, and the screen asked for.</summary>
     public void Refresh()
     {
         SupabaseAuth auth = SupabaseAuth.Instance;
-        bool named = auth != null && auth.IsSignedIn && !auth.IsAnonymous;
+        bool named = Named;
 
         if (anonymousGroup != null)
             anonymousGroup.SetActive(!named);
+
+        if (signInGroup != null)
+            signInGroup.SetActive(!named && _screen == AuthScreen.SignIn);
+
+        if (signUpGroup != null)
+            signUpGroup.SetActive(!named && _screen == AuthScreen.SignUp);
 
         if (signedInGroup != null)
             signedInGroup.SetActive(named);
@@ -193,14 +354,19 @@ public class AccountSectionView : MonoBehaviour
                 : string.Empty;
         }
 
+        // DoorFlow words one way out ("Not now" or "Continue as a guest"); the
+        // sign-in screen's says the same.
+        if (signInLaterLabel != null && laterLabel != null)
+            signInLaterLabel.text = laterLabel.text;
+
         SetBusy(_busy);
         DrawPending();
     }
 
     /// <summary>
-    /// Waiting on a confirmation link. The two buttons change job rather than
-    /// the screen growing new ones: Create becomes "I've opened the link", and
-    /// Sign in becomes "Send it again". Both go back once the account is real.
+    /// Waiting on a confirmation link. Create becomes "I've opened the link",
+    /// and "Send the link again" comes on screen under it. Both go back once
+    /// the account is real.
     /// </summary>
     bool Pending
     {
@@ -227,9 +393,11 @@ public class AccountSectionView : MonoBehaviour
         bool pending = Pending;
 
         Relabel(signUpButton, pending ? "account.confirmedIt" : "account.create");
-        Relabel(signInButton, pending ? "account.resend" : "account.signIn");
 
-        if (pending && !_busy && statusLabel != null)
+        if (resendButton != null)
+            resendButton.gameObject.SetActive(pending);
+
+        if (pending && !_busy && statusLabel != null && _screen == AuthScreen.SignUp)
         {
             statusLabel.text = string.Format(AppStrings.Get("account.checkEmail"),
                                              SupabaseAuth.Instance.PendingEmail);
@@ -255,6 +423,8 @@ public class AccountSectionView : MonoBehaviour
         }));
     }
 
+    // ------------------------------------------------------------- actions
+
     void SignUp()
     {
         if (_busy)
@@ -278,8 +448,7 @@ public class AccountSectionView : MonoBehaviour
         // let people make a password the website would then call too short.
         if (password.Length < 8)
         {
-            Say("account.shortPassword");
-            statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+            SayPoor("account.shortPassword");
             return;
         }
 
@@ -313,15 +482,26 @@ public class AccountSectionView : MonoBehaviour
 
         SetBusy(true);
         Say("account.working");
-        // On the auth service, not on this card.
+        // On the auth service, not on this view.
         //
         // Sign-up refreshes the session half way through, and the account screen
         // shown after the tutorial closes itself the moment the session changes.
-        // Closing it switched this card off, and Unity stops every coroutine on
+        // Closing it switched this view off, and Unity stops every coroutine on
         // an object that is switched off - so the last step, writing the name to
         // the profile, never ran. The leaderboard read the profile and called the
         // new walker "Player". The auth service is never switched off.
         auth.StartCoroutine(auth.SignUp(email, password, Value(nameField), role, work, Done));
+    }
+
+    /// <summary>"Send the link again", while one is out.</summary>
+    void Resend()
+    {
+        if (_busy || !Pending)
+            return;
+
+        SetBusy(true);
+        Say("account.working");
+        SupabaseAuth.Instance.StartCoroutine(SupabaseAuth.Instance.ResendConfirmation(Done));
     }
 
     void SignIn()
@@ -329,16 +509,10 @@ public class AccountSectionView : MonoBehaviour
         if (_busy)
             return;
 
-        if (Pending)
-        {
-            SetBusy(true);
-            Say("account.working");
-            SupabaseAuth.Instance.StartCoroutine(SupabaseAuth.Instance.ResendConfirmation(Done));
-            return;
-        }
-
-        string email = Value(emailField);
-        string password = Value(passwordField);
+        // The sign-in screen's own boxes; a view built without them (an older
+        // scene) signs in with the shared ones.
+        string email = Value(signInEmailField != null ? signInEmailField : emailField);
+        string password = Value(signInPasswordField != null ? signInPasswordField : passwordField);
 
         if (!Complete(email, password))
             return;
@@ -387,7 +561,7 @@ public class AccountSectionView : MonoBehaviour
     }
 
     /// <summary>
-    /// The reply from any of the three.
+    /// The reply from any of them.
     ///
     /// A message means it failed and the message is GoTrue's own words wherever
     /// it wrote any - "Password should be at least 6 characters" is something a
@@ -402,12 +576,13 @@ public class AccountSectionView : MonoBehaviour
         if (error == "account.checkEmail" || error == "account.resent" || error == "account.notYet")
         {
             Refresh();
-            if (error != "account.checkEmail" && statusLabel != null)
+            TextMeshProUGUI status = Status;
+            if (error != "account.checkEmail" && status != null)
             {
-                statusLabel.text = AppStrings.Get(error);
-                statusLabel.color = ThemeManager.Get(error == "account.resent"
+                status.text = AppStrings.Get(error);
+                status.color = ThemeManager.Get(error == "account.resent"
                     ? ThemeRole.StatusGood : ThemeRole.StatusFair);
-                statusLabel.gameObject.SetActive(true);
+                status.gameObject.SetActive(true);
             }
             return;
         }
@@ -431,10 +606,13 @@ public class AccountSectionView : MonoBehaviour
                    : error.IndexOf("rate limit", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "account.slowDown"
                    : null;
 
-        statusLabel.text = key != null ? AppStrings.Get(key) : error;
+        TextMeshProUGUI line = Status;
+        if (line == null)
+            return;
 
-        statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
-        statusLabel.gameObject.SetActive(true);
+        line.text = key != null ? AppStrings.Get(key) : error;
+        line.color = ThemeManager.Get(ThemeRole.StatusPoor);
+        line.gameObject.SetActive(true);
     }
 
     bool Complete(string email, string password)
@@ -442,8 +620,7 @@ public class AccountSectionView : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
             return true;
 
-        Say("account.needBoth");
-        statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+        SayPoor("account.needBoth");
         return false;
     }
 
@@ -457,6 +634,9 @@ public class AccountSectionView : MonoBehaviour
         if (signInButton != null)
             signInButton.interactable = !busy;
 
+        if (resendButton != null)
+            resendButton.interactable = !busy;
+
         if (signOutButton != null)
             signOutButton.interactable = !busy;
 
@@ -464,21 +644,53 @@ public class AccountSectionView : MonoBehaviour
             saveNameButton.interactable = !busy;
     }
 
+    /// <summary>The status line of the screen that is up.</summary>
+    TextMeshProUGUI Status
+    {
+        get
+        {
+            if (_screen == AuthScreen.SignIn && signInStatusLabel != null && !Named)
+                return signInStatusLabel;
+
+            return statusLabel;
+        }
+    }
+
     void Say(string key)
     {
-        if (statusLabel == null)
-            return;
-
         if (string.IsNullOrEmpty(key))
         {
-            statusLabel.text = string.Empty;
-            statusLabel.gameObject.SetActive(false);
+            // Both, so nothing said on one screen is waiting on the other.
+            Hide(statusLabel);
+            Hide(signInStatusLabel);
             return;
         }
 
-        statusLabel.text = AppStrings.Get(key);
-        statusLabel.color = ThemeManager.Get(ThemeRole.TextMuted);
-        statusLabel.gameObject.SetActive(true);
+        TextMeshProUGUI line = Status;
+        if (line == null)
+            return;
+
+        line.text = AppStrings.Get(key);
+        line.color = ThemeManager.Get(ThemeRole.TextMuted);
+        line.gameObject.SetActive(true);
+    }
+
+    void SayPoor(string key)
+    {
+        Say(key);
+
+        TextMeshProUGUI line = Status;
+        if (line != null)
+            line.color = ThemeManager.Get(ThemeRole.StatusPoor);
+    }
+
+    static void Hide(TextMeshProUGUI line)
+    {
+        if (line == null)
+            return;
+
+        line.text = string.Empty;
+        line.gameObject.SetActive(false);
     }
 
     void Clear()
@@ -488,6 +700,9 @@ public class AccountSectionView : MonoBehaviour
 
         if (nameField != null)
             nameField.text = string.Empty;
+
+        if (signInEmailField != null)
+            signInEmailField.text = string.Empty;
 
         if (workChoice != null)
             workChoice.Select(null);
@@ -503,6 +718,9 @@ public class AccountSectionView : MonoBehaviour
         // a phone that is about to be handed to somebody is the reason.
         if (passwordField != null)
             passwordField.text = string.Empty;
+
+        if (signInPasswordField != null)
+            signInPasswordField.text = string.Empty;
     }
 
     static string Value(TMP_InputField field)
