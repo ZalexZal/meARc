@@ -21,6 +21,35 @@ public class WorkChoiceView : MonoBehaviour
     /// <summary>The chosen key, or null.</summary>
     public string Selected { get; private set; }
 
+    // A job is shown by its field first (the bold line: Education, Tourism,
+    // Real estate, Other) with the role word under it (the small line: Teacher,
+    // Tour guide, Estate broker, Every option), as on the website. The stored
+    // key never changes.
+
+    /// <summary>The AppStrings key of the bold line for a job key.</summary>
+    public static string HeaderKey(string key)
+    {
+        return "work.field." + key;
+    }
+
+    /// <summary>The AppStrings key of the small line for a job key.</summary>
+    public static string SubtextKey(string key)
+    {
+        return "work.role." + key;
+    }
+
+    /// <summary>The bold line for a job key, in the reader's language ("Образование").</summary>
+    public static string Header(string key)
+    {
+        return LineOfWork.IsValid(key) ? AppStrings.Get(HeaderKey(key)) : "—";
+    }
+
+    /// <summary>The small line under it for a job key ("Учител").</summary>
+    public static string Subtext(string key)
+    {
+        return LineOfWork.IsValid(key) ? AppStrings.Get(SubtextKey(key)) : "—";
+    }
+
     /// <summary>Raised when the reader picks one.</summary>
     public event System.Action OnChosen;
 
