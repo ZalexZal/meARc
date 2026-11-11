@@ -12,7 +12,12 @@ public class BearingArrow : MonoBehaviour
 {
     public enum Frame
     {
-        /// <summary>The map is drawn north up, so a true bearing is the angle.</summary>
+        /// <summary>
+        /// On the map's cards and strips. Turns with the phone like the camera's
+        /// arrow when the compass works, so "that way" is that way in the hand;
+        /// without a compass it falls back to the true bearing on the north-up
+        /// map rather than disappearing. (Name kept: scenes store the value.)
+        /// </summary>
         NorthUp,
 
         /// <summary>Over the camera, where the angle is relative to where the phone points.</summary>
@@ -48,6 +53,10 @@ public class BearingArrow : MonoBehaviour
     bool _lastArrivedOn;
     float _timer;
 
+    // The angle is recomputed every frame while the compass is in play - the
+    // phone turns faster than four times a second - but only from cached state.
+    bool _arrowLive;
+
     public void SetTarget(BuildingData building)
     {
         if (_target == building)
@@ -68,14 +77,20 @@ public class BearingArrow : MonoBehaviour
 
     void Update()
     {
-        // Four times a second. A walking reader turns far slower than sixty hertz,
-        // and the arrow is redrawn on a shared canvas.
+        // Distance and visibility four times a second: a walking reader moves far
+        // slower than sixty hertz. The angle follows the compass every frame,
+        // because the hand turns the phone much faster than the feet move it;
+        // Turn only writes when the change is visible.
         _timer += Time.unscaledDeltaTime;
-        if (_timer < 0.25f)
+        if (_timer >= 0.25f)
+        {
+            _timer = 0f;
+            Refresh();
             return;
+        }
 
-        _timer = 0f;
-        Refresh();
+        if (_arrowLive && locationService != null && locationService.HasHeading)
+            Turn();
     }
 
     void Refresh()
@@ -109,14 +124,39 @@ public class BearingArrow : MonoBehaviour
             arrivedIcon.SetActive(arrived);
         }
 
-        if (!known || arrived || arrow == null)
+        _arrowLive = arrowOn && arrow != null;
+        if (!_arrowLive)
             return;
 
+        Turn();
+
+        if (tinted == null)
+            return;
+
+        Color colour = ThemeManager.Get(ThemeRole.AccentText);
+        if (colour != _lastColour)
+        {
+            _lastColour = colour;
+            tinted.color = colour;
+        }
+    }
+
+    /// <summary>
+    /// Bearing to the target minus where the phone faces. DeviceHeading is
+    /// already smoothed in UserLocationService, so the arrow does not shiver.
+    ///
+    /// The map's arrows used to skip the heading entirely (Frame.NorthUp drew the
+    /// true bearing), so on the Map tab they only moved as the reader walked and
+    /// never as the phone turned - while the camera's arrows, built DeviceRelative,
+    /// did. Both now read the same compass.
+    /// </summary>
+    void Turn()
+    {
         double bearing = GeoMath.BearingDegrees(
             locationService.Latitude, locationService.Longitude,
             _target.latitude, _target.longitude);
 
-        if (frame == Frame.DeviceRelative)
+        if (locationService.HasHeading)
             bearing -= locationService.DeviceHeading;
 
         // Negated because a compass bearing runs clockwise and Unity's Z rotation
@@ -129,16 +169,6 @@ public class BearingArrow : MonoBehaviour
         {
             _lastAngle = angle;
             arrow.localRotation = Quaternion.Euler(0f, 0f, angle);
-        }
-
-        if (tinted == null)
-            return;
-
-        Color colour = ThemeManager.Get(ThemeRole.AccentText);
-        if (colour != _lastColour)
-        {
-            _lastColour = colour;
-            tinted.color = colour;
         }
     }
 }
