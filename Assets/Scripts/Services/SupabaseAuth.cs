@@ -185,7 +185,7 @@ public class SupabaseAuth : MonoBehaviour
     /// would go on believing it.
     /// </summary>
     public IEnumerator SignUp(string email, string password, string displayName,
-                             string work, Action<string> done)
+                             string role, string work, Action<string> done)
     {
         SupabaseConfig config = SupabaseConfig.Instance;
 
@@ -197,7 +197,14 @@ public class SupabaseAuth : MonoBehaviour
 
         // Required, and checked before anything goes out: the form says so too,
         // but an account made without it would be asked again at every launch.
-        if (!LineOfWork.IsValid(work))
+        if (!AccountRole.IsValid(role))
+        {
+            Fail(done, "err.role");
+            yield break;
+        }
+
+        // Only a creator has a line of work; a viewer's is ignored.
+        if (role == AccountRole.Creator && !LineOfWork.IsValid(work))
         {
             Fail(done, "err.work");
             yield break;
@@ -211,12 +218,12 @@ public class SupabaseAuth : MonoBehaviour
         // the question would pop up over the sign-up that just answered it.
         _workFor = UserId;
 
-        // The name and the line of work go into user_metadata as well as into
+        // The name, the role and the line of work go into user_metadata as well as into
         // profiles. GoTrue keeps the metadata, but the trigger that copies it
         // into profiles runs on INSERT only, and this is an update of the guest
         // row - so profiles is written separately below. Keeping both means a
         // rebuilt profile still knows what to call somebody and what they do.
-        string body = SignUpBody(email, password, displayName, work);
+        string body = SignUpBody(email, password, displayName, role, work);
 
         bool held = false;
 
@@ -258,7 +265,7 @@ public class SupabaseAuth : MonoBehaviour
 
         // Not allowed to fail the sign-up: the account exists either way. If it
         // does not land, the question is asked once at the next launch instead.
-        yield return SetWork(work, null);
+        yield return SetRole(role, work, null);
 
         _working = false;
 
@@ -395,12 +402,19 @@ public class SupabaseAuth : MonoBehaviour
     /// </summary>
     public string Work { get; private set; }
 
-    /// <summary>Raised when the line of work has been read or changed.</summary>
+    /// <summary>
+    /// "creator" or "viewer" as profiles.role holds it: null until it has been
+    /// read, and null for an account that has never answered.
+    /// </summary>
+    public string Role { get; private set; }
+
+    /// <summary>Raised when the role or the line of work has been read or changed.</summary>
     public static event Action OnWorkChanged;
 
     /// <summary>
     /// Raised once per account per launch, when the profile was read and says
-    /// this account has never answered. Not raised when the read failed.
+    /// this account has never chosen a role (role is null, whatever work says).
+    /// Not raised when the read failed.
     /// </summary>
     public static event Action OnWorkMissing;
 
@@ -418,6 +432,7 @@ public class SupabaseAuth : MonoBehaviour
 
         _workFor = UserId;
         Work = null;
+        Role = null;
 
         if (OnWorkChanged != null)
             OnWorkChanged();
@@ -432,7 +447,7 @@ public class SupabaseAuth : MonoBehaviour
         if (config == null)
             yield break;
 
-        string url = config.Endpoint("/rest/v1/profiles?id=eq." + uid + "&select=work");
+        string url = config.Endpoint("/rest/v1/profiles?id=eq." + uid + "&select=role,work");
         string reply = null;
         bool ok;
         bool retry;
@@ -464,16 +479,18 @@ public class SupabaseAuth : MonoBehaviour
         if (!ok || uid != UserId || IsAnonymous)
             yield break;
 
+        string role;
         string work;
-        if (!LineOfWork.TryRead(reply, out work))
+        if (!AccountRole.TryRead(reply, out role, out work))
             yield break;
 
+        Role = role;
         Work = work;
 
         if (OnWorkChanged != null)
             OnWorkChanged();
 
-        if (work == null && OnWorkMissing != null)
+        if (role == null && OnWorkMissing != null)
             OnWorkMissing();
     }
 
@@ -521,22 +538,103 @@ public class SupabaseAuth : MonoBehaviour
     }
 
     /// <summary>
-    /// The body of the sign-up PUT. The line of work is required and has to be
-    /// one of the four: anything else is refused here rather than sent, so a
-    /// value can never carry extra JSON in with it.
+    /// Writes the role (and, for a creator, the line of work) onto the reader's
+    /// own profile row. A viewer sends no work; the column is left as it is.
     /// </summary>
-    public static string SignUpBody(string email, string password, string displayName, string work)
+    public IEnumerator SetRole(string role, string work, Action<string> done)
     {
-        if (!LineOfWork.IsValid(work))
+        SupabaseConfig config = SupabaseConfig.Instance;
+
+        if (!AccountRole.IsValid(role))
+        {
+            Fail(done, "err.role");
+            yield break;
+        }
+
+        if (role == AccountRole.Creator && !LineOfWork.IsValid(work))
+        {
+            Fail(done, "err.work");
+            yield break;
+        }
+
+        if (config == null || !IsSignedIn || string.IsNullOrEmpty(UserId))
+        {
+            Fail(done, "auth.noSession");
+            yield break;
+        }
+
+        string url = config.Endpoint("/rest/v1/profiles?id=eq." + UserId);
+
+        using (UnityWebRequest request = Patch(url, RolePatchBody(role, work)))
+        {
+            // The row back, not 204, for the same reason as SetWork.
+            request.SetRequestHeader("Prefer", "return=representation");
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success ||
+                !LineOfWork.PatchLanded(request.downloadHandler.text))
+            {
+                Fail(done, "work.saveFailed", request);
+                yield break;
+            }
+        }
+
+        Role = role;
+
+        if (role == AccountRole.Creator)
+            Work = work;
+
+        if (OnWorkChanged != null)
+            OnWorkChanged();
+
+        if (done != null)
+            done(null);
+    }
+
+    /// <summary>
+    /// The body of the sign-up PUT. The role is required, and a creator's line
+    /// of work with it: anything else is refused here rather than sent, so a
+    /// value can never carry extra JSON in with it. A viewer's work is left out.
+    /// </summary>
+    public static string SignUpBody(string email, string password, string displayName,
+                                    string role, string work)
+    {
+        if (!AccountRole.IsValid(role))
+            throw new ArgumentException("Not a role: " + role, "role");
+
+        bool creator = role == AccountRole.Creator;
+
+        if (creator && !LineOfWork.IsValid(work))
             throw new ArgumentException("Not a line of work: " + work, "work");
 
         string data = string.IsNullOrWhiteSpace(displayName)
             ? string.Empty
             : "\"display_name\":\"" + Escape(displayName.Trim()) + "\",";
 
+        string tail = "\"role\":\"" + role + "\"" +
+                      (creator ? ",\"work\":\"" + work + "\"" : string.Empty);
+
         return "{\"email\":\"" + Escape(email) + "\"," +
                "\"password\":\"" + Escape(password) + "\"," +
-               "\"data\":{" + data + "\"work\":\"" + work + "\"}}";
+               "\"data\":{" + data + tail + "}}";
+    }
+
+    /// <summary>
+    /// The body of PATCH profiles for the role: {"role":"viewer"}, or for a
+    /// creator the role and the line of work.
+    /// </summary>
+    public static string RolePatchBody(string role, string work)
+    {
+        if (!AccountRole.IsValid(role))
+            throw new ArgumentException("Not a role: " + role, "role");
+
+        if (role == AccountRole.Viewer)
+            return "{\"role\":\"viewer\"}";
+
+        if (!LineOfWork.IsValid(work))
+            throw new ArgumentException("Not a line of work: " + work, "work");
+
+        return "{\"role\":\"creator\",\"work\":\"" + work + "\"}";
     }
 
     /// <summary>The body of PATCH profiles for the line of work.</summary>

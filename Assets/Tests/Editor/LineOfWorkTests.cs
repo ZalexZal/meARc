@@ -29,33 +29,33 @@ public class LineOfWorkTests
     {
         Assert.AreEqual(
             "{\"email\":\"a@b.bg\",\"password\":\"secret123\"," +
-            "\"data\":{\"display_name\":\"Мария\",\"work\":\"guide\"}}",
-            SupabaseAuth.SignUpBody("a@b.bg", "secret123", "  Мария ", "guide"));
+            "\"data\":{\"display_name\":\"Мария\",\"role\":\"creator\",\"work\":\"guide\"}}",
+            SupabaseAuth.SignUpBody("a@b.bg", "secret123", "  Мария ", "creator", "guide"));
     }
 
     [Test]
     public void SignUpBody_WorkWithoutAName()
     {
         Assert.AreEqual(
-            "{\"email\":\"a@b.bg\",\"password\":\"secret123\",\"data\":{\"work\":\"broker\"}}",
-            SupabaseAuth.SignUpBody("a@b.bg", "secret123", "   ", "broker"));
+            "{\"email\":\"a@b.bg\",\"password\":\"secret123\",\"data\":{\"role\":\"creator\",\"work\":\"broker\"}}",
+            SupabaseAuth.SignUpBody("a@b.bg", "secret123", "   ", "creator", "broker"));
     }
 
     [Test]
     public void SignUpBody_EscapesEveryField()
     {
-        string body = SupabaseAuth.SignUpBody("x\"y@b.bg", "p\\a\"s\ns", "Ана \"Учителката\"\t", "teacher");
+        string body = SupabaseAuth.SignUpBody("x\"y@b.bg", "p\\a\"s\ns", "Ана \"Учителката\"\t", "creator", "teacher");
 
         Assert.AreEqual(
             "{\"email\":\"x\\\"y@b.bg\",\"password\":\"p\\\\a\\\"s\\ns\"," +
-            "\"data\":{\"display_name\":\"Ана \\\"Учителката\\\"\",\"work\":\"teacher\"}}",
+            "\"data\":{\"display_name\":\"Ана \\\"Учителката\\\"\",\"role\":\"creator\",\"work\":\"teacher\"}}",
             body);
     }
 
     [Test]
     public void SignUpBody_ControlCharactersCannotBreakTheJson()
     {
-        string body = SupabaseAuth.SignUpBody("a@b.bg", "line1\r\nline2\u0001", null, "other");
+        string body = SupabaseAuth.SignUpBody("a@b.bg", "line1\r\nline2\u0001", null, "creator", "other");
         StringAssert.Contains("line1\\r\\nline2\\u0001", body);
         StringAssert.DoesNotContain("\n", body);
     }
@@ -63,9 +63,9 @@ public class LineOfWorkTests
     [Test]
     public void SignUpBody_RefusesAnInvalidWork()
     {
-        Assert.Throws<ArgumentException>(() => SupabaseAuth.SignUpBody("a@b.bg", "secret123", "A", null));
-        Assert.Throws<ArgumentException>(() => SupabaseAuth.SignUpBody("a@b.bg", "secret123", "A", ""));
-        Assert.Throws<ArgumentException>(() => SupabaseAuth.SignUpBody("a@b.bg", "secret123", "A", "\",\"role\":\"admin"));
+        Assert.Throws<ArgumentException>(() => SupabaseAuth.SignUpBody("a@b.bg", "secret123", "A", "creator", null));
+        Assert.Throws<ArgumentException>(() => SupabaseAuth.SignUpBody("a@b.bg", "secret123", "A", "creator", ""));
+        Assert.Throws<ArgumentException>(() => SupabaseAuth.SignUpBody("a@b.bg", "secret123", "A", "creator", "\",\"role\":\"admin"));
     }
 
     [Test]
