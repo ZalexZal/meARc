@@ -28,8 +28,18 @@ public class AccountSectionView : MonoBehaviour
     public TMP_InputField emailField;
     public TMP_InputField passwordField;
 
-    [Tooltip("Broker, teacher, guide or other. Required to make an account, with " +
-             "nothing chosen to begin with; sign-in ignores it.")]
+    [Tooltip("The role's sky, chip and headline, over the fields. Follows the answer.")]
+    public RoleBanner roleBanner;
+
+    [Tooltip("Creator or viewer. Required to make an account, with nothing chosen " +
+             "to begin with; sign-in ignores it.")]
+    public RoleChoiceView roleChoice;
+
+    [Tooltip("\"Choose how you will use AR Trail.\", right under the two cards.")]
+    public TextMeshProUGUI roleError;
+
+    [Tooltip("Broker, teacher, guide or other. Required of a creator only, and on " +
+             "screen only once creator is chosen.")]
     public WorkChoiceView workChoice;
 
     [Tooltip("\"Choose your line of work.\", right under the choices, so it is " +
@@ -82,7 +92,12 @@ public class AccountSectionView : MonoBehaviour
         AppStrings.OnLanguageChanged += Refresh;
 
         if (workChoice != null)
-            workChoice.OnChosen += HideWorkError;
+            workChoice.OnChosen += WorkChosen;
+
+        if (roleChoice != null)
+            roleChoice.OnChosen += RoleChosen;
+
+        ShowBanner();
 
         // On the way in as well as on the event: this card lives on the Settings
         // panel, which is switched off for most of the app's life, so it is
@@ -96,13 +111,58 @@ public class AccountSectionView : MonoBehaviour
         AppStrings.OnLanguageChanged -= Refresh;
 
         if (workChoice != null)
-            workChoice.OnChosen -= HideWorkError;
+            workChoice.OnChosen -= WorkChosen;
+
+        if (roleChoice != null)
+            roleChoice.OnChosen -= RoleChosen;
+    }
+
+    void WorkChosen()
+    {
+        HideWorkError();
+        ShowBanner();
+    }
+
+    void RoleChosen()
+    {
+        HideRoleError();
+        HideWorkError();
+        ShowBanner();
+    }
+
+    void ShowBanner()
+    {
+        if (roleBanner != null)
+            roleBanner.Show(roleChoice != null ? roleChoice.Selected : null,
+                            workChoice != null ? workChoice.Selected : null);
     }
 
     void HideWorkError()
     {
         if (workError != null)
             workError.gameObject.SetActive(false);
+    }
+
+    void HideRoleError()
+    {
+        if (roleError != null)
+            roleError.gameObject.SetActive(false);
+    }
+
+    /// <summary>A missing answer, said right under the question it belongs to.</summary>
+    void SayUnder(TextMeshProUGUI under, string key)
+    {
+        if (under != null)
+        {
+            Say(null);
+            under.text = AppStrings.Get(key);
+            under.gameObject.SetActive(true);
+        }
+        else
+        {
+            Say(key);
+            statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
+        }
     }
 
     /// <summary>Shows whichever half matches the session.</summary>
@@ -223,21 +283,25 @@ public class AccountSectionView : MonoBehaviour
             return;
         }
 
+        string role = roleChoice != null ? roleChoice.Selected : null;
         string work = workChoice != null ? workChoice.Selected : null;
 
-        if (!LineOfWork.IsValid(work))
+        if (!AccountRole.IsValid(role))
         {
-            if (workError != null)
-            {
-                Say(null);
-                workError.text = AppStrings.Get("err.work");
-                workError.gameObject.SetActive(true);
-            }
-            else
-            {
-                Say("err.work");
-                statusLabel.color = ThemeManager.Get(ThemeRole.StatusPoor);
-            }
+            SayUnder(roleError, "err.role");
+            return;
+        }
+
+        HideRoleError();
+
+        // Only a creator is asked what they do; a viewer sends no work at all.
+        if (role == AccountRole.Viewer)
+        {
+            work = null;
+        }
+        else if (!LineOfWork.IsValid(work))
+        {
+            SayUnder(workError, "err.work");
             return;
         }
 
@@ -257,7 +321,7 @@ public class AccountSectionView : MonoBehaviour
         // an object that is switched off - so the last step, writing the name to
         // the profile, never ran. The leaderboard read the profile and called the
         // new walker "Player". The auth service is never switched off.
-        auth.StartCoroutine(auth.SignUp(email, password, Value(nameField), work, Done));
+        auth.StartCoroutine(auth.SignUp(email, password, Value(nameField), role, work, Done));
     }
 
     void SignIn()
@@ -428,7 +492,12 @@ public class AccountSectionView : MonoBehaviour
         if (workChoice != null)
             workChoice.Select(null);
 
+        if (roleChoice != null)
+            roleChoice.Select(null);
+
         HideWorkError();
+        HideRoleError();
+        ShowBanner();
 
         // Always, and not only on success. A password left sitting in a field on
         // a phone that is about to be handed to somebody is the reason.

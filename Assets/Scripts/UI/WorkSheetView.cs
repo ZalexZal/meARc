@@ -3,8 +3,10 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The line of work as a sheet: opened from the Settings row to change it, and
-/// put up once after sign-in for an account that has never answered.
+/// Creator or viewer, and a creator's line of work, as a sheet: opened from the
+/// Settings row to change it, and put up once after sign-in for an account that
+/// has never said how it uses AR Trail. The role's banner sits on top and
+/// follows the answer, as the website's sign-up stage does.
 ///
 /// There is no "Later". The answer is required, but the sheet can still be
 /// closed - its X, the dim behind it, a swipe down - and closing saves nothing,
@@ -14,10 +16,16 @@ using UnityEngine.UI;
 /// </summary>
 public class WorkSheetView : MonoBehaviour
 {
+    [Tooltip("Creator or viewer. Switches the work rows on for a creator.")]
+    public RoleChoiceView role;
+
     public WorkChoiceView choice;
 
-    [Tooltip("The sheet's title: \"What do you do?\" when asked, \"Change line of " +
-             "work\" from Settings.")]
+    [Tooltip("The role's sky, chip and headline, over the choices.")]
+    public RoleBanner banner;
+
+    [Tooltip("The sheet's title: \"How will you use AR Trail?\" when asked, \"How " +
+             "you use AR Trail\" from Settings.")]
     public TextMeshProUGUI title;
 
     [Tooltip("Why it is asked. Shown either way.")]
@@ -29,7 +37,7 @@ public class WorkSheetView : MonoBehaviour
     public TextMeshProUGUI statusLabel;
 
     bool _busy;
-    string _titleKey = "work.title";
+    string _titleKey = "role.question";
 
     void Awake()
     {
@@ -42,7 +50,10 @@ public class WorkSheetView : MonoBehaviour
         AppStrings.OnLanguageChanged += Paint;
 
         if (choice != null)
-            choice.OnChosen += ClearStatus;
+            choice.OnChosen += Chosen;
+
+        if (role != null)
+            role.OnChosen += Chosen;
 
         Paint();
     }
@@ -52,33 +63,62 @@ public class WorkSheetView : MonoBehaviour
         AppStrings.OnLanguageChanged -= Paint;
 
         if (choice != null)
-            choice.OnChosen -= ClearStatus;
+            choice.OnChosen -= Chosen;
+
+        if (role != null)
+            role.OnChosen -= Chosen;
     }
 
     /// <summary>From the Settings row: the current answer already chosen.</summary>
     public void OpenToChange()
     {
-        SupabaseAuth auth = SupabaseAuth.Instance;
-        Show("work.change", auth != null ? auth.Work : null);
+        Show("role.settingsTitle");
     }
 
-    /// <summary>After sign-in, for an account that has never answered: nothing chosen.</summary>
+    /// <summary>
+    /// After sign-in, for an account whose role was never asked. An account
+    /// made by an older app may still have a line of work; that answer stands
+    /// and comes up chosen, as a creator's.
+    /// </summary>
     public void Ask()
     {
-        Show("work.title", null);
+        Show("role.question");
     }
 
-    void Show(string titleKey, string current)
+    void Show(string titleKey)
     {
         _titleKey = titleKey;
         _busy = false;
         gameObject.SetActive(true);
 
+        SupabaseAuth auth = SupabaseAuth.Instance;
+        string currentRole = auth != null ? auth.Role : null;
+        string currentWork = auth != null ? auth.Work : null;
+
+        if (!AccountRole.IsValid(currentRole) && LineOfWork.IsValid(currentWork))
+            currentRole = AccountRole.Creator;
+
+        if (role != null)
+            role.Select(currentRole);
+
         if (choice != null)
-            choice.Select(current);
+            choice.Select(currentRole == AccountRole.Creator ? currentWork : null);
 
         ClearStatus();
+        ShowBanner();
         Paint();
+    }
+
+    void Chosen()
+    {
+        ClearStatus();
+        ShowBanner();
+    }
+
+    void ShowBanner()
+    {
+        if (banner != null)
+            banner.Show(role != null ? role.Selected : null, choice != null ? choice.Selected : null);
     }
 
     public void Close()
@@ -92,7 +132,7 @@ public class WorkSheetView : MonoBehaviour
             title.text = AppStrings.Get(_titleKey);
 
         if (askLine != null)
-            askLine.text = AppStrings.Get("work.ask");
+            askLine.text = AppStrings.Get("role.footer");
 
         if (saveButton != null)
             saveButton.interactable = !_busy;
@@ -103,9 +143,19 @@ public class WorkSheetView : MonoBehaviour
         if (_busy)
             return;
 
+        string chosenRole = role != null ? role.Selected : null;
         string work = choice != null ? choice.Selected : null;
 
-        if (!LineOfWork.IsValid(work))
+        if (!AccountRole.IsValid(chosenRole))
+        {
+            Say("err.role");
+            return;
+        }
+
+        // A viewer is never asked what they do, so nothing is sent for it.
+        if (chosenRole == AccountRole.Viewer)
+            work = null;
+        else if (!LineOfWork.IsValid(work))
         {
             Say("err.work");
             return;
@@ -120,7 +170,7 @@ public class WorkSheetView : MonoBehaviour
 
         // On the auth service, which is never switched off: closing the sheet
         // mid-save would otherwise stop the coroutine before it answered.
-        auth.StartCoroutine(auth.SetWork(work, Done));
+        auth.StartCoroutine(auth.SetRole(chosenRole, work, Done));
     }
 
     void Done(string error)
@@ -130,7 +180,7 @@ public class WorkSheetView : MonoBehaviour
 
         if (!string.IsNullOrEmpty(error))
         {
-            Say(error == "err.work" ? error : "work.saveFailed");
+            Say(error == "err.work" || error == "err.role" ? error : "work.saveFailed");
             return;
         }
 

@@ -3794,6 +3794,10 @@ const float ReferenceWidth = 1080f;
                                               TextAlignmentOptions.Left, "account.noneBody");
         UIFactory.FitsItsText(body);
 
+        // The website's stage, as a strip: what the answer below means, before
+        // anybody has typed a thing. It follows the two questions further down.
+        view.roleBanner = BuildRoleBanner(outGroup);
+
         // First, because it is the one field that is about the person rather
         // than about the login.
         view.nameField = Field(outGroup, "Name", "account.name");
@@ -3811,16 +3815,10 @@ const float ReferenceWidth = 1080f;
         view.passwordField.contentType = TMP_InputField.ContentType.Password;
 
         // Required for a new account, nothing chosen: the website asks the same
-        // question at its sign-up, in the same words.
-        TextMeshProUGUI workLabel = UIFactory.Text("WorkLabel", outGroup, Body, ThemeRole.TextPrimary,
-                                                   TextAlignmentOptions.BottomLeft, "work.title",
-                                                   FontStyles.Bold);
-        UIFactory.Size(workLabel.gameObject, 76f);
-        view.workChoice = WorkChoices(outGroup);
-        view.workError = UIFactory.Text("WorkError", outGroup, Secondary, ThemeRole.StatusPoor,
-                                        TextAlignmentOptions.Left, "err.work");
-        UIFactory.FitsItsText(view.workError);
-        view.workError.gameObject.SetActive(false);
+        // two questions at its sign-up, in the same words. Creator or viewer
+        // first; the line of work only for a creator.
+        view.roleChoice = RoleQuestion(outGroup, out view.roleError, out view.workChoice,
+                                       out view.workError);
 
         view.signUpButton = FullWidthButton(outGroup, "Create", "account.create",
                                             ThemeRole.Accent, ThemeRole.OnAccent);
@@ -4095,7 +4093,7 @@ const float ReferenceWidth = 1080f;
         // What the account does, and a way to change it. The value runs long in
         // Bulgarian ("Брокер на недвижими имоти"), so it gets more room than a
         // language name and an ellipsis rather than a second line.
-        controller.workButton = ValueRow(account, "work.row", out controller.workValueLabel);
+        controller.workButton = ValueRow(account, "role.settingsTitle", out controller.workValueLabel);
         LayoutElement workValueSize = controller.workValueLabel.GetComponent<LayoutElement>();
         workValueSize.minWidth = 0f;
         workValueSize.preferredWidth = 500f;
@@ -4588,22 +4586,33 @@ const float ReferenceWidth = 1080f;
         Wire(close.onClick, view.Close, "Work sheet close");
         Wire(outside.onClick, view.Close, "Work sheet outside");
 
+        // Nearly the whole screen: the banner, two cards and four rows do not fit
+        // in less, and they scroll inside it on a short phone.
         RectTransform sheet = (RectTransform)panel.Find("Sheet");
         if (sheet != null)
-            sheet.anchorMax = new Vector2(1f, 0.76f);
+            sheet.anchorMax = new Vector2(1f, 0.92f);
 
         // The header's title, written by the view: it is a question when asked
         // and a setting when opened from Settings.
         Transform titleObject = panel.Find("Sheet/Head/Bar/Title");
         view.title = titleObject != null ? titleObject.GetComponent<TextMeshProUGUI>() : null;
         if (view.title != null)
-            view.title.text = AppStrings.Get("work.title");
+            view.title.text = AppStrings.Get("role.question");
 
-        view.askLine = UIFactory.Text("Ask", body, Secondary, ThemeRole.TextSecondary,
-                                      TextAlignmentOptions.TopLeft, "work.ask");
+        // The choices scroll; the error and Save stay put under them.
+        RectTransform list = UIFactory.ScrollList("Scroll", body, 33f);
+        UIFactory.Size(list.parent.parent.gameObject, 0f).flexibleHeight = 1f;
+        list.parent.parent.GetComponent<LayoutElement>().preferredHeight = -1f;
+        list.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(0, 0, 0, 33);
+
+        view.banner = BuildRoleBanner(list);
+
+        view.role = RoleQuestion(list, out TextMeshProUGUI _, out view.choice, out TextMeshProUGUI _,
+                                 false);
+
+        view.askLine = UIFactory.Text("Ask", list, Secondary, ThemeRole.TextMuted,
+                                      TextAlignmentOptions.TopLeft, "role.footer");
         UIFactory.FitsItsText(view.askLine);
-
-        view.choice = WorkChoices(body);
 
         view.statusLabel = UIFactory.Text("Status", body, Secondary, ThemeRole.StatusPoor,
                                           TextAlignmentOptions.Left);
@@ -4632,10 +4641,13 @@ const float ReferenceWidth = 1080f;
         view.holes = new RectTransform[n];
         view.edges = new Image[n];
 
+        // The field is the name, the role word the line under it: "Туризъм" over
+        // "Екскурзовод", as the website's work.ts has them.
         for (int i = 0; i < n; i++)
         {
             string work = LineOfWork.Keys[i];
-            WorkRow(list, work, work == "other" ? "work.otherHint" : null,
+            WorkRow(list, char.ToUpperInvariant(work[0]) + work.Substring(1),
+                    WorkChoiceView.HeaderKey(work), WorkChoiceView.SubtextKey(work),
                     out view.options[i], out view.radios[i], out view.holes[i], out view.edges[i]);
         }
 
@@ -4643,14 +4655,182 @@ const float ReferenceWidth = 1080f;
     }
 
     /// <summary>
+    /// "How will you use AR Trail?" and its two cards, then - for a creator only
+    /// - "What do you do?" and the four lines of work, and for a viewer the note
+    /// on why they are not asked. Used by the sign-up form and the work sheet.
+    /// </summary>
+    static RoleChoiceView RoleQuestion(Transform parent, out TextMeshProUGUI roleError,
+                                       out WorkChoiceView work, out TextMeshProUGUI workError,
+                                       bool errors = true)
+    {
+        RectTransform group = UIFactory.Rect("RoleQuestion", parent);
+        UIFactory.VerticalStack(group, 22f, false);
+
+        TextMeshProUGUI question = UIFactory.Text("RoleLabel", group, Body, ThemeRole.TextPrimary,
+                                                  TextAlignmentOptions.BottomLeft, "role.question",
+                                                  FontStyles.Bold);
+        UIFactory.FitsItsText(question);
+
+        RectTransform cards = UIFactory.Rect("RoleChoice", group);
+        UIFactory.VerticalStack(cards, 22f, false);
+        RoleChoiceView view = cards.gameObject.AddComponent<RoleChoiceView>();
+
+        int n = RoleChoiceView.Keys.Length;
+        view.options = new Button[n];
+        view.radios = new Image[n];
+        view.holes = new RectTransform[n];
+        view.edges = new Image[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            string role = RoleChoiceView.Keys[i];
+            WorkRow(cards, role == AccountRole.Creator ? "Creator" : "Viewer",
+                    "role." + role, "role." + role + "Body",
+                    out view.options[i], out view.radios[i], out view.holes[i], out view.edges[i]);
+        }
+
+        roleError = null;
+        if (errors)
+        {
+            roleError = UIFactory.Text("RoleError", group, Secondary, ThemeRole.StatusPoor,
+                                       TextAlignmentOptions.Left, "err.role");
+            UIFactory.FitsItsText(roleError);
+            roleError.gameObject.SetActive(false);
+        }
+
+        TextMeshProUGUI note = UIFactory.Text("ViewerNote", group, Secondary, ThemeRole.TextSecondary,
+                                              TextAlignmentOptions.TopLeft, "role.viewerNote");
+        UIFactory.FitsItsText(note);
+        view.viewerNote = note.gameObject;
+
+        RectTransform workGroup = UIFactory.Rect("Work", group);
+        UIFactory.VerticalStack(workGroup, 22f, false);
+        view.workGroup = workGroup.gameObject;
+
+        TextMeshProUGUI workLabel = UIFactory.Text("WorkLabel", workGroup, Body, ThemeRole.TextPrimary,
+                                                   TextAlignmentOptions.BottomLeft, "work.title",
+                                                   FontStyles.Bold);
+        UIFactory.FitsItsText(workLabel);
+        LayoutElement workLabelRoom = workLabel.gameObject.AddComponent<LayoutElement>();
+        workLabelRoom.minHeight = 76f;
+
+        work = WorkChoices(workGroup);
+
+        workError = null;
+        if (errors)
+        {
+            workError = UIFactory.Text("WorkError", workGroup, Secondary, ThemeRole.StatusPoor,
+                                       TextAlignmentOptions.Left, "err.work");
+            UIFactory.FitsItsText(workError);
+            workError.gameObject.SetActive(false);
+        }
+
+        // Nothing chosen yet: neither follow-up is on screen.
+        view.viewerNote.SetActive(false);
+        view.workGroup.SetActive(false);
+        return view;
+    }
+
+    /// <summary>
+    /// The website's sign-up stage as a strip (RoleBanner): the seal on the
+    /// left, the chip and the headline beside it, on the role's sky. Its colours
+    /// are painted by the banner, not the theme, so none of it is themed here.
+    /// </summary>
+    static RoleBanner BuildRoleBanner(Transform parent)
+    {
+        RectTransform rt = UIFactory.Rect("RoleBanner", parent);
+        RoleBanner banner = rt.gameObject.AddComponent<RoleBanner>();
+        banner.sky = UIFactory.Plain(rt, RoleBanner.Sky("none", false), UIShape.Card);
+        banner.sky.raycastTarget = false;
+
+        HorizontalLayoutGroup row = UIFactory.HorizontalStack(rt, 39f);
+        row.padding = new RectOffset(44, 44, 44, 44);
+        row.childAlignment = TextAnchor.MiddleLeft;
+
+        // The seal: a rounded square for a creator, a circle otherwise, and the
+        // role's glyph over whichever is up.
+        RectTransform seal = UIFactory.Rect("Seal", rt);
+        UIFactory.Size(seal.gameObject, 132f, 132f).flexibleWidth = 0f;
+
+        RectTransform squareRect = UIFactory.Rect("Square", seal);
+        UIFactory.Stretch(squareRect);
+        banner.sealSquare = UIFactory.Plain(squareRect, Color.white, UIShape.Rounded);
+        banner.sealSquare.raycastTarget = false;
+
+        RectTransform roundRect = UIFactory.Rect("Round", seal);
+        UIFactory.Stretch(roundRect);
+        banner.sealRound = UIFactory.Plain(roundRect, Color.white, UIShape.Circle);
+        banner.sealRound.raycastTarget = false;
+
+        RectTransform glyphRect = UIFactory.Rect("Glyph", seal);
+        UIFactory.Corner(glyphRect, new Vector2(0.5f, 0.5f), new Vector2(66f, 66f), Vector2.zero);
+        banner.glyph = UIFactory.Plain(glyphRect, Color.white);
+        banner.glyph.preserveAspect = true;
+        banner.glyph.raycastTarget = false;
+
+        // In RoleBanner.GlyphKeys order: teacher, guide, broker, other, viewer,
+        // none, and a creator who has not said what they do. The education and
+        // estate glyphs are the trail categories' own.
+        banner.glyphs = new Sprite[]
+        {
+            UIIcons.Get(AppIcon.Book),
+            UIIcons.Get(AppIcon.Landmark),
+            UIIcons.Get(AppIcon.Home),
+            UIIcons.Get(AppIcon.Spark),
+            UIIcons.Get(AppIcon.Walk),
+            UIIcons.Get(AppIcon.Question),
+            UIIcons.Get(AppIcon.Plus)
+        };
+        banner.glyph.sprite = banner.glyphs[5];
+
+        RectTransform words = UIFactory.Rect("Words", rt);
+        LayoutElement wordsSize = words.gameObject.AddComponent<LayoutElement>();
+        wordsSize.minWidth = 0f;
+        wordsSize.preferredWidth = 1f;
+        wordsSize.flexibleWidth = 1f;
+        UIFactory.VerticalStack(words, 17f, false).childAlignment = TextAnchor.MiddleLeft;
+
+        // The chip hugs its words: a row the width of the strip, with the pill
+        // inside it at its own preferred width.
+        RectTransform chipRow = UIFactory.Rect("ChipRow", words);
+        UIFactory.HorizontalStack(chipRow, 0f);
+
+        RectTransform chip = UIFactory.Rect("Chip", chipRow);
+        banner.chip = UIFactory.Plain(chip, Color.white, UIShape.Pill);
+        banner.chip.raycastTarget = false;
+        HorizontalLayoutGroup chipLayout = UIFactory.HorizontalStack(chip, 0f);
+        chipLayout.padding = new RectOffset(28, 28, 10, 10);
+
+        banner.tagLabel = Unthemed(UIFactory.Text("Tag", chip, Caption, ThemeRole.TextPrimary,
+                                                  TextAlignmentOptions.Left, null, FontStyles.Bold));
+        banner.tagLabel.textWrappingMode = TextWrappingModes.NoWrap;
+
+        banner.headLabel = Unthemed(UIFactory.Text("Head", words, Body, ThemeRole.TextPrimary,
+                                                   TextAlignmentOptions.Left, null, FontStyles.Bold));
+        UIFactory.FitsItsText(banner.headLabel);
+
+        banner.Paint();
+        return banner;
+    }
+
+    /// <summary>A label whose colour its owner paints, with the theme's hand taken off it.</summary>
+    static TextMeshProUGUI Unthemed(TextMeshProUGUI label)
+    {
+        ThemedElement themed = label.GetComponent<ThemedElement>();
+        if (themed != null)
+            Object.DestroyImmediate(themed);
+        return label;
+    }
+
+    /// <summary>
     /// One line of work: RadioRow's 56px row with its hairline and 22px radio,
     /// but growing past 56px when there is a hint under the name, or when a
     /// Bulgarian name wraps.
     /// </summary>
-    static void WorkRow(Transform parent, string work, string hintKey, out Button button,
+    static void WorkRow(Transform parent, string name, string labelKey, string hintKey, out Button button,
                         out Image radio, out RectTransform hole, out Image edge)
     {
-        RectTransform rt = UIFactory.Rect(char.ToUpperInvariant(work[0]) + work.Substring(1), parent);
+        RectTransform rt = UIFactory.Rect(name, parent);
         button = UIFactory.Button(rt, ThemeRole.Surface, 1f, UIShape.Rounded);
         rt.gameObject.AddComponent<LayoutElement>().minHeight = 155f;
 
@@ -4686,7 +4866,7 @@ const float ReferenceWidth = 1080f;
         UIFactory.VerticalStack(words, 6f, false).childAlignment = TextAnchor.MiddleLeft;
 
         TextMeshProUGUI label = UIFactory.Text("Label", words, Body, ThemeRole.TextPrimary,
-                                               TextAlignmentOptions.Left, "work." + work);
+                                               TextAlignmentOptions.Left, labelKey, FontStyles.Bold);
         UIFactory.FitsItsText(label);
         label.raycastTarget = false;
 

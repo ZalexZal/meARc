@@ -283,22 +283,33 @@ public static class UIPreview
                        new ProfileService.LevelData { xp = 220, level = 6, floor = 190, next = 234, max = 50 });
             SettingsTabController settingsTab = canvas.GetComponentInChildren<SettingsTabController>(true);
             if (settingsTab != null && settingsTab.workValueLabel != null)
-                settingsTab.workValueLabel.text = LineOfWork.Label("teacher");
+                settingsTab.workValueLabel.text = SettingsTabController.RowValue(AccountRole.Creator, "guide");
 
             Shoot(canvas, rig, "35-you" + t, "SettingsPanel");
 
-            // Line of work, opened from its Settings row (Task 14): the sheet
-            // with the account's answer already chosen. Written by hand, since
-            // the sheet fills itself from SupabaseAuth only while the app runs.
+            // How you use AR Trail, opened from its Settings row: the sheet with
+            // the account's answer already chosen, a creator in tourism. Written
+            // by hand, since the sheet fills itself from SupabaseAuth only while
+            // the app runs.
             WorkSheetView workSheet = settingsTab != null ? settingsTab.workSheet : null;
             if (workSheet != null)
             {
-                if (workSheet.title != null) workSheet.title.text = AppStrings.Get("work.change");
-                if (workSheet.askLine != null) workSheet.askLine.text = AppStrings.Get("work.ask");
-                if (workSheet.choice != null) workSheet.choice.Select("teacher");
+                if (workSheet.title != null) workSheet.title.text = AppStrings.Get("role.settingsTitle");
+                if (workSheet.askLine != null) workSheet.askLine.text = AppStrings.Get("role.footer");
+                if (workSheet.role != null) workSheet.role.Select(AccountRole.Creator);
+                if (workSheet.choice != null) workSheet.choice.Select("guide");
+                if (workSheet.banner != null) workSheet.banner.Show(AccountRole.Creator, "guide");
                 if (workSheet.statusLabel != null) workSheet.statusLabel.gameObject.SetActive(false);
-                Shoot(canvas, rig, "25-settings-work" + t, "SettingsPanel", "WorkSheet");
+                Shoot(canvas, rig, "25-settings-role" + t, "SettingsPanel", "WorkSheet");
+
+                // And a viewer's: no lines of work, the note in their place.
+                if (workSheet.role != null) workSheet.role.Select(AccountRole.Viewer);
+                if (workSheet.banner != null) workSheet.banner.Show(AccountRole.Viewer, null);
+                Shoot(canvas, rig, "25-settings-role-viewer" + t, "SettingsPanel", "WorkSheet");
+
+                if (workSheet.role != null) workSheet.role.Select(null);
                 if (workSheet.choice != null) workSheet.choice.Select(null);
+                if (workSheet.banner != null) workSheet.banner.Show(null, null);
 
                 // And the row that opens it, scrolled into view in the account
                 // group, which only an account sees.
@@ -314,7 +325,7 @@ public static class UIPreview
                     float fromTop = -local.y - list.viewport.rect.height * 0.5f;
                     list.verticalNormalizedPosition = travel > 0f
                         ? Mathf.Clamp01(1f - fromTop / travel) : 1f;
-                    Shoot(canvas, rig, "25b-settings-work-row" + t, "SettingsPanel");
+                    Shoot(canvas, rig, "25b-settings-role-row" + t, "SettingsPanel");
                     list.verticalNormalizedPosition = 1f;
                     Canvas.ForceUpdateCanvases();
                 }
@@ -602,33 +613,55 @@ public static class UIPreview
             if (guestFlow.guestNote != null) guestFlow.guestNote.SetActive(false);
             if (guestFlow.accountLaterLabel != null) guestFlow.accountLaterLabel.text = AppStrings.Get("trails.notNow");
 
-            // Sign-up with the line of work (Task 14): the account door scrolled
-            // down to the four choices, Create tapped with none of them chosen.
-            if (guestCard != null && guestCard.workChoice != null)
+            // Sign-up with creator or viewer: nobody yet (Create tapped with no
+            // answer), a creator in tourism, and a viewer. Each twice: at the top,
+            // where the banner is, and scrolled to the question.
+            if (guestCard != null && guestCard.roleChoice != null)
             {
                 guestCard.signedInGroup.SetActive(false);
                 guestCard.anonymousGroup.SetActive(true);
-                guestCard.workChoice.Select(null);
-                if (guestCard.workError != null)
-                {
-                    guestCard.workError.text = AppStrings.Get("err.work");
-                    guestCard.workError.gameObject.SetActive(true);
-                }
-
                 ScrollRect form = guestCard.GetComponentInParent<ScrollRect>(true);
-                Canvas.ForceUpdateCanvases();
-                if (form != null)
-                {
-                    LayoutRebuilder.ForceRebuildLayoutImmediate(form.content);
-                    form.verticalNormalizedPosition = 0f;
-                }
 
-                Shoot(canvas, rig, "24-signup-work" + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
+                string[][] states =
+                {
+                    new[] { "none", null, null },
+                    new[] { "creator", AccountRole.Creator, "guide" },
+                    new[] { "viewer", AccountRole.Viewer, null },
+                };
+
+                foreach (string[] state in states)
+                {
+                    guestCard.roleChoice.Select(state[1]);
+                    if (guestCard.workChoice != null) guestCard.workChoice.Select(state[2]);
+                    if (guestCard.roleBanner != null) guestCard.roleBanner.Show(state[1], state[2]);
+                    if (guestCard.roleError != null)
+                    {
+                        guestCard.roleError.text = AppStrings.Get("err.role");
+                        guestCard.roleError.gameObject.SetActive(state[1] == null);
+                    }
+
+                    string name = "24-signup-role-" + state[0];
+                    if (form != null)
+                    {
+                        Canvas.ForceUpdateCanvases();
+                        LayoutRebuilder.ForceRebuildLayoutImmediate(form.content);
+                        form.verticalNormalizedPosition = 1f;
+                    }
+                    Shoot(canvas, rig, name + "-top" + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
+
+                    RectTransform question = (RectTransform)guestCard.roleChoice.transform.parent;
+                    if (form != null)
+                        ScrollToTop(form, question);
+                    Shoot(canvas, rig, name + t, "MapPanel", "Doors/Backdrop", "Doors/Account");
+                }
 
                 if (form != null) form.verticalNormalizedPosition = 1f;
 
-                if (guestCard.workError != null)
-                    guestCard.workError.gameObject.SetActive(false);
+                guestCard.roleChoice.Select(null);
+                if (guestCard.workChoice != null) guestCard.workChoice.Select(null);
+                if (guestCard.roleBanner != null) guestCard.roleBanner.Show(null, null);
+                if (guestCard.roleError != null)
+                    guestCard.roleError.gameObject.SetActive(false);
                 guestCard.signedInGroup.SetActive(signedWas);
             }
             else
@@ -1534,6 +1567,18 @@ public static class UIPreview
 
         at.SetValue(flow, page);
         draw.Invoke(flow, null);
+    }
+
+    /// <summary>Scrolls a list so the target's top sits a little under the viewport's top.</summary>
+    static void ScrollToTop(ScrollRect list, RectTransform target)
+    {
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(list.content);
+        float travel = list.content.rect.height - list.viewport.rect.height;
+        Vector3 local = list.content.InverseTransformPoint(target.position);
+        float top = -(local.y + target.rect.yMax) - 40f;
+        list.verticalNormalizedPosition = travel > 0f ? Mathf.Clamp01(1f - top / travel) : 1f;
+        Canvas.ForceUpdateCanvases();
     }
 
     static bool IsDoorShot(string[] visible)

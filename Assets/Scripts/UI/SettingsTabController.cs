@@ -325,12 +325,26 @@ public class SettingsTabController : MonoBehaviour
         ApplyWork();
     }
 
-    /// <summary>The value on the line-of-work row, a dash until it is known.</summary>
+    /// <summary>
+    /// The value on the "How you use AR Trail" row: "Viewer", a creator's field
+    /// ("Tourism"), or a dash until it is known. An account from an older app
+    /// with a line of work and no role shows its field, as the sheet treats it.
+    /// </summary>
     void ApplyWork()
     {
         if (workValueLabel != null)
-            workValueLabel.text = LineOfWork.Label(SupabaseAuth.Instance != null
-                ? SupabaseAuth.Instance.Work : null);
+        {
+            SupabaseAuth auth = SupabaseAuth.Instance;
+            workValueLabel.text = RowValue(auth != null ? auth.Role : null, auth != null ? auth.Work : null);
+        }
+    }
+
+    public static string RowValue(string role, string work)
+    {
+        if (role == AccountRole.Viewer)
+            return AppStrings.Get("role.nameViewer");
+
+        return LineOfWork.IsValid(work) ? AppStrings.Get("work.field." + work) : "—";
     }
 
     static void Set(TextMeshProUGUI label, string key)

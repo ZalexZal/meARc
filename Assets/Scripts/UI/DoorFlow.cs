@@ -511,7 +511,8 @@ public class DoorFlow : MonoBehaviour
     // ------------------------------------------------------------- line of work
 
     /// <summary>
-    /// The profile says this account has never answered. Asked as soon as no
+    /// The profile says this account has never said whether it creates or only
+    /// views (role is null; a read that failed never gets here). Asked as soon as no
     /// door is up - over the terms or a trail list it would be one modal on top
     /// of another.
     /// </summary>
@@ -537,8 +538,10 @@ public class DoorFlow : MonoBehaviour
 
         SupabaseAuth auth = SupabaseAuth.Instance;
 
-        // Answered meanwhile, or somebody else now: nothing is owed.
-        if (auth == null || !auth.IsSignedIn || auth.IsAnonymous || auth.Work != null)
+        // Answered meanwhile, or somebody else now: nothing is owed. The role is
+        // the question now; a line of work from an older app does not answer it,
+        // and the sheet comes up with that work already chosen.
+        if (auth == null || !auth.IsSignedIn || auth.IsAnonymous || auth.Role != null)
         {
             _workOwed = false;
             return;
