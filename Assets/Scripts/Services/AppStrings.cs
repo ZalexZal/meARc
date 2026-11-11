@@ -17,7 +17,7 @@ public enum AppLanguage
 /// change. Keeping the lookup behind a key from day one is what makes that swap
 /// cheap.
 /// </summary>
-public static class AppStrings
+public static partial class AppStrings
 {
     const string PrefKey = "app_language";
 
@@ -66,12 +66,12 @@ public static class AppStrings
     public static string Get(string key)
     {
         Dictionary<string, string> table =
-            CurrentLanguage == AppLanguage.Bulgarian ? Bg : En;
+            CurrentLanguage == AppLanguage.Bulgarian ? BgAll : EnAll;
 
         if (table.TryGetValue(key, out string value))
             return value;
 
-        if (CurrentLanguage != AppLanguage.English && En.TryGetValue(key, out value))
+        if (CurrentLanguage != AppLanguage.English && EnAll.TryGetValue(key, out value))
             return value;
 
         return key;
@@ -81,8 +81,30 @@ public static class AppStrings
     /// that carries both, like the demo's stops.</summary>
     public static string GetIn(AppLanguage language, string key)
     {
-        Dictionary<string, string> table = language == AppLanguage.Bulgarian ? Bg : En;
+        Dictionary<string, string> table = language == AppLanguage.Bulgarian ? BgAll : EnAll;
         return table.TryGetValue(key, out string value) ? value : Get(key);
+    }
+
+    // The main tables below, plus one table per feature in its own partial file
+    // (AppStrings.<Feature>.cs), so features can add strings without touching
+    // this file. Merged once, on first use; a key in two tables is a bug and
+    // the later one is ignored with a warning.
+    static Dictionary<string, string> _enAll, _bgAll;
+    static Dictionary<string, string> EnAll => _enAll ?? (_enAll = Merge(En, AuthEn, MiscEn, StageEn, TeacherEn));
+    static Dictionary<string, string> BgAll => _bgAll ?? (_bgAll = Merge(Bg, AuthBg, MiscBg, StageBg, TeacherBg));
+
+    static Dictionary<string, string> Merge(params Dictionary<string, string>[] tables)
+    {
+        var all = new Dictionary<string, string>(tables[0]);
+        for (int i = 1; i < tables.Length; i++)
+            foreach (var pair in tables[i])
+            {
+                if (all.ContainsKey(pair.Key))
+                    UnityEngine.Debug.LogWarning("[AppStrings] duplicate key " + pair.Key);
+                else
+                    all[pair.Key] = pair.Value;
+            }
+        return all;
     }
 
     // ---------------------------------------------------------------- English

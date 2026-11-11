@@ -23,7 +23,7 @@ using UnityEngine.XR.ARFoundation;
 /// why <see cref="Tap"/> is 128 rather than 48: anything smaller lands under the
 /// minimum touch target once it reaches a real screen.
 /// </summary>
-public static class AppUIBuilder
+public static partial class AppUIBuilder
 {
         /// <summary>
     /// The Stadia Maps key, in one place.
