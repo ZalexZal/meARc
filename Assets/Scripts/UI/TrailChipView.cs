@@ -42,16 +42,10 @@ public class TrailChipView : MonoBehaviour
         if (button != null)
             button.onClick.AddListener(Open);
 
+        // Reporting is switched off for the competition build: no listener, and
+        // the button stays hidden (Refresh keeps it so).
         if (reportButton != null)
-            reportButton.onClick.AddListener(Report);
-    }
-
-    void Report()
-    {
-        TrailService trails = TrailService.Instance;
-
-        if (reportSheet != null && trails != null && !string.IsNullOrEmpty(trails.SelectedId))
-            reportSheet.OpenTrail(trails.SelectedId);
+            reportButton.gameObject.SetActive(false);
     }
 
     void OnEnable()

@@ -553,13 +553,10 @@ public class TeamDoorView : MonoBehaviour
 
             if (boardButtons[i] != null)
             {
-                string teamId = row.team_id;
+                // Reporting a team's name is switched off for the competition
+                // build: the row is not a button, and nothing opens the sheet.
                 boardButtons[i].onClick.RemoveAllListeners();
-                boardButtons[i].interactable = !row.is_mine && reportSheet != null &&
-                                               !string.IsNullOrEmpty(row.team_name);
-
-                if (boardButtons[i].interactable)
-                    boardButtons[i].onClick.AddListener(delegate { reportSheet.OpenTeam(teamId); });
+                boardButtons[i].interactable = false;
             }
 
             if (boardPoints[i] != null)

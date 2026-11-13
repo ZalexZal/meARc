@@ -137,14 +137,11 @@ public class InfoPanelController : MonoBehaviour
         if (moveButton != null)
             moveButton.onClick.AddListener(MoveThisMarker);
 
+        // Reporting is switched off for the competition build: the button stays
+        // hidden and has no listener. ReportSheetView and its scene objects are
+        // left in place.
         if (reportButton != null)
-        {
-            reportButton.onClick.AddListener(ReportThisMarker);
-
-            // A local marker from the CSV has no server row to report. Better an
-            // absent button than one that answers a tap with an error.
-            reportButton.gameObject.SetActive(reportSheet != null);
-        }
+            reportButton.gameObject.SetActive(false);
 
         if (scrim != null)
             scrim.SetActive(false);
@@ -268,27 +265,6 @@ public class InfoPanelController : MonoBehaviour
     }
 
     /// <summary>
-    /// Opens the reason chooser for the stop on screen.
-    ///
-    /// The sheet stays where it is behind it. Reporting is a thing you do about
-    /// what you are looking at, and taking it away first would leave somebody
-    /// choosing a reason for a stop they can no longer see the name of.
-    /// </summary>
-    public void ReportThisMarker()
-    {
-        if (currentBuilding == null || reportSheet == null)
-            return;
-
-        if (menu != null)
-            menu.Close();
-
-        if (detents != null)
-            detents.ToLarge();
-
-        reportSheet.Open(currentBuilding.buildingId, currentBuilding.DisplayName);
-    }
-
-    /// <summary>
     /// Whether opening this stop counts as having explored it.
     ///
     /// The rule is the AR marker: walk to it, see it standing on the place, tap
@@ -402,7 +378,7 @@ public class InfoPanelController : MonoBehaviour
             hideButton.gameObject.SetActive(!demo && !editable);
 
         if (reportButton != null)
-            reportButton.gameObject.SetActive(reportSheet != null && !demo && !editable);
+            reportButton.gameObject.SetActive(false);
 
         RenderBuilding(data);
 

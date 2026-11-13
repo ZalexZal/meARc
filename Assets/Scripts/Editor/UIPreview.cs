@@ -526,8 +526,9 @@ public static class UIPreview
             chip.nameLabel.text = chipWas;
             if (chip.modeChip != null) chip.modeChip.SetActive(true);
 
+            // The report button stays hidden for good (reporting is off).
             if (chip.reportButton != null)
-                chip.reportButton.gameObject.SetActive(true);
+                chip.reportButton.gameObject.SetActive(false);
         }
 
         if (strip != null)
