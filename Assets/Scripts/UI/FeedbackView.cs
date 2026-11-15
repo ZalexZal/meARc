@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// You → Send feedback: what a tester, or anybody, wants the person running
-/// AR Trail to know.
+/// meARc to know.
 ///
 /// It lands in the reviewer's queue on the website with the app version and
 /// the phone model, which is what turns "the camera is black" into something

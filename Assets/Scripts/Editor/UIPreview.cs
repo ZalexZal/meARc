@@ -315,7 +315,7 @@ public static class UIPreview
             Shoot(canvas, rig, "35b-you-viewer" + t, "SettingsPanel");
             foreach (NameSeal seal in seals) seal.Show(AccountRole.Creator, "teacher");
 
-            // How you use AR Trail, opened from its Settings row: the sheet with
+            // How you use meARc, opened from its Settings row: the sheet with
             // the account's answer already chosen, a creator in tourism. Written
             // by hand, since the sheet fills itself from SupabaseAuth only while
             // the app runs.
@@ -1672,6 +1672,13 @@ public static class UIPreview
 
         for (int i = 0; i < themed.Length; i++)
             themed[i].Apply();
+
+        // The brand lockup swaps its picture rather than its colour.
+        ThemedSprite[] pictures = Object.FindObjectsByType<ThemedSprite>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < pictures.Length; i++)
+            pictures[i].Apply();
 
         // The line-of-work radios are painted by their view, which repaints on
         // the theme event - and nothing is subscribed while nothing plays.

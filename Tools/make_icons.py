@@ -1,4 +1,7 @@
-"""The app's icons and Play graphics, drawn from the website's favicon: the pin.
+"""SUPERSEDED (16 Nov 2026): the app is now meARc and Assets/Art/Icon holds the
+meARc mark from the logo files. Running this would put the old pin back.
+
+The app's icons and Play graphics, drawn from the website's favicon: the pin.
 
 White pin on the one blue, with the blue showing through its eye. Drawn at 4x
 and scaled down, which is the anti-aliasing.

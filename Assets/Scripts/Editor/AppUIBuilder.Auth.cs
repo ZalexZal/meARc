@@ -246,7 +246,7 @@ public static partial class AppUIBuilder
     }
 
     /// <summary>
-    /// "How will you use AR Trail?" as A5 asks it: two tiles side by side, then
+    /// "How will you use meARc?" as A5 asks it: two tiles side by side, then
     /// for a creator the four lines of work as a 2×2 grid, and for a viewer the
     /// note on why they are not asked. Drives the same RoleChoiceView and
     /// WorkChoiceView the work sheet uses; a tile's ring is its edge.

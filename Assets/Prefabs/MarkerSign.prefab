@@ -287,7 +287,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: AR Trail
+  m_text: meARc
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: f3e069c9b82996476a6331dff64f764a, type: 2}
   m_sharedMaterial: {fileID: -2982990990034619572, guid: f3e069c9b82996476a6331dff64f764a, type: 2}

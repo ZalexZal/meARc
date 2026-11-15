@@ -326,7 +326,7 @@ public class SettingsTabController : MonoBehaviour
     }
 
     /// <summary>
-    /// The value on the "How you use AR Trail" row: "Viewer", a creator's field
+    /// The value on the "How you use meARc" row: "Viewer", a creator's field
     /// ("Tourism"), or a dash until it is known. An account from an older app
     /// with a line of work and no role shows its field, as the sheet treats it.
     /// </summary>

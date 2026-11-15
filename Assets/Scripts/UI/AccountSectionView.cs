@@ -49,7 +49,7 @@ public class AccountSectionView : MonoBehaviour
              "to begin with.")]
     public RoleChoiceView roleChoice;
 
-    [Tooltip("\"Choose how you will use AR Trail.\", right under the two cards.")]
+    [Tooltip("\"Choose how you will use meARc.\", right under the two cards.")]
     public TextMeshProUGUI roleError;
 
     [Tooltip("Broker, teacher, guide or other. Required of a creator only, and on " +

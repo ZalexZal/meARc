@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// How a person uses AR Trail, as profiles.role holds it: a creator makes
+/// How a person uses meARc, as profiles.role holds it: a creator makes
 /// routes, a viewer browses and walks them, and null is somebody who has never
 /// been asked (every account made before the question existed).
 ///

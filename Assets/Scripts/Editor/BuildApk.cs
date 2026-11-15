@@ -228,7 +228,7 @@ public static class BuildApk
     [MenuItem("Tools/Build/Android APK")]
     public static void Build()
     {
-        BuildTo("ARTrail.apk", bundle: false);
+        BuildTo("meARc.apk", bundle: false);
     }
 
     /// <summary>
@@ -239,7 +239,7 @@ public static class BuildApk
     [MenuItem("Tools/Build/Android App Bundle (Play)")]
     public static void BuildBundle()
     {
-        BuildTo("ARTrail.aab", bundle: true);
+        BuildTo("meARc.aab", bundle: true);
     }
 
     static void BuildTo(string file, bool bundle)

@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// Opens the app on a trail from a link: artrail://join/&lt;trail id&gt;.
+/// Opens the app on a trail from a link: mearc://join/&lt;trail id&gt;.
 ///
 /// A trail's QR code on the website leads to its card there, and the card's
 /// "Open in the app" button sends this. Only public trails can be joined this
@@ -15,7 +15,7 @@ using UnityEngine;
 /// </summary>
 public class JoinLinks : MonoBehaviour
 {
-    const string Prefix = "artrail://join/";
+    const string Prefix = "mearc://join/";
 
     string _pending;
 

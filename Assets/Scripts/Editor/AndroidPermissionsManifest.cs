@@ -77,7 +77,7 @@ public class AndroidPermissionsManifest : IPostGenerateGradleAndroidProject
     }
 
     /// <summary>
-    /// artrail://join/&lt;trail id&gt; opens the app on that trail. The website's
+    /// mearc://join/&lt;trail id&gt; opens the app on that trail. The website's
     /// "Open in the app" button sends it, which is what a trail's QR code leads to.
     /// </summary>
     static void AcceptJoinLinks(XmlDocument document, XmlNode application)
@@ -91,7 +91,7 @@ public class AndroidPermissionsManifest : IPostGenerateGradleAndroidProject
                 if (filter.InnerXml.Contains("android.intent.category.LAUNCHER"))
                     launcher = true;
 
-                if (filter.InnerXml.Contains("artrail"))
+                if (filter.InnerXml.Contains("mearc"))
                     return;
             }
 
@@ -104,12 +104,12 @@ public class AndroidPermissionsManifest : IPostGenerateGradleAndroidProject
             links.AppendChild(Named(document, "category", "android.intent.category.BROWSABLE"));
 
             XmlElement data = document.CreateElement("data");
-            data.SetAttribute("scheme", AndroidNs, "artrail");
+            data.SetAttribute("scheme", AndroidNs, "mearc");
             data.SetAttribute("host", AndroidNs, "join");
             links.AppendChild(data);
 
             activity.AppendChild(links);
-            Debug.Log("[Manifest] artrail://join links open the app.");
+            Debug.Log("[Manifest] mearc://join links open the app.");
             return;
         }
 

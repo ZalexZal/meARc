@@ -4,13 +4,14 @@ using UnityEditor.Build;
 using UnityEngine;
 
 /// <summary>
-/// The launcher icon: the website's pin, white on the one blue.
+/// The launcher icon: the meARc mark (flag and ring) on white, and the
+/// stacked meARc lockup on the Unity splash screen.
 ///
-/// There was none. Every build shipped Unity's default icon, which is the
+/// There was none once. Every build shipped Unity's default icon, which is the
 /// first thing a Play reviewer and every tester would have seen. The artwork
-/// is drawn by Tools/make_icons.py into Assets/Art/Icon and
-/// assigned here, on every build, so a settings file that lost it cannot
-/// quietly put the default back.
+/// comes from the meARc logo files (rebrand, 16 Nov 2026) in Assets/Art/Icon
+/// and Assets/Art/Brand, and is assigned here, on every build, so a settings
+/// file that lost it cannot quietly put the default back.
 ///
 /// Three kinds, because Android launchers disagree: adaptive (a background
 /// and a foreground layer the launcher masks to its own shape), round, and
@@ -52,6 +53,28 @@ public static class AppIcons
         PlayerSettings.SetPlatformIcons(android, AndroidPlatformIconKind.Legacy, plain);
 
         Debug.Log("[Icons] Adaptive, round and legacy icons set.");
+
+        Splash();
+    }
+
+    /// <summary>
+    /// The stacked lockup in white on the splash's ink background (#231f20,
+    /// the logo's own ink), shown before Unity's own logo line.
+    /// </summary>
+    static void Splash()
+    {
+        const string LockupPath = "Assets/Art/Brand/meARc-stacked-dark.png";
+        Sprite lockup = AssetDatabase.LoadAssetAtPath<Sprite>(LockupPath);
+
+        if (lockup == null)
+        {
+            Debug.LogWarning("[Icons] " + LockupPath + " is not a Sprite; the splash keeps no app logo.");
+            return;
+        }
+
+        PlayerSettings.SplashScreen.backgroundColor = new Color32(0x23, 0x1f, 0x20, 0xff);
+        PlayerSettings.SplashScreen.logos = new[] { PlayerSettings.SplashScreenLogo.Create(2f, lockup) };
+        Debug.Log("[Icons] Splash logo set.");
     }
 
     static Texture2D Load(string file)

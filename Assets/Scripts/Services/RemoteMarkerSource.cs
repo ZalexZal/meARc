@@ -8,7 +8,7 @@ using UnityEngine.Networking;
 /// <summary>
 /// Loads markers from the backend through the markers_near RPC.
 ///
-/// Replaces RemoteBuildingSource for the AR Trail platform. The load behaviour is
+/// Replaces RemoteBuildingSource for the meARc platform. The load behaviour is
 /// deliberately identical, because it was already right: show the cached copy
 /// immediately so the app is usable in the first second, then fetch in the
 /// background and replace it. A refresh that fails is silent - the reader keeps

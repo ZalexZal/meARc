@@ -160,7 +160,7 @@ public class MapTileLayer : MonoBehaviour
 
     [Tooltip("Sent with every request. OpenStreetMap rejects anonymous clients, and " +
              "being identifiable is the least a tile consumer owes a free service.")]
-    public string userAgent = "ARTrail/0.6 (+https://github.com/ZalexZal/AR-Trails)";
+    public string userAgent = "meARc/0.6 (+https://github.com/ZalexZal/AR-Trails)";
 
     [Header("Limits")]
     [Tooltip("Tiles loading at once, from the phone or the network. Reading from " +

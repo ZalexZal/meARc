@@ -301,7 +301,7 @@ const float ReferenceWidth = 1080f;
         EditorUtility.SetDirty(settingsTab);
 
         // Over the tab bar, as every sheet is.
-        // No badge sheet: AR Trails is a tool, not a game (6 Nov 2026).
+        // No badge sheet: meARc is a tool, not a game (6 Nov 2026).
 
         // Over the tabs and the nav bar, under the sheets, the doors and the toast.
         BuildTeacherTools(root);
@@ -4590,7 +4590,7 @@ const float ReferenceWidth = 1080f;
     }
 
     /// <summary>
-    /// "How will you use AR Trail?" and its two cards, then - for a creator only
+    /// "How will you use meARc?" and its two cards, then - for a creator only
     /// - "What do you do?" and the four lines of work, and for a viewer the note
     /// on why they are not asked. Used by the sign-up form and the work sheet.
     /// </summary>
@@ -5783,7 +5783,7 @@ const float ReferenceWidth = 1080f;
                 label.fontSizeMax = 2.6f;
                 label.color = new Color(0.11f, 0.11f, 0.12f);
                 // Seen in the preview; on a phone the spawner writes the stop's own words.
-                label.text = "AR Trail";
+                label.text = "meARc";
 
                 view.signLabel = label;
                 view.billboard = true;
@@ -6806,11 +6806,7 @@ const float ReferenceWidth = 1080f;
     {
         RectTransform panel = Door(parent, "Welcome", plain: true, inner: out RectTransform inner);
 
-        TextMeshProUGUI brand = UIFactory.Text("Brand", inner, 34f, ThemeRole.TextPrimary,
-                                               TextAlignmentOptions.TopLeft, "app.name",
-                                               FontStyles.Bold);
-        UIFactory.Corner(brand.rectTransform, new Vector2(0f, 1f), new Vector2(620f, 48f),
-                         Vector2.zero);
+        WelcomeBrand(inner);
 
         WelcomeMarkers(inner);
 
@@ -6877,6 +6873,77 @@ const float ReferenceWidth = 1080f;
 
         panel.gameObject.SetActive(false);
         return panel.gameObject;
+    }
+
+    const string BrandFolder = "Assets/Art/Brand/";
+
+    /// <summary>
+    /// The stacked meARc lockup (flag and ring above the word), top-left where
+    /// the name used to be written. Ink on light, white on dark: the blue is in
+    /// the artwork, so the theme swaps the picture instead of tinting it.
+    /// Falls back to the written name when the artwork is not imported.
+    /// </summary>
+    static void WelcomeBrand(RectTransform inner)
+    {
+        Sprite onLight = BrandSprite("meARc-stacked.png");
+        Sprite onDark = BrandSprite("meARc-stacked-dark.png");
+
+        if (onLight == null)
+        {
+            _notes.Add("The meARc lockup is missing from " + BrandFolder + "; Welcome writes the name instead.");
+            TextMeshProUGUI brand = UIFactory.Text("Brand", inner, 34f, ThemeRole.TextPrimary,
+                                                   TextAlignmentOptions.TopLeft, "app.name",
+                                                   FontStyles.Bold);
+            UIFactory.Corner(brand.rectTransform, new Vector2(0f, 1f), new Vector2(620f, 48f),
+                             Vector2.zero);
+            return;
+        }
+
+        const float LockupH = 196f;
+        float aspect = onLight.rect.width / onLight.rect.height;
+
+        RectTransform rt = UIFactory.Rect("Brand", inner);
+        UIFactory.Corner(rt, new Vector2(0f, 1f), new Vector2(LockupH * aspect, LockupH),
+                         Vector2.zero);
+
+        Image image = rt.gameObject.AddComponent<Image>();
+        image.sprite = onLight;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+
+        ThemedSprite themed = rt.gameObject.AddComponent<ThemedSprite>();
+        themed.onLight = onLight;
+        themed.onDark = onDark;
+        themed.Apply();
+    }
+
+    /// <summary>A brand PNG as a UI sprite: Single, no mips, uncompressed so the edges stay clean.</summary>
+    static Sprite BrandSprite(string file)
+    {
+        string path = BrandFolder + file;
+
+        if (!System.IO.File.Exists(path))
+            return null;
+
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+
+        if (importer != null &&
+            (importer.textureType != TextureImporterType.Sprite ||
+             importer.spriteImportMode != SpriteImportMode.Single ||
+             importer.mipmapEnabled ||
+             importer.textureCompression != TextureImporterCompression.Uncompressed))
+        {
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.maxTextureSize = 2048;
+            importer.SaveAndReimport();
+        }
+
+        return AssetDatabase.LoadAssetAtPath<Sprite>(path);
     }
 
     /// <summary>
