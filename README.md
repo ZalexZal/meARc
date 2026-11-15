@@ -1,12 +1,12 @@
-<p align="center"><img src="Assets/Art/Icon/round.png" alt="AR Trail icon" width="120"></p>
+<p align="center"><img src="Assets/Art/Icon/round.png" alt="meARc icon" width="120"></p>
 
-# AR Trail: the Android app
+# meARc: the Android app
 
-The Unity project for **AR Trail**, city trails in augmented reality. The website,
+The Unity project for **meARc**, city trails in augmented reality. The website,
 the database and the legal file are in
 [`noit-platform`](https://github.com/ZalexZal/noit-platform).
 
-**Package:** `com.alex.artrail` · **Version:** 0.6.3 (build 23) ·
+**Package:** `com.alex.mearc` · **Version:** 0.6.3 (build 23) ·
 **Unity** 6000.4.10f1 · **ARCore Geospatial** · **Website:**
 [artrails.netlify.app](https://artrails.netlify.app)
 
@@ -26,7 +26,7 @@ the database and the legal file are in
 
 ## The idea
 
-AR Trail turns a walk through a town into a trail of stops that stand in the
+meARc turns a walk through a town into a trail of stops that stand in the
 street in augmented reality.
 
 Somebody who knows a place (a teacher, a guide, an organiser) builds a trail on
@@ -43,7 +43,7 @@ The same engine runs four kinds of trail:
 | **Keeps a score** (teams, points, leaderboard, priced hints) | Competition (`ctf`) | Freefall (`freefall`) |
 | **No score** (questions still asked and answered) | Guided (`guide`) | Educational (`educational`) |
 
-AR Trail was built in Yambol, Bulgaria, by Alexander Zamov, for NOIT, Bulgaria's
+meARc was built in Yambol, Bulgaria, by Alexander Zamov, for NOIT, Bulgaria's
 national olympiad in information technology. Everything is in Bulgarian and
 English.
 
@@ -52,7 +52,7 @@ English.
 City games in Yambol already run as stations: a QR code at each place and
 answers sent through a web form. They work, but the phone only ever shows a
 form. Nothing stands
-at the place itself. AR Trail keeps what those games do well (teams, questions,
+at the place itself. meARc keeps what those games do well (teams, questions,
 a board everyone watches) and adds the part they can't do: the content waits at
 the spot where it belongs, and you have to go there to get it.
 
@@ -91,7 +91,7 @@ flowchart TB
         W2["Run the day<br/>board · levers · review"]
         W3["Accounts<br/>parents · export · delete"]
     end
-    subgraph App["Android app · AR Trail"]
+    subgraph App["Android app · meARc"]
         direction LR
         A1["Map<br/>next stop · guidance"]
         A2["Camera<br/>AR markers in the street"]
@@ -136,7 +136,7 @@ proven on a real phone and what still waits for a field test.
 **Getting onto a trail**
 - A six-letter trail code, typed into six boxes (letters that look alike, such
   as 0/O and 1/I/L, are never used).
-- A link or QR code from the website (`artrail://join/<trail>`), which works only
+- A link or QR code from the website (`mearc://join/<trail>`), which works only
   for trails that are publicly listed.
 - **Near you**: public trails whose first stop is close by, joined with one tap.
 - Games (scored trails) ask you to make or join a team before the first stop,
@@ -496,7 +496,7 @@ Input System package stays at `activeInputHandler: Both`, because tapping AR
 objects uses legacy Input on purpose.
 
 **Android settings:**
-- Package `com.alex.artrail`, version 0.6.3 (23).
+- Package `com.alex.mearc`, version 0.6.3 (23).
 - Minimum Android 10 (API 29). Targets the newest installed SDK (API 36).
 - ARM64 only, IL2CPP.
 - ARCore is **optional**, so phones without it still get the map, the library
@@ -505,8 +505,8 @@ objects uses legacy Input on purpose.
 ```sh
 # the password is read from the environment, never from a file in this repo
 export ARTRAIL_KEYSTORE_PASS="…"
-Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod BuildApk.Build        # Build/ARTrail.apk
-Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod BuildApk.BuildBundle  # Build/ARTrail.aab for Play
+Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod BuildApk.Build        # Build/meARc.apk
+Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod BuildApk.BuildBundle  # Build/meARc.aab for Play
 Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod UIPreview.CaptureAll  # PreviewShots/*.png
 ```
 
@@ -564,7 +564,8 @@ PROJECT.md, PROJECT-CONTEXT.md   the handbook of the predecessor app, AR Archite
 
 ## Version history
 
-AR Trail was built in fifteen versions between 26 August and 6 October 2026.
+meARc was built in fifteen versions between 26 August and 6 October 2026.
+Package ids and file names in this history are as they were at the time; the project was renamed from AR Trail to meARc, and the package from `com.alex.artrail` to `com.alex.mearc`, on 16 November 2026.
 Each one ended with something working end to end. The numbers below are the
 project's own names for those stages. The **Android build** column is what the
 app itself reported: `versionName` 0.1.0 until 23 September, 0.2.0 from 25
@@ -776,7 +777,7 @@ Commits: website `cc3c5c0`–`6ae1e4d` · app `ed65a44`–`06b2f94`
   - Deleting a trail, a 404 page, and translated error messages.
 - **App:**
   - **A practice trail instead of a manual.**
-  - **Near you** (the public library) and `artrail://join` links.
+  - **Near you** (the public library) and `mearc://join` links.
   - A quieter, Apple-like look (Inter, one blue, capsule buttons).
   - A full pass on a real phone: back, audio length, YouTube/Vimeo, 8-character
     passwords, sign-out on this phone only, and mode names that match the
