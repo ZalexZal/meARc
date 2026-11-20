@@ -6,7 +6,7 @@ The Unity project for **meARc**, city trails in augmented reality. The website,
 the database and the legal file are in
 [`noit-platform`](https://github.com/ZalexZal/noit-platform).
 
-**Package:** `com.alex.mearc` · **Version:** 0.6.3 (build 23) ·
+**Package:** `com.alex.mearc` · **Version:** 0.6.7 (build 27) ·
 **Unity** 6000.4.10f1 · **ARCore Geospatial** · **Website:**
 [artrails.netlify.app](https://artrails.netlify.app)
 
@@ -114,7 +114,7 @@ The two repositories:
 | Repository | What is in it |
 |---|---|
 | [`noit-platform`](https://github.com/ZalexZal/noit-platform) | The website (`web/`), every database migration (`supabase/migrations/`), the end-to-end seam test (`tests/`), the legal file (`docs/legal/`), the Play Store kit (`docs/play-store/`) and the design handbooks |
-| [`AR-Trails`](https://github.com/ZalexZal/AR-Trails) | The Unity project for the Android app: scripts, the generated UI, the build and preview tools, the icon |
+| [`meARc`](https://github.com/ZalexZal/meARc) | The Unity project for the Android app: scripts, the generated UI, the build and preview tools, the icon |
 
 ## What it does
 
@@ -229,8 +229,8 @@ proven on a real phone and what still waits for a field test.
   email confirmation (it continues by itself when you come back from the
   email), changing email and password, hidden stops, blocked people, and
   deleting the account.
-- Help: How it works, **Send feedback** (a message to the person running AR
-  Trail, with the app version and phone model shown before it goes, and "you
+- Help: How it works, **Send feedback** (a message to the person running
+  meARc, with the app version and phone model shown before it goes, and "you
   may reply by email" for accounts that have one), replaying the practice
   trail, the terms, the privacy policy, Data and sources, and About.
 
@@ -496,7 +496,7 @@ Input System package stays at `activeInputHandler: Both`, because tapping AR
 objects uses legacy Input on purpose.
 
 **Android settings:**
-- Package `com.alex.mearc`, version 0.6.3 (23).
+- Package `com.alex.mearc`, version 0.6.7 (27).
 - Minimum Android 10 (API 29). Targets the newest installed SDK (API 36).
 - ARM64 only, IL2CPP.
 - ARCore is **optional**, so phones without it still get the map, the library
@@ -565,7 +565,7 @@ PROJECT.md, PROJECT-CONTEXT.md   the handbook of the predecessor app, AR Archite
 ## Version history
 
 meARc was built in fifteen versions between 26 August and 6 October 2026.
-Package ids and file names in this history are as they were at the time; the project was renamed from AR Trail to meARc, and the package from `com.alex.artrail` to `com.alex.mearc`, on 16 November 2026.
+Package ids and file names in this history are as they were at the time; the project was renamed from AR Trail to meARc, and the package from `com.alex.artrail` to `com.alex.mearc`, on 16 November 2026; the app's repository on GitHub is now `meARc` (formerly `AR-Trails`).
 Each one ended with something working end to end. The numbers below are the
 project's own names for those stages. The **Android build** column is what the
 app itself reported: `versionName` 0.1.0 until 23 September, 0.2.0 from 25
