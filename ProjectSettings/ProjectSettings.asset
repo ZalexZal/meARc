@@ -39,7 +39,9 @@ PlayerSettings:
     y: 0
     width: 1
     height: 1
-  m_SplashScreenLogos: []
+  m_SplashScreenLogos:
+  - logo: {fileID: 21300000, guid: 006d090c3501483ebd1c2a7e93ee2b0e, type: 3}
+    duration: 2
   m_VirtualRealitySplashScreen: {fileID: 0}
   defaultScreenWidth: 1024
   defaultScreenHeight: 768
@@ -143,13 +145,9 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 0.6.7
+  bundleVersion: 0.6.8
   preloadedAssets:
   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  - {fileID: 4800000, guid: c9f956787b1d945e7b36e0516201fc76, type: 3}
-  - {fileID: 4800000, guid: 0945859e5a1034c2cb6dce53cb4fb899, type: 3}
-  - {fileID: 4098870614499507440, guid: 8747ad4561261194dad2de8b99e3c935, type: 2}
-  - {fileID: 2495205364760583549, guid: 19ba0222052bb754a9bdbad7d5e82d34, type: 2}
   - {fileID: 11400000, guid: 86478df9d3f9c98409ce1b3c80a1e689, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
@@ -179,7 +177,7 @@ PlayerSettings:
     iPhone: 0
     tvOS: 0
   overrideDefaultApplicationIdentifier: 1
-  AndroidBundleVersionCode: 27
+  AndroidBundleVersionCode: 28
   AndroidMinSdkVersion: 29
   AndroidTargetSdkVersion: 0
   AndroidPreferredInstallLocation: 1
