@@ -1,3 +1,10 @@
+> **Historical document, not meARc.** This is the handoff note of the predecessor app, the
+> *AR Architecture Guide*, as it stood on 5 August 2026 (superseded by `PROJECT.md` of 22 August,
+> which is itself historical). meARc was forked from it on 26 August 2026 and renamed (package
+> `com.alex.mearc`). The app name "TBD", the Google Sheet pipeline, Cesium and the `C:/Users/zalex`
+> paths below do not apply to meARc. The current description is [README.md](README.md). Kept only
+> for the history of the inherited AR pipeline.
+
 # AR Geo Application — Project Context & Handoff (v3)
 
 Supersedes v2. **v3 differs from v2 in that every status claim below was verified against

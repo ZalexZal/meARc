@@ -1,6 +1,6 @@
 # Stage sprites (A5 living scene)
 
-Rendered from the website's own drawings by `tools/render-stage-sprites.mjs` in the noit-platform repo
+Rendered from the website's own drawings by `tools/render-stage-sprites.mjs` in the meARc-platform repo
 (scene paths from `RoleScene.astro`, colours from `lib/stage.ts`, glyphs from `lib/role.ts`).
 Transparent PNGs, imported as Sprites (alphaIsTransparency, no mipmaps, bilinear). Re-run the script to regenerate.
 

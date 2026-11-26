@@ -4,9 +4,9 @@
 
 The Unity project for **meARc**, city trails in augmented reality. The website,
 the database and the legal file are in
-[`noit-platform`](https://github.com/ZalexZal/noit-platform).
+[`meARc-platform`](https://github.com/ZalexZal/meARc-platform).
 
-**Package:** `com.alex.mearc` · **Version:** 0.6.7 (build 27) ·
+**Package:** `com.alex.mearc` · **Version:** 0.6.8 (build 28) ·
 **Unity** 6000.4.10f1 · **ARCore Geospatial** · **Website:**
 [artrails.netlify.app](https://artrails.netlify.app)
 
@@ -60,7 +60,7 @@ Four goals shaped every decision:
 
 1. **Anyone can make a trail without writing code.** The website builds it: a
    map, a form per stop, both languages, a spreadsheet import for long trails,
-   and co-editing for a class or a team of organisers.
+   and 3D models: your own .glb or .stl, or one made by AI from a photo.
 2. **You have to be there.** A stop's contents open only when you stand at it:
    by tapping the AR marker, or from inside the stop's radius when AR can't
    calibrate. On scored trails the server also checks where each answer came
@@ -71,11 +71,10 @@ Four goals shaped every decision:
    order, the hints, the cooldown after a wrong answer, and the end of a game. A
    modified app gains nothing.
 4. **It has to be safe and lawful to put in front of school children.** It has
-   reporting, blocking, a review queue before anything becomes public, removal
-   notices, parental consent at 13, a parent account, and data export and
-   deletion for everyone. GDPR, the Bulgarian Personal Data Protection Act, the
+   reporting on the website, removal notices, parental consent at 13, a parent
+   account, and data export and deletion for everyone. GDPR, the Bulgarian Personal Data Protection Act, the
    EU Digital Services Act, Google Play's policies and ARCore's terms are handled
-   in code and written down in [`docs/legal`](https://github.com/ZalexZal/noit-platform/tree/main/docs/legal).
+   in code and written down in [`docs/legal`](https://github.com/ZalexZal/meARc-platform/tree/main/docs/legal).
 
 ## How it fits together
 
@@ -87,7 +86,7 @@ truth.
 flowchart TB
     subgraph Web["Website · artrails.netlify.app"]
         direction LR
-        W1["Build trails<br/>editor · import · co-editing"]
+        W1["Build trails<br/>builder · import · AI"]
         W2["Run the day<br/>board · levers · review"]
         W3["Accounts<br/>parents · export · delete"]
     end
@@ -100,7 +99,7 @@ flowchart TB
     subgraph SB["Supabase · EU, Frankfurt"]
         direction LR
         DB[("Postgres + PostGIS<br/>row-level security")]
-        RPC["~100 SQL functions<br/>the only door to stops and answers"]
+        RPC["~140 SQL functions<br/>the only door to stops and answers"]
         AU["Auth<br/>guest · email · link"]
         ST["Storage<br/>photos · audio · video"]
     end
@@ -113,7 +112,7 @@ The two repositories:
 
 | Repository | What is in it |
 |---|---|
-| [`noit-platform`](https://github.com/ZalexZal/noit-platform) | The website (`web/`), every database migration (`supabase/migrations/`), the end-to-end seam test (`tests/`), the legal file (`docs/legal/`), the Play Store kit (`docs/play-store/`) and the design handbooks |
+| [`meARc-platform`](https://github.com/ZalexZal/meARc-platform) | The website (`web/`), every database migration (`supabase/migrations/`), the end-to-end seam test (`tests/`), the legal file (`docs/legal/`), the AI Edge Functions and the tools |
 | [`meARc`](https://github.com/ZalexZal/meARc) | The Unity project for the Android app: scripts, the generated UI, the build and preview tools, the icon |
 
 ## What it does
@@ -139,6 +138,17 @@ proven on a real phone and what still waits for a field test.
 - A link or QR code from the website (`mearc://join/<trail>`), which works only
   for trails that are publicly listed.
 - **Near you**: public trails whose first stop is close by, joined with one tap.
+- **The trail menu**: the trail pill pulls down a menu with *Yours* (each
+  trail with its category, city and progress, a tick on the open one),
+  *Nearby* (the three closest public trails you have not joined), *Search all
+  trails* and *Join with a code*. On an account that owns trails, *My trails*
+  comes first.
+- **The Trails screen**: a search that finds a name the way the website does
+  (Latin letters find Cyrillic, accents don't matter), category chips (All,
+  Education, Tourism, Real estate, Other), a city picker and *Nearest*.
+- **A preview before you join**: a trail you have not joined opens on a
+  schematic map of its stops, its length, the minutes it takes on foot and how
+  it works. From there you join, or are led to its start when it is far away.
 - Games (scored trails) ask you to make or join a team before the first stop,
   and need an account rather than a guest session.
 
@@ -189,8 +199,8 @@ proven on a real phone and what still waits for a field test.
 
 **A stop**
 - Opens as a sheet from the bottom, at half height with the map above it. Pull
-  it up for all of it, down to close it. Its **⋯** menu hides the stop, reports
-  it, or, on your own trail, moves it.
+  it up for all of it, down to close it. Its **⋯** menu hides the stop or, on
+  your own trail, moves it.
 - Its name, distance and description are visible from anywhere. Its contents
   open only when you're standing at it, and until then the sheet says why
   instead of leaving a gap.
@@ -214,17 +224,33 @@ proven on a real phone and what still waits for a field test.
   large boxes, with **Copy** and **Share**; the standings (refreshed every 15 s
   while open); who is on the team; anything a moderator did to your score, with
   the reason; and **Leave**, which asks twice.
+- Each member's row shows the captain's star and "GPS ✓" (the phone tells its
+  team once that location works, never a position). The captain can make a
+  teammate captain, remove one (the second tap confirms) or give up for the whole
+  team.
+- Before a live event starts the next-stop card says when ("The game starts at
+  18:00"). On a trail whose start is the organiser's, a waiting screen holds the
+  team until the organiser presses Start.
+- A guest entering a trail for the first time sees "You are walking as a guest"
+  before the first stop, with where the walk is kept, the account form and
+  *Continue as a guest*.
 
 **Profile tab**
-- Who you are, and three counts: trails, stops and badges.
-- **11 badges**: First trail, Guided walker, Flag runner, Free roamer, Scholar,
-  Flawless, Trailblazer (with levels), Team player, Captain, Summit and Sharp
-  eye. Each opens a sheet with its rule and how far along you are. Badges belong
-  to your account and survive a team or trail being deleted.
+- Who you are, with a small seal beside the name (a square for a creator, a
+  circle for a viewer), and two counts: trails and stops visited.
+- Since 7 November the app is "a tool, not a game": the level bar and the 11
+  badges are not drawn on the Profile tab, though the server still keeps them and
+  the website shows them. The code that drew them (`Badges`, `BadgeSheetView`,
+  `BadgesPageView`) is still in the project and no longer built into the screen.
 - What you are walking now: the trail and your team.
 - Settings: the theme (like the phone, light or dark, in a control you can tap
-  or slide), nearby alerts, hiding stops behind buildings, and Bulgarian or
-  English.
+  or slide), nearby alerts, hiding stops behind buildings, Bulgarian or
+  English, and **how you use meARc**: *I make trails* or *I explore and walk*,
+  and for a creator a line of work (real estate, education, tourism or other).
+  Both are asked at sign-up, and once after sign-in for an older account that
+  was never asked. The website uses them to show a creator only what they
+  need; the app only stores them. Tapping the version number seven times
+  switches on a hidden developer mode that also shows draft stops.
 - Account: a guest becomes an account without losing the walk. Also sign-in,
   email confirmation (it continues by itself when you come back from the
   email), changing email and password, hidden stops, blocked people, and
@@ -241,10 +267,10 @@ proven on a real phone and what still waits for a field test.
   whatever is on top.
 
 **Safety**
-- **Report** any stop, trail or team name, with six reasons and one tap.
-- **Block** whoever made it (two taps). Their trails leave your library, you
-  leave each other's trails, and their team names read "Hidden team". You can
-  undo it any time.
+- **Report** and **Block** from a stop or a team name are switched off in the app
+  (13 November, for the competition build); the code and the sheet are still in
+  the project. Reporting still works on the website. People you blocked earlier
+  stay in *Blocked people* on the Profile tab, where you can undo it.
 - At 13, a **parent has to agree** before trails open: by email, or with a code
   from the parent's account. Until then only the practice trail works. Answering
   "12 or younger" locks sign-up on that phone.
@@ -255,13 +281,18 @@ proven on a real phone and what still waits for a field test.
   You can nudge the marker a metre at a time relative to where you face, or put
   it where you stand, then save. This fixes the metres of error a map click
   always carries.
-- **Stop here**: on a trail you own or edit, a pill in the camera places a new
-  stop where you stand, as a draft only you and your editors see, and opens it in the
-  capture bar. Its words are written on the website, which publishes it.
 - **Shape**: the capture bar switches a stop between pin, sphere, cone, cube and
   sign, saved at once and swapped in the camera, so the choice is made looking at
   the thing itself. A stop with its own 3D model keeps it: the button is hidden
   there.
+
+**Organisers, on the phone**
+- *My trails* in the trail menu lists the trails you own. One with teams has a
+  **Teacher panel**: a *Lobby* (every team and who is in it, a GPS dot per
+  player, **Kick** and **Ban** per player, **Disqualify** per team, and everybody
+  in no team), a *Scoreboard*, and **Start** for a trail whose start is manual
+  ("Every team sees the stops at once, and points start to count. This cannot
+  be undone."). Every rule is the database's, as on the website.
 
 ### For a creator (the website)
 
@@ -429,12 +460,20 @@ flowchart TD
   does not merge anything, and the card says so first.
 - **`AccountScope`** stamps the account onto every stored key (progress, cached
   answers, chosen trail, terms record). On a phone shared by a class, nothing
-  leaks to the next person. `AccountScopeCheck` fails the build if an unscoped
-  key appears.
+  leaks to the next person. `AccountScopeCheck` (*Tools → Check → Account
+  scoping*, or `-executeMethod AccountScopeCheck.Verify`, which exits with 1)
+  fails if an unscoped key appears. `BuildApk` does not run it, so run it
+  before a release.
 - **`DoorFlow`** runs the doors one at a time: Welcome → Terms with the age
   question (`AgeChoiceView`) → the practice trail (`DemoTrail`) → My trails /
   Enter a code (`CodeDoor`) → the team gate for games (`TeamDoorView`) → the
-  parent door for 13-year-olds (`ConsentDoorView`, `ConsentService`).
+  parent door for 13-year-olds (`ConsentDoorView`, `ConsentService`). Sign-in
+  and sign-up are two screens, and sign-up also asks how you use meARc
+  (`RoleChoiceView`, `AccountRole`) and a creator's line of work
+  (`WorkChoiceView`, `LineOfWork`). Both are stored in `profiles`; the app
+  decides nothing from them. `WorkSheetView` asks again, once, on an older
+  account that never answered, and `RoleStage` is the website's animated
+  sign-up scene, drawn from the sprites in `Assets/Art/Stage`.
 - **`TermsService`** records acceptance on the phone at once and on the server
   when there is signal. The version in `SupabaseConfig` must match the website's
   `lib/terms.ts`.
@@ -452,11 +491,13 @@ flowchart TD
 ### The interface is generated
 
 Nothing under the Canvas is edited by hand. **`AppUIBuilder`** (menu *Tools →
-Build App UI*) builds the whole hierarchy from code, using `UIFactory`,
+UI → Build App UI*; `-executeMethod AppUIBuilder.BuildAndSaveScene` from the
+command line) builds the whole hierarchy from code, in four partial files
+(`AppUIBuilder`, `.Auth`, `.Misc`, `.Teacher`), using `UIFactory`,
 `UIIcons` (icons drawn from signed distance fields) and `UISprites`. Every
 graphic carries a `ThemedElement` role, so light and dark switch without
-hardcoded colours, and every string comes from `AppStrings` in Bulgarian and
-English. The build runs the builder first, so the player always matches the
+hardcoded colours, and every string comes from `AppStrings` (also partial, one table per feature)
+in Bulgarian and English. The build runs the builder first, so the player always matches the
 code.
 
 The look is **Daylight** (version 13): one blue, Inter, a type scale of 12, 14,
@@ -469,14 +510,20 @@ a pull from its top to its sheet), `PagePush` (a page sliding in), and
 
 Seeing it without a phone:
 - **`UIPreview.CaptureAll`** renders every screen, in both themes at 1080×1920,
-  into `PreviewShots/`. It refuses to run if the build didn't happen or the
+  into `PreviewShots/` (with `ARTRAIL_PREVIEW_LANG=bg`, in Bulgarian, into
+  `PreviewShots-bg/`, for the website's app pages). It refuses to run if the build didn't happen or the
   canvas is the wrong size, and it reports controls wired to nothing, and any
   label set to cut off with "…" that is shorter than its own line (`[ShortLine]`),
   because such a label draws nothing at all.
-- **`MarkerPreview`** renders the 3D marker from standing height at three
-  distances.
+- **`MarkerPreview`** (`Shoot`, and `ShootModels` for a creator's own models)
+  renders the 3D marker from standing height at three distances, into
+  `MarkerShots/`.
 - **`CacheCheck`** drives the offline caches through a simulated network
-  failure.
+  failure (`-executeMethod CacheCheck.Run`).
+- **Edit-mode tests** in `Assets/Tests/Editor` (Unity Test Framework: roles,
+  line of work, trail search and route, the teacher roster, the sign-up stage,
+  city parsing). Run them from *Window → General → Test Runner*, or with
+  `-runTests -testPlatform EditMode`.
 
 ### Scripts
 
@@ -484,19 +531,28 @@ Seeing it without a phone:
 |---|---|
 | `Scripts/` | Inherited core: `BuildingData` (a stop in memory), `GeoMath`, `CubeTapManager` / `TappableObject` (tapping AR objects, legacy Input on purpose), `InfoPanelController` (the stop sheet), `TabNavigationController` |
 | `Scripts/AR/` | `MarkerSpawner`, `MarkerView`, `ModelView` (a creator's own model), `OcclusionService` |
-| `Scripts/Services/` | Backend: `SupabaseConfig`, `SupabaseAuth`, `Postgrest`, `RemoteMarkerSource`, `ModelCache`, `MarkerDetailService`, `MarkerTaskService`, `TrailService`, `TeamService`, `ProfileService`, `TermsService`, `ConsentService`. Device: `UserLocationService`, `AndroidPermissions`, `AppLifecycleWatcher`, `FrameRate`. Behaviour: `DemoTrail`, `DiscoveryTracker`, `GuidanceService`, `ProximityAlerts`, `HiddenMarkers`, `AccountScope`. Look: `AppStrings`, `ThemeManager`, `MarkerPalette`, `MapInk` |
-| `Scripts/UI/` | Every screen and control: map (`MapView`, `MapTileLayer`, `MapPinView`, `NextStopCard`, `TrailChipView`, `TeamChipView`, `UserDotView`), camera (`CameraTabController`, `CameraRadar`, `CaptureMode`, `VpsIndicatorController`, `CoachSweep`, `EdgeIndicator`, `ArHelpView`), sheets (`SheetDetents`, `SheetDragHandle`, `SheetScrollHandoff`, `SheetMenu`, `PagePush`, `StopListView`), doors (`DoorFlow`, `CodeDoor`, `TrailsDoor`, `TeamDoorView`, `ConsentDoorView`, `AgeChoiceView`), stop (`MarkerPieceController`, `MarkerQuestionView`, `HintSheetView`, `MediaPlayerView`, `ReportSheetView`), Profile (`ProfileView`, `Badges`, `BadgeSheetView`, `ThemeChoiceView`, `LanguageChoiceView`, `SwitchView`, `AccountSectionView`, `AccountSecurityView`, `BlockedListView`, `DeleteAccountView`), shared (`PillShape`, `SideDrag`, `GlassTabBar`, `Haptics`) |
-| `Scripts/Editor/` | `AppUIBuilder`, `UIFactory`, `UIIcons`, `UISprites`, `AppFonts`, `AppIcons`, `BuildApk`, `UIPreview`, `MarkerPreview` (also `ShootModels`), `MarkerShapes`, `ModelShaders`, `CacheCheck`, `AccountScopeCheck`, `AndroidPermissionsManifest` |
+| `Scripts/Services/` | Backend: `SupabaseConfig`, `SupabaseAuth`, `Postgrest`, `RemoteMarkerSource`, `ModelCache`, `MarkerDetailService`, `MarkerTaskService`, `TrailService`, `TeamService`, `TeacherService`, `ProfileService`, `TermsService`, `ConsentService`, `AccountRole`, `LineOfWork`, `MarkerContent`. Device: `UserLocationService`, `AndroidPermissions`, `AppLifecycleWatcher`, `FrameRate`. Behaviour: `DemoTrail`, `DiscoveryTracker`, `GuidanceService`, `ProximityAlerts`, `HiddenMarkers`, `AccountScope`, `DeveloperMode`. Look: `AppStrings`, `ThemeManager`, `MarkerPalette`, `MapInk` |
+| `Scripts/UI/` | Every screen and control: map (`MapView`, `MapTileLayer`, `MapPinView`, `NextStopCard`, `TrailChipView`, `TeamChipView`, `UserDotView`), camera (`CameraTabController`, `CameraRadar`, `CaptureMode`, `VpsIndicatorController`, `CoachSweep`, `EdgeIndicator`, `ArHelpView`), sheets (`SheetDetents`, `SheetDragHandle`, `SheetScrollHandoff`, `SheetMenu`, `PagePush`, `StopListView`), doors (`DoorFlow`, `CodeDoor`, `TrailsDoor`, `TeamDoorView`, `ConsentDoorView`, `AgeChoiceView`, `RoleChoiceView`, `WorkChoiceView`, `WorkSheetView`, `RoleStage`, `WaitingView`), trails (`TrailMenuView`, `TrailPreviewView`, `TrailGraphView`, `TrailRoute`, `TrailFilter`, `TrailRowView`, `JoinLinks`), organiser (`TeacherPanelView`), feedback (`FeedbackView`), stop (`MarkerPieceController`, `MarkerQuestionView`, `HintSheetView`, `MediaPlayerView`, `ReportSheetView`), Profile (`ProfileView`, `Badges`, `BadgeSheetView`, `ThemeChoiceView`, `LanguageChoiceView`, `SwitchView`, `AccountSectionView`, `AccountSecurityView`, `BlockedListView`, `DeleteAccountView`, `NameSeal`), shared (`PillShape`, `SideDrag`, `GlassTabBar`, `Haptics`, `FieldFocus`, `KeyboardAvoider`, `ThemedSprite`) |
+| `Scripts/Editor/` | `AppUIBuilder`, `UIFactory`, `UIIcons`, `UISprites`, `AppFonts`, `AppIcons`, `BuildApk`, `UIPreview`, `MarkerPreview` (also `ShootModels`), `MarkerShapes`, `ModelShaders`, `CacheCheck`, `AccountScopeCheck`, `AndroidPermissionsManifest`. Inherited from the architecture guide and not used by the trails: `BuildingDataTools`, `StarterAssetGenerator`, `TapTestSceneBuilder` (menu *Tools → Building Data*), with `BuildingDatabase`, `RemoteBuildingSource`, `CsvParser`, `BuildingCategory`, `EraDefinition`, `BuildingDatabaseTest` and `GeospatialDebugOverlay` |
 
 ## Building
 
-**Requirements:** Unity **6000.4.10f1** with Android support, URP 17.4, AR
-Foundation with the ARCore XR plugin 6.4.3, and ARCore Extensions (`arf6`). The
-Input System package stays at `activeInputHandler: Both`, because tapping AR
-objects uses legacy Input on purpose.
+**Requirements:** Unity **6000.4.10f1** with Android Build Support (its
+OpenJDK, SDK and NDK modules; the editor path on Linux is
+`~/Unity/Hub/Editor/6000.4.10f1/Editor/Unity`), URP 17.4, AR Foundation with the
+ARCore XR plugin 6.4.3, Unity glTFast 6.20.0, and ARCore Extensions (`arf6`,
+fetched from GitHub on first open, so it needs `git` and a network). The Input
+System package stays at `activeInputHandler: Both`, because tapping AR objects
+uses legacy Input on purpose.
+
+**Keys.** A `keys` folder in the home folder of whoever builds
+(`~/keys`, or `%USERPROFILE%\keys` on Windows) holds `arcore-api-key.txt` and
+`artrail-release.keystore` (the keystore keeps its old file name). Nothing in
+the repository holds either, and neither is ever printed. The keystore
+password comes from the environment.
 
 **Android settings:**
-- Package `com.alex.mearc`, version 0.6.7 (27).
+- Package `com.alex.mearc`, version 0.6.8 (28), product name meARc (меАРк in Bulgarian).
 - Minimum Android 10 (API 29). Targets the newest installed SDK (API 36).
 - ARM64 only, IL2CPP.
 - ARCore is **optional**, so phones without it still get the map, the library
@@ -505,21 +561,29 @@ objects uses legacy Input on purpose.
 ```sh
 # the password is read from the environment, never from a file in this repo
 export ARTRAIL_KEYSTORE_PASS="…"
-Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod BuildApk.Build        # Build/meARc.apk
-Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod BuildApk.BuildBundle  # Build/meARc.aab for Play
-Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod UIPreview.CaptureAll  # PreviewShots/*.png
+Unity -batchmode -nographics -quit -projectPath . -buildTarget Android -executeMethod BuildApk.Build        # Build/meARc.apk
+Unity -batchmode -nographics -quit -projectPath . -buildTarget Android -executeMethod BuildApk.BuildBundle  # Build/meARc.aab for Play
+Unity -batchmode -quit -projectPath . -buildTarget Android -executeMethod UIPreview.CaptureAll              # PreviewShots/*.png (needs graphics)
 ```
 
-The same actions are under *Tools → Build* in the editor. `BuildApk`:
+Close the editor first: a second Unity cannot open the same project. To put
+the APK on the website, run `tools/publish-apk.sh` in the
+[`meARc-platform`](https://github.com/ZalexZal/meARc-platform) repository. It
+checks that the file is the release-signed `com.alex.mearc` build, copies it to
+the site as `/meARc.apk` and writes the version and size the download buttons
+show. Then commit and push there, and Netlify publishes it.
+
+The same actions are under *Tools → Build* in the editor (*Android APK*,
+*Android App Bundle (Play)*, *Apply app icons*, *Model Shaders*). `BuildApk`:
 1. Regenerates the UI and saves the scene.
 2. Applies the launcher icon (`AppIcons`, from `Tools/make_icons.py`).
 3. Puts back the XR preloaded assets that command-line builds silently drop.
    Without them the camera feed is black.
-4. Puts the ARCore API key from `C:/Users/zalex/keys/arcore-api-key.txt` into
+4. Puts the ARCore API key from `keys/arcore-api-key.txt` into
    ARCore's settings for the length of the build, and saves the settings back
    without it. It refuses a missing key, one Google says does not exist, and a
    scene whose session would start with Geospatial off.
-5. Signs with the release keystore.
+5. Signs with the release keystore, found at `keys/artrail-release.keystore`.
 
 It **refuses to build** when a keystore is configured but no password is given,
 rather than handing back a debug-signed APK that looks like a release. The IL2CPP
@@ -539,7 +603,7 @@ missing placeholder material that keeps glTFast's shaders in the player.
 - The Google ARCore API key is restricted to this package and signing
   certificate, and is never committed: the build adds it and takes it out.
 - The keystore itself and its password live outside the repository
-  (`C:/Users/zalex/keys`). Back them up: an app can only be updated with the key
+  (the `keys` folder above). Back them up: an app can only be updated with the key
   it was first signed with.
 
 ## Repository layout
@@ -555,17 +619,23 @@ Assets/
   XR/               ARCore and XR Management settings
 Packages/           manifest (AR Foundation, ARCore Extensions, URP, Input System)
 ProjectSettings/    Android package, version, signing path (no passwords)
+Assets/Tests/Editor/  Edit-mode tests (roles, trail search and route, teacher roster)
+Assets/Art/Stage/ sprites for the sign-up stage, rendered from the website's drawings
+Assets/Art/Brand/ the stacked meARc lockup shown on the welcome screen
 Tools/make_icons.py draws the launcher icon from the website's pin
-PROJECT.md, PROJECT-CONTEXT.md   the handbook of the predecessor app, AR Architecture Guide,
-                                 kept for the history of the inherited AR pipeline
+PROJECT.md, PROJECT-CONTEXT.md   the handbooks of the predecessor app, AR Architecture Guide
+                                 (August 2026, not meARc), kept for the history of the
+                                 inherited AR pipeline
 ```
 
-`Build/`, `PreviewShots/`, `Library/` and all keystores are gitignored.
+`Build/`, `PreviewShots/`, `PreviewShots-bg/`, `Library/` and all keystores are gitignored.
 
 ## Version history
 
 meARc was built in fifteen versions between 26 August and 6 October 2026.
-Package ids and file names in this history are as they were at the time; the project was renamed from AR Trail to meARc, and the package from `com.alex.artrail` to `com.alex.mearc`, on 16 November 2026; the app's repository on GitHub is now `meARc` (formerly `AR-Trails`).
+Package ids and file names in this history are as they were at the time; the project was renamed from AR Trail to meARc, and the package from `com.alex.artrail` to `com.alex.mearc`, on 16 November 2026; the app's repository on GitHub is now `meARc` (formerly `AR-Trails`). The
+website's repository is now `meARc-platform` (formerly `noit-platform`). Builds
+0.6.4 to 0.6.8 came after version 15 and are in [the section after it](#after-version-15-october-to-november).
 Each one ended with something working end to end. The numbers below are the
 project's own names for those stages. The **Android build** column is what the
 app itself reported: `versionName` 0.1.0 until 23 September, 0.2.0 from 25
@@ -1184,9 +1254,26 @@ ran out of memory beside IL2CPP.
 
 Commits: website 5 October, app 6 October
 
+### After version 15 (October to November)
+
+Not numbered as stages. Each line is one build or one piece of work; the
+database numbers are the website repository's migrations.
+
+| Date (2026) | Build | What changed | Database |
+|---|---|---|---|
+| 30 Oct | (in 0.6.4) | The level and its title on the Profile tab; a visit carries the phone's position; captains, "GPS ✓", the start of a live event and the guest warning in the app; a stop with no colour is brand blue `#0066CC` | 0056–0061 |
+| 4–5 Nov | **0.6.4 (24)** | Modes as two plain answers, "stop" as the one word, one code box (a team code joins the team as well as the trail), Educational walked in any order, "Profile" not "You" | |
+| 7–8 Nov | | "A tool, not a game": no XP, levels or badges on Profile, "visited" not "found", a pull-down trail menu, the next-stop card follows the finger, the camera follows the theme, "Stop here" removed from the camera; a model made with AI says so under the stop | |
+| 9–10 Nov | **0.6.5 (25)** | The trail picker (Yours, Nearby, a searchable Trails screen), the trail preview before joining, line of work | |
+| 11 Nov | **0.6.6 (26)** | Creator or viewer in the app: at sign-up, in Settings and once for older accounts | |
+| 11 Nov | **0.6.7 (27)** | The A5 sign-up stage, sign-in and sign-up as two screens, the name seal, My trails and the teacher panel (lobby, kick, ban, disqualify, scoreboard, start) with the students' waiting screen; map arrows turn with the compass | |
+| 13 Nov | | Report and Block switched off in the app for the competition build | |
+| 16 Nov | | Rebrand to **meARc** (меАРк): name, package `com.alex.mearc`, `mearc://join/<trail>` links, icons, welcome lockup, `Build/meARc.apk` | |
+| 21 Nov | **0.6.8 (28)** | The meARc splash logo, the UI re-saved from the builder | |
+
 ## Status
 
-*As of 6 October 2026. The goal is a Google Play release; the date is not
+*As of 6 October 2026, apart from the table above. The goal is a Google Play release; the date is not
 set.*
 
 **Proven.** Each of these has been checked on a Samsung Galaxy A54 (Android 16),
@@ -1213,7 +1300,8 @@ deleted afterwards:
 **Built, waiting for a phone or an outdoor test:**
 - Version 6 and 7 on the phone: block, the fake-GPS refusal, capture mode, the
   parent-consent door and parent code, and email confirmation.
-- Outdoors: Stop here, switching a shape from the camera, and the next-stop
+- Outdoors: switching a shape from the camera (Stop here has been gone from
+  the camera since 7 November), and the next-stop
   card opening by itself on arrival.
 - Two phones racing at one stop outdoors.
 - Creators' own 3D models in the street (0.6.3): the switch between pin and
@@ -1273,7 +1361,7 @@ deleted afterwards:
     Digital Services Act art. 17).
 - **Paperwork:** records of processing (GDPR art. 30), a data protection impact
   assessment, the list of processors, a 72-hour breach plan and the moderation
-  rules are in [`docs/legal`](https://github.com/ZalexZal/noit-platform/tree/main/docs/legal).
+  rules are in [`docs/legal`](https://github.com/ZalexZal/meARc-platform/tree/main/docs/legal).
 - **Google Play and ARCore:**
   - ARCore's required notices appear on the terms screen, in Data and sources,
     and before the first camera session.

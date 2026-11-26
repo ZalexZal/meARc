@@ -1,3 +1,12 @@
+> **Historical document, not meARc.** This is the handbook of the predecessor app, the
+> *AR Architecture Guide* (a guide to the buildings of Yambol), as it stood on 22 August 2026.
+> meARc was forked from it on 26 August 2026 and has since been renamed (package
+> `com.alex.mearc`), rebuilt around trails and a Supabase backend, and left the Google Sheet
+> content pipeline described here. Statements below about the app name being undecided, the
+> Google Sheet, Cesium, `C:/Users/zalex` paths and the building-only data model do not apply to
+> meARc. The current description is [README.md](README.md). Kept only for the history of the
+> inherited AR pipeline.
+
 # AR Architecture Guide — Project Handbook
 
 Complete reference for the project. Everything a person (or another assistant) needs to
